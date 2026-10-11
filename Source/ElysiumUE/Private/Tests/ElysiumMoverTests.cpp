@@ -10,6 +10,7 @@
 #include "ElysiumMapCollisionPayload.h"
 #include "ElysiumWorldCollisionActor.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumPhysicalMaterial.h"
 #include "Substrate/ElysiumLockable.h"
 #include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumModelPhysics.h"
@@ -319,6 +320,7 @@ void FElysiumDoorCasesTest::GetTests(TArray<FString>& OutBeautifiedNames, TArray
 		TEXT("NativeContactMirrorEvidence"),
 		TEXT("NativeContactSwizzleEvidence"),
 		TEXT("NativeDoorFeedbackObserver"),
+		TEXT("NativeMovingFirstContact"),
 		TEXT("NativeWorldContentsFilter"),
 		TEXT("NativeArrivalClockObservers"),
 	};
@@ -561,7 +563,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		TestNull(TEXT("actual native178 retirement stops postcallback receiver access"),World.Resolve(ButtonHandle));
 		return true;
 	}
-	if (Parameters == TEXT("NativeDoorFeedbackObserver"))
+	if (Parameters == TEXT("NativeDoorFeedbackObserver") || Parameters == TEXT("NativeMovingFirstContact"))
 	{
 		AActor* Owner = ElysiumDoorResyncTests::SpawnMoverOwner(this, EngineWorld);
 		if (!Owner) return false;
@@ -604,7 +606,116 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("linked peer begins open before native Blocked"), Peer->State(), FElysiumDoorBase::EToggleState::AtTop);
 		Sink->Reset(); Events.Reset(); Door->InputClose(FElysiumEntityHandle::Invalid());
 		TestEqual(TEXT("actual Close producer emits input and movement outputs"), Sink->CountOf(TEXT("fire"), TEXT("OnClose")), 2);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .6);
+		int32 MovingFrames = 0, FirstContactFrame = 0, FirstBlockedFrame = 0;
+		float PreparedInterval = 0.f, FirstContactInterval = 0.f;
+		double FirstContactDistanceSquared = 0.;
+		const auto MovingIncarnation = ElysiumModelPhysics::CaptureIdentity(Subject->VPhysicsGetObject());
+		auto SourceWords = [](const FVector& Cm)
+		{ return FVector(static_cast<float>(Cm.X/2.54),static_cast<float>(-Cm.Y/2.54),static_cast<float>(Cm.Z/2.54)); };
+		TFunction<void(const TCHAR*)> MovingObserver;
+		if (Parameters == TEXT("NativeMovingFirstContact"))
+		{
+			// The paired public wall uses the same authored default surface as the brushes.
+			// Give the ordinary native static box that actual material instead of UE's default.
+			FBodyInstance* SubjectNativeBody=ElysiumModelPhysics::Identity(Subject->Body);
+			Wall->SetPhysMaterialOverride(SubjectNativeBody->GetSimplePhysicalMaterial());
+			for (FElysiumEntity* MovingBody : {Subject,Blocker,static_cast<FElysiumEntity*>(Peer)})
+			{
+				FVector InitialPosition; FQuat InitialRotation;
+				ElysiumModelPhysics::GetShadowPosition(MovingBody->VPhysicsGetObject(),&InitialPosition,&InitialRotation);
+				TestTrue(TEXT("paired native creation has identity rotation"),InitialRotation==FQuat::Identity);
+				TestTrue(TEXT("paired native creation has zero linear/angular velocity"),ElysiumModelPhysics::Identity(MovingBody->Body)->GetUnrealWorldVelocity().IsZero()
+					&& ElysiumModelPhysics::Identity(MovingBody->Body)->GetUnrealWorldAngularVelocityInRadians().IsZero());
+				const FVector InitialSource=SourceWords(InitialPosition);
+				AddInfo(FString::Printf(TEXT("MOVING_CREATE,%s,%.9g,%.9g,%.9g"),MovingBody==Subject?TEXT("subject"):MovingBody==Blocker?TEXT("blocker"):TEXT("peer"),InitialSource.X,InitialSource.Y,InitialSource.Z));
+				const auto* CreationShadow=ElysiumModelPhysics::ShadowFor(MovingBody->VPhysicsGetObject());
+				const auto* NativeMaterial=Cast<UElysiumPhysicalMaterial>(ElysiumModelPhysics::Identity(MovingBody->Body)->GetSimplePhysicalMaterial());
+				TestTrue(TEXT("moving native body retains authored default material"),NativeMaterial && NativeMaterial->SourceName==TEXT("default"));
+				TestTrue(TEXT("moving native body retains forbidden movement/rotation permissions"),CreationShadow && !CreationShadow->bAllowMovement && !CreationShadow->bAllowRotation && !CreationShadow->bGravityMode && CreationShadow->TeleportDistanceCm==0.f);
+				AddInfo(FString::Printf(TEXT("MOVING_PARAMETERS,%s,mass=%.9g,damping=%.9g,angularDamping=%.9g,gravity=%d,inertia=%s,friction=%.9g,elasticity=%.9g"),
+					MovingBody==Subject?TEXT("subject"):MovingBody==Blocker?TEXT("blocker"):TEXT("peer"),ElysiumModelPhysics::Identity(MovingBody->Body)->GetBodyMass(),
+					MovingBody->Body->BodyInstance.LinearDamping,MovingBody->Body->BodyInstance.AngularDamping,MovingBody->Body->BodyInstance.bEnableGravity,
+					*ElysiumModelPhysics::Identity(MovingBody->Body)->GetBodyInertiaTensor().ToString(),NativeMaterial?NativeMaterial->Friction:0.f,NativeMaterial?NativeMaterial->Restitution:0.f));
+			}
+		}
+		if (Parameters == TEXT("NativeMovingFirstContact")) MovingObserver = [&](const TCHAR* Stage)
+		{
+			if (FCString::Strcmp(Stage,TEXT("after_begin")) == 0)
+			{
+				++MovingFrames;
+				for (FElysiumEntity* MovingBody : {Subject,Blocker,static_cast<FElysiumEntity*>(Peer)})
+				{
+					TestTrue(TEXT("paired ordinary sliding frame retains zero Source angular velocity"),MovingBody->AngularVelocity.IsZero());
+					const auto* MovingShadow = ElysiumModelPhysics::ShadowFor(MovingBody->VPhysicsGetObject());
+					if (!MovingShadow) { AddError(TEXT("ordinary moving body lost its installed shadow")); continue; }
+					const FVector TargetSource=SourceWords(MovingShadow->Target.GetLocation());
+					const FVector LogicalSource=SourceWords(MovingBody->GetAbsOrigin());
+					const FVector VelocitySource=SourceWords(MovingBody->Velocity);
+					AddInfo(FString::Printf(TEXT("MOVING_INPUT,%d,%.17g,%.9g,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g"),
+						MovingFrames,World.NowSeconds(),static_cast<float>(World.FrameSeconds()),MovingBody==Subject?TEXT("subject"):MovingBody==Blocker?TEXT("blocker"):TEXT("peer"),
+						TargetSource.X,TargetSource.Y,TargetSource.Z,MovingShadow->RemainingSeconds,LogicalSource.X,LogicalSource.Y,LogicalSource.Z,
+						VelocitySource.X,VelocitySource.Y,VelocitySource.Z,MovingBody->LocalTime,MovingBody->StartFrameLocalTime,MovingBody->PhysicsMoveDoneTime,
+						static_cast<float>(MovingBody->AngularVelocity.SizeSquared())));
+				}
+			}
+			if (FCString::Strcmp(Stage,TEXT("after_prepare")) == 0)
+			{
+				const auto* MovingShadow=ElysiumModelPhysics::ShadowFor(Subject->VPhysicsGetObject());
+				AddInfo(FString::Printf(TEXT("MOVING_PREPARED,%d,%.9g,%.9g"),MovingFrames,PreparedInterval,MovingShadow?MovingShadow->RemainingSeconds:-1.f));
+			}
+			if (FCString::Strcmp(Stage,TEXT("after_solve")) == 0)
+			{
+				FVector NativePosition; FQuat NativeRotation; void* ContactPartner=nullptr; FString ContactProvenance;
+				const int32 ShadowResult=ElysiumModelPhysics::GetShadowPosition(Subject->VPhysicsGetObject(),&NativePosition,&NativeRotation);
+				const bool bContact=ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),ContactPartner,&ContactProvenance);
+				void* RepeatedPartner=nullptr; FString RepeatedProvenance;
+				TestEqual(TEXT("same completed solve repeated44 preserves presence"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),RepeatedPartner,&RepeatedProvenance),bContact);
+				TestTrue(TEXT("same completed solve repeated44 preserves selected native incarnation"),RepeatedPartner==ContactPartner);
+				TestEqual(TEXT("same completed solve repeated44 preserves birth/qualification provenance"),RepeatedProvenance,ContactProvenance);
+				const FVector SolvedSource=SourceWords(NativePosition), LogicalSource=SourceWords(Subject->GetAbsOrigin());
+				const FVector Difference=SolvedSource-LogicalSource;
+				const double DistanceSquared=Difference.Z*Difference.Z+Difference.X*Difference.X+Difference.Y*Difference.Y;
+				const float MovingInterval=Subject->LocalTime-Subject->StartFrameLocalTime;
+				const auto Active=ElysiumModelPhysics::ActiveOutputs(World);
+				const bool bActualOutput=Active.ContainsByPredicate([&](const auto& Entry)
+				{ return Entry.Incarnation==MovingIncarnation.Incarnation && ElysiumModelPhysics::IsCurrentOutput(Entry) && ElysiumModelPhysics::GameDataFor(Entry,World)==Subject; });
+				AddInfo(FString::Printf(TEXT("MOVING_SOLVED,%d,%.17g,%d,%d,%llu,%d,%s,%.9g,%.9g,%.9g,%.9g,%.17g,%s"),
+					MovingFrames,World.NowSeconds(),ShadowResult,bActualOutput,MovingIncarnation.Incarnation,bContact,
+					*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(ContactPartner)),SolvedSource.X,SolvedSource.Y,SolvedSource.Z,
+					MovingInterval,DistanceSquared,*ContactProvenance));
+				if (bContact && FirstContactFrame==0)
+				{
+					FirstContactFrame=MovingFrames; FirstContactInterval=MovingInterval; FirstContactDistanceSquared=DistanceSquared;
+					TestEqual(TEXT("first moving contact reads actual47 return1"),ShadowResult,1);
+					TestTrue(TEXT("first moving contact admits actual creation-owned native226 output"),bActualOutput);
+					TestTrue(TEXT("first moving contact has positive normal pusher interval"),MovingInterval>0.f);
+					TestTrue(TEXT("first moving contact has authored linear velocity"),!Subject->Velocity.IsZero());
+					TestTrue(TEXT("first moving contact has the actual live authored blocker"),ElysiumModelPhysics::GameDataForObject(ContactPartner)==Blocker);
+				}
+			}
+			if (FCString::Strcmp(Stage,TEXT("after_feedback")) == 0)
+			{
+				int32 BlockedCount=0;
+				for (const auto& MovingEvent : Events)
+					if (MovingEvent.Entity==Door->Handle && MovingEvent.Kind==TEXT("retail_site") && MovingEvent.Text.Contains(TEXT("tag=pusher_blocked"))) ++BlockedCount;
+				if (BlockedCount && FirstBlockedFrame==0) FirstBlockedFrame=MovingFrames;
+				if (MovingFrames==FirstContactFrame)
+				{
+					TestTrue(TEXT("first normal moving44 does not cross strict one-inch feedback band"),FirstContactDistanceSquared<=1.);
+					TestEqual(TEXT("first normal moving44's actual226 emits no178"),BlockedCount,0);
+					TestEqual(TEXT("first normal moving44's actual226 retains local/start equality"),Subject->LocalTime,Subject->StartFrameLocalTime);
+				}
+				AddInfo(FString::Printf(TEXT("MOVING_FEEDBACK,%d,%d,%.9g,%.9g,%.9g,%s"),MovingFrames,BlockedCount,
+					Subject->LocalTime,Subject->StartFrameLocalTime,Subject->PhysicsMoveDoneTime,*Subject->GetOrigin().ToString()));
+			}
+		};
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .6,&PreparedInterval,MovingObserver);
+		if (Parameters == TEXT("NativeMovingFirstContact"))
+		{
+			TestTrue(TEXT("ordinary moving fixture reaches first qualifying native44"),FirstContactFrame>0);
+			TestTrue(TEXT("ordinary moving fixture reaches actual178 on a normal frame"),FirstBlockedFrame>=FirstContactFrame);
+			AddInfo(FString::Printf(TEXT("MOVING_FIRST,contactFrame=%d blockedFrame=%d interval=%.9g distanceSquared=%.9g"),FirstContactFrame,FirstBlockedFrame,FirstContactInterval,FirstContactDistanceSquared));
+		}
 		bool bSelectedBlocker = false;
 		for (const auto& Event : Events)
 			if (Event.Entity == Door->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=pusher_blocked")))

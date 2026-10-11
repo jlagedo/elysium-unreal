@@ -1,5 +1,157 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Moving observer checkpoint (2026-10-11 10:26:40 UTC)
+
+This evidence packet adds a normal moving observer and matched public replay; runtime
+is unchanged. It supersedes the older idle-firstphase frontier below, without closing
+moving timing parity, candidate encounter equivalence, original23/88 or the L0 gate.
+The pre-edit contract immediately below remains the packet's scope and rollback rules.
+
+`NativeMovingFirstContact` uses actual START_OPEN/InputClose, authored10in/s linear
+velocity, angular velocity0, positive LocalTime-StartFrame, normal object46 target/arrival,
+completed native solve and actual226 ->100a55b0 ->178. It retains the original
+NativeDoorFeedbackObserver's eventual receiver/peer/output assertions. Each case owns
+its own world/scene lifetime. A static wall centered(-36,0,1000)cm, halfextents
+(10,100,100)cm, pins the blocker centered(-16,0,1000)cm; the subject/peer box
+halfextents are10cm and the peer starts atX1000cm. The subject's START_OPEN span is
+14.92cm. No pose/velocity/clock/deadline injection or artificial delay was added.
+
+Creation observers assert identity rotation and zero native initial linear/angular
+velocity; emit actual47 creation positions and native incarnation. Recipe observers
+retain authored mass1, inertia1, linear/angular damping.1, rotation limit.5, volume0,
+drag1, rolling drag0, contents1, default surface friction.8/elasticity.5, SetShadow45
+(10000,10000,false,false), gravity-modefalse, teleportdistance0 and initial
+UpdateShadow46(target,false,0). Forbidden movement/rotation transforms live native
+mass to1000000.06, disables gravity and zeroes inertia. The new case explicitly gives
+the static wall the same default physical material as the native brush; the original
+case's material and all assertions remain unchanged.
+
+The replay creates its static wall first via confirmed environment#8, then the three
+dynamic shadow bodies#7, using the same8 box vertices converted to separately stored
+Source-inch float coordinates with Y reflected. It retains the same authored default
+surface/recipe/permissions/initial46 and replays every logged normal46 target and
+arrival. Chaos's box and retail Collision007's hull are distinct engine geometry/solve
+services; equal dimensions and inputs do not prove their mechanical equivalence.
+The native live mass is an observed transformed float, not a rewritten authored recipe.
+
+MOVING_INPUT is after ordinary Begin and before Prepare, MOVING_PREPARED after actual
+PreparePhysicsFrame, MOVING_SOLVED after TickTestWorld's completed solve and BEFORE
+FinishNativePhysicsFrame's standard all-object contact refresh, and MOVING_FEEDBACK
+after actual226. The diagnostic therefore queries the subject's completed output before
+the normal refresh. A repeated same-fence query asserts equal qualification, other
+owner and provenance. GetContactPoint cache qualification is idempotent here: birth
+comes from completed sequence/output time, not query count. The following production
+refresh samples the same fence before226; the original observer passes alongside it.
+The diagnostic advances the subject's cache qualification/roster query at that fence,
+but not its mechanical solve/birth clock or mutable gameplay callback phase.
+Separate Source-float operands precede double subtraction/squared arithmetic, matching
+production's strict1in² gate and float-store/sqrt path. Angular0 is asserted each frame;
+this packet does not replay a nonzero angular gate.
+
+| Normal matched prefix | Actual native observer | Public retail service replay |
+| --- | --- | --- |
+| First qualifying44 | Frame20, host.333333333, discrepancy²7.74144269e-8; live creation-owned blocker; positive interval, no178 | Frame26, host.433333333, discrepancy².049872837305557; blocker, no calculated rewind |
+| Before first native178, frame32 | Host.533333333, discrepancy²1.0501758925050075; actual rewind/178, then local/start=.51666683 | Same logical/velocity/clocks/46 inputs; actual47 discrepancy².57965414909080337, no calculated rewind/178 |
+| Preparation/event delta at20/26/32 | Once GT, PreparedInterval.0166666675, countdown0 | One actual callback each, delta.0149999997 |
+
+The native test actually executes100a55b0/178. Public columns apply its recovered
+linear rule to the same recorded logical/clocks/velocity and actual47/44 outputs;
+they do not invoke vampire gameplay or independently evolve authored receivers.
+Replay ends through the solve immediately BEFORE native frame32's first178.
+Frames33 onward consume changed native callbacks/targets/clocks and are excluded.
+Thus no claim of independently evolved retail no178 through.6 is valid.
+
+Public ordinary clock is recorded separately, not used as47 sampleclock. The supported
+SIM_NOTHING public motion observer measures32 frames:28 one-event frames and two events
+at1/9/18/27, every delta.0149999997. Both paired processes share executable/creation
+code and extracted inputs. All non-event CSV fields are byte-equal; this does not claim
+CSV observation of creation/target equality. The handler returns0 with ignored output
+references untouched; controller is destroyed before attached bodies/environment.
+Exact public ABI/PE addresses are in `docs/vtmb/physics-interaction.md`.
+
+Finite next frontier: current GT PrepareShadow substitutes the admitted request delta
+and once-per-frame invocation for the source per-event controller input/count/phase.
+Measure the supported Chaos per-simulation callback contract and native47 sampling
+phase before any faithful adapter repair. This mismatch is concrete, but its sole
+causal responsibility for first44/178 timing is unproven. A Chaos callback does not
+promise retail.015 cadence. Do not install fixed.015 scheduling, lag, sorting or an
+IVP clock/layout/topology clone. Full contact mechanics/encounter equivalence remains
+independently open. Existing save/lifetime/higher hooks are retained, not newly closed.
+
+Authoritative receipts: build
+`E:/elysium-work/logs/20261011T102150.355278Z-build.json` exit0 (29.5s); affected
+`E:/elysium-work/reports/tests/20261011T102220.711038Z-elysium-substrate-mover/index.json`
+16 clean/0failed, including original moving observer and new case. Wrapper layout
+warning is separate from the16 clean tests. Native log
+`E:/elysium-work/logs/20261011T102220.558901Z-test.log`; paired replay
+`E:/elysium-work/research/vphysics-contacts/20261011T102350.497103Z/index.json`
+exit0, both probes0, all non-event columns equal, no compile warnings. Its provenance
+records native-log and extracted-input hashes. Initial diagnostic failures/warnings
+and unbounded suffix receipts are superseded by these coherent final receipts.
+Explicit C4458/C4459 review preceded builds; a probe C4456 name was corrected before
+the final receipt. Functional source froze10:26:40UTC; no more worker engine/probe
+jobs. Coordinator owns default/bounded arena/review/commit. Runtime/generator/map
+inputs did not change, so earlier applicable evidence remains available for review.
+
+## Normal moving first-contact packet contract (2026-10-11)
+
+Before implementation, the bounded observer is an actual START_OPEN sliding door's
+InputClose ->101c1520 local velocity/deadline ->10038cb0 think0/deadline clip/135
+->10038710 transaction ->object46, followed by1002ea40's admitted solve and actual
+creation-owned active226100b4f30 ->100a55b0. A separate native static wall pins the
+authored blocker; each test owns its own engine scene. The existing
+NativeDoorFeedbackObserver proves eventual178, but does not identify first44.
+Extend that observer without injecting a pose, velocity, clock, deadline or delay.
+
+The first44 observer records each normal target and arrival, before PrepareShadow;
+host float interval and PhysFrame's separately capped/scaled native interval remain
+distinct. Controller2601aad0 stores the target and nonnegative arrival, wakes changed
+targets;2601aa50 consumes actual simulation-event delta, counts arrival down and
+uses2601a250/26019600's confirmed velocity correction. Installed UE5.8 public
+BodyInstance.h1028/1031/1187/1202/1205 and the existing ModelPhysics consumers were
+inspected: supported GT writes/readback around completed solves are the adapter
+boundary. GetUnrealWorldTransform's projection default is recorded, not equated to
+retail37. Actual47/26018640 samples the environment simulation clock;
+26019580 constructs its time argument, rather than supplying that clock.
+37 samples the ordinary environment clock and is a separate diagnostic. Chaos owns
+geometry, broadphase, manifolds and solve mechanics. No IVP scheduler/layout clone.
+
+Position/velocity convert centimetres to separately stored Source-inch float words;
+Y is reflected at the adapter boundary; angles are Source pitch/yaw/roll degrees,
+not Unreal Euler signs. Observer inputs include LOCAL220/221, absolute217/219,
+linear/angular velocity, LocalTime+3f4, StartFrame+160, deadline+3fc, callback native
+incarnation, target, arrival and post-prepare countdown.100a55b0 exits for dt<=0;
+nonzero linear velocity enables strict discrepancy squared>1 inch squared, then
+distance/(speed*dt), clamp[0,dt], subtract. Nonzero angular velocity enables signed
+quaternion angle absolute>.5 degrees and full rewind. Positive rewind reads220 then
+221 and calls62 then64; corrected<=start admits44. The observer records threshold,
+rollback and actual178 separately; native contact presence alone is not178 parity.
+
+Creation-owned other object6 feeds178 BEFORE corrected LocalTime is written. Base
+100a4d40 calls the installed callback, then resolves live authored parent+254 and
+forwards178; deletion/reparenting and independent move-parent+25c retain existing
+native/world and callback fixtures as observers. StartFrame then receives current
+LocalTime; deadline!=0 && deadline<=LocalTime clears deadline before133. Actual
+sliding178 peer/output behavior is the existing moving observer, while clear-before-
+133/helper/arrival order is NativeArrivalClockObservers. No new callback is installed.
+
+SAVE-only FLOAT+160/+3fc and moving LocalTime/velocity/local pose survive existing
+save and DoorElevator/ModelPhysics restore observers. Fresh Load natives retire
+before saved reconstruction; creation identity, generation and alias guards remain
+required, and first44 records the live captured incarnation. L3 owns10036bd0's
+pending-view writes/consumption (hooks.tsv); this sliding observer has angular
+velocity0 and does not claim player or specialized higher receiver coverage.
+
+The matched public probe will replay actual normal per-frame object46 submissions,
+creation parameters and static wall geometry, retaining actual47 and44 after
+Simulate. It compares feedback against the same recorded logical/local/velocity
+inputs, not against interpolated37 or arbitrary final seating. This is a bounded
+service comparison, not independently simulated retail gameplay. Unknown before
+the fixture runs: first44's dt/threshold reach and whether it changes actual178.
+Full candidate encounter equivalence and broad trajectory equivalence remain OPEN.
+Any material input/clock/geometry mismatch prevents a parity conclusion; positions
+alone never license a delay, sort, topology clone or invented missing dependency.
+
 Recovered against main `e798fe5b`, before implementation. Addresses `100...`/`101...`
 are vampire.dll, `260...` are vphysics.dll. Corpus C, assembly and read-only retail
 PE reads are evidence; decompiler comparison expressions below are misleading.

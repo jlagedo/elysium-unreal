@@ -984,6 +984,67 @@ membership removal has no complete production shadow witness and the whole funct
 
 ### Recovered shadow/frame prerequisite chain (2026-10-11; implementation open)
 
+#### Public moving-event observation (2026-10-11; bounded service contract)
+
+Read-only `Bin/vphysics.dll` PE recovery confirms environment table260c9998:
+dynamic#7=260104f0 and static#8=260105d0 take the same five explicit arguments
+(shape, material index, position, Source angles, ObjectParams), returning with RET14h.
+Both call260189f0; their seventh helper argument is respectively staticFlag0/1.
+This supports a genuine static wall in the public replay, without a private body layout.
+Environment#26=26010900 is Simulate;#28=26010f10 returns the timestep as float;
+#29=26010f20 accepts a float timestep;#30=26010f40 returns ordinary time as float.
+#32=26011330 takes a callback pointer, not a next-frame-time getter.
+
+Actual object47/26018640 loads the body's environment simulation sample time
+(the double at environment+130), constructs that time argument through26019580,
+then samples through2602e700 and returns literal1. Public environment#30 reads
+ordinary time (+128), so it cannot identify47's sample time. Object37 is a separate
+ordinary-clock interpolation read. The replay uses47, never substitutes37 and never
+reads either private time field. These layout facts explain the contract only.
+
+Controller2601aa50 receives the simulation-event pointer as its second explicit
+argument. It loads the event double delta, stores a float argument for2601a250,
+then subtracts the event double from its FLOAT remaining-arrival value and clamps
+at zero. A Simulate request delta therefore does not by itself establish the shadow
+controller delta or invocation count. The public motion callback exposes that event
+delta without reproducing the private event scheduler:
+
+| Public interface | Confirmed VtMB ABI / lifetime |
+| --- | --- |
+| Environment#39,260113c0 | One handler pointer;260166b0 ->26015ef0 returns controller interface at allocation+4 |
+| Environment#40,260113e0 | Destroy controller through virtual0(deleteFlag1), before retiring attached bodies/environment |
+| Controller table260c9d48#1,26016470 | SetEventHandler |
+| Controller#2,26016480 | AttachObject: exactly one object argument, RET4; no later SDK's checkIfAlreadyAttached bool |
+| Controller#3/#4/#5/#6/#7/#8 | Detach260165c0 / Count26015fa0 / Objects26015fb0 / Clear26015fe0 / Wake26016010 / Priority26016440 |
+| Callback thunk260160f0 at26016152 | Handler virtual0 receives public controller, object wrapper, float(event delta), linear reference, angular reference |
+| Handler return0 | SIM_NOTHING: decrement then unsigned >3 takes260163f0 without applying acceleration/force; output references are ignored |
+
+The observer attaches to the dynamic subject, records delta and returns0. It leaves
+the ignored output references untouched and never reads uninitialized force vectors.
+The handler remains alive through controller destruction. Control and observer runs
+use the same executable and extracted input file; the paired CSV compares all
+non-event columns exactly. This tests observed47/44/clock/rule outputs, while equal
+creation/target inputs are established by their shared code path and provenance hashes.
+
+Authoritative paired receipt:
+`E:/elysium-work/research/vphysics-contacts/20261011T102350.497103Z/index.json`.
+Both exit0 and `eventObserverPreservedAllOtherColumns=true`. Across32 normal moving
+frames, actual event delta is always .0149999997 seconds:28 frames have one event,
+frames1/9/18/27 have two. Decisive frames20/26/32 each have one event. The configured
+public timestep remains the existing .015; requested Simulate delta is .0166666675.
+This establishes measured cadence for this replay, not a universal fixed timestep rule.
+
+The native adapter's PrepareShadow currently executes once on the game thread using
+the admitted request delta .0166666675, not the source simulation-event delta/count.
+This is a concrete producer-phase mismatch. It does not establish the sole cause of
+contact/feedback differences, or that a Chaos per-simulation callback would reproduce
+retail cadence. The next adapter contract must first observe supported Chaos callback
+delta/count/phase, threading/lifetime and completed-pose sampling. Unreal owns the
+schedule and rigid mechanics; no fixed.015 scheduler, IVP phase/layout clone, added
+lag or contact-order repair follows from this evidence. Actual moving consequence
+and native-retail contact service equivalence remain open; the matched normal prefix
+and feedback thresholds are recorded in the L0 pusher walk.
+
 The first reached observer is a parented `prop_dynamic` solid2: InitStatic100a5bb0
 delegates InitShadow100a6150(false,false,null). It requires a dynamic bbox body, not
 a static replacement. InitShadow runs Setup/225, obtains absolute pose and collision

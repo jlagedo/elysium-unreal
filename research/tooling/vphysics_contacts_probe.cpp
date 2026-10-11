@@ -6,6 +6,8 @@
 #include <string>
 #include <fstream>
 #include <iterator>
+#include <vector>
+#include <sstream>
 
 template<class T> static T Method(void* Object, int Slot)
 { return reinterpret_cast<T>((*reinterpret_cast<void***>(Object))[Slot]); }
@@ -39,6 +41,16 @@ using ShadowPose = int (__thiscall*)(void*, float*, float*);
 using DestroyBody = void (__thiscall*)(void*, void*);
 
 struct Body { const char* Name; void* Object = nullptr; float Target[3] = {}; unsigned Incarnation = 0, UpdateCalls = 0; float LastArrival = 0.f; };
+struct MovingInput {
+  int Frame; double HostTime; float HostDt; std::string Name;
+  float Target[3], Arrival, Logical[3], Velocity[3], Local, Start, Deadline, AngularSquared;
+};
+// VtMB env39/40, motion public table260c9d48; callback260160f0/26016152.
+// Single virtual, no destructor slot. SIM_NOTHING0 applies no force or acceleration.
+struct MotionEventObserver {
+  std::vector<float> Deltas;
+  virtual int Simulate(void*, void*, float Delta, float*, float*) { Deltas.push_back(Delta); return 0; }
+};
 static std::string Variant = "baseline";
 static float SourceInches(double Cm) { return static_cast<float>(Cm / 2.54); }
 static void Target(Body& Item, double X, double Y, double Z)
@@ -50,14 +62,18 @@ static void Target(Body& Item, double X, double Y, double Z)
 
 int main(int argc, char** argv)
 {
-  if (argc < 4 || argc > 7) return 2;
+  if (argc < 4 || argc > 9) return 2;
+  const bool MovingReplay=argc>=8;
+  const bool ObserveEvents=argc==9 && std::string(argv[8])=="events";
+  if (argc==9 && !ObserveEvents) return 2;
   if (argc >= 5) Variant=argv[4];
   const std::string Clock = argc >= 6 ? argv[5] : "raw";
-  const std::string Arrival = argc == 7 ? argv[6] : "frame";
+  const std::string Arrival = argc >= 7 ? argv[6] : "frame";
   if (Clock!="raw" && Clock!="admitted") return 2;
   if (Arrival!="frame" && Arrival!="zero") return 2;
   if (Variant!="baseline" && Variant!="swapped" && Variant!="mirror" && Variant!="swizzle") return 2;
-  printf("variant=%s clock=%s arrival=%s; second recreation remains at .45\n",Variant.c_str(),Clock.c_str(),Arrival.c_str());
+  if (MovingReplay) printf("moving replay: recorded admitted frames/normal object46 arrival; prefix ends at first native178; eventObserver=%d\n",ObserveEvents);
+  else printf("variant=%s clock=%s arrival=%s; second recreation remains at .45\n",Variant.c_str(),Clock.c_str(),Arrival.c_str());
   const std::string Bin = argv[1]; SetDllDirectoryA(Bin.c_str());
   HMODULE Dll = LoadLibraryA((Bin + "/vphysics.dll").c_str());
   if (!Dll) return 3;
@@ -102,6 +118,31 @@ int main(int argc, char** argv)
   Body Subject{"subject"}, First{"first"}, Second{"second"};
   Target(Subject,0,0,1000); Target(First,19,0,1000); Target(Second,-100,0,1000);
   Body* Bodies[] = {&Subject,&First,&Second};
+  std::vector<MovingInput> MovingInputs;
+  if (MovingReplay) {
+    First.Name="blocker"; Second.Name="peer";
+    std::ifstream MovingFile(argv[7]); std::string Row;
+    unsigned Created=0;
+    while (std::getline(MovingFile,Row)) {
+      for (char& Ch : Row) if (Ch==',') Ch=' ';
+      std::istringstream Stream(Row); std::string Tag; Stream>>Tag;
+      if (Tag=="MOVING_CREATE") {
+        std::string Name; float Position[3]; Stream>>Name>>Position[0]>>Position[1]>>Position[2];
+        for (Body* Item : Bodies) if (Name==Item->Name) {
+          for (int Axis=0; Axis<3; ++Axis) Item->Target[Axis]=Position[Axis]; ++Created;
+        }
+      } else if (Tag=="MOVING_INPUT") {
+        MovingInput Item{}; Stream>>Item.Frame>>Item.HostTime>>Item.HostDt>>Item.Name;
+        for(float& Value : Item.Target) Stream>>Value;
+        Stream>>Item.Arrival; for(float& Value : Item.Logical) Stream>>Value;
+        for(float& Value : Item.Velocity) Stream>>Value;
+        Stream>>Item.Local>>Item.Start>>Item.Deadline>>Item.AngularSquared;
+        if (Stream.fail() || Item.AngularSquared!=0.f) return 13;
+        MovingInputs.push_back(Item);
+      }
+    }
+    if (Created!=3 || MovingInputs.empty() || MovingInputs.size()%3) return 14;
+  }
   auto Create = [&](Body& Item) {
     ObjectParams Params; Params.Name = Item.Name; Params.GameData = &Item;
     Item.Object = Method<CreateBody>(Environment, 7)(Environment, Shape, Material, Item.Target, Zero, &Params);
@@ -114,8 +155,77 @@ int main(int argc, char** argv)
     return true;
   };
   Body* CreationOrder[] = {&Subject,Variant=="swapped"?&Second:&First,Variant=="swapped"?&First:&Second};
-  for (Body* Item : CreationOrder) if (!Create(*Item)) return 9;
+  if (!MovingReplay) for (Body* Item : CreationOrder) if (!Create(*Item)) return 9;
   FILE* Output = nullptr; fopen_s(&Output, argv[3], "w"); if (!Output) return 10;
+  if (MovingReplay) {
+    //260c9998#8=260105d0, identical five argument ABI to#7, staticFlag1 to260189f0.
+    float WallVertices[8][3]; const float* WallPointers[8]; int WallIndex=0;
+    for(double X : {-10.,10.}) for(double Y : {-100.,100.}) for(double Z : {-100.,100.}) {
+      WallVertices[WallIndex][0]=SourceInches(X); WallVertices[WallIndex][1]=SourceInches(-Y); WallVertices[WallIndex][2]=SourceInches(Z);
+      WallPointers[WallIndex]=WallVertices[WallIndex]; ++WallIndex;
+    }
+    void* WallHull=Method<Convex>(Collision,ConvexSlot)(Collision,WallPointers,8);
+    void* WallShape=Method<ConvertConvex>(Collision,ConvertSlot)(Collision,&WallHull,1);
+    const float WallPosition[3]={SourceInches(-36.),0.f,SourceInches(1000.)};
+    ObjectParams WallParams; WallParams.Name="pinned_world_wall";
+    void* Wall=Method<CreateBody>(Environment,8)(Environment,WallShape,Material,WallPosition,Zero,&WallParams);
+    if (!Wall) return 15;
+    Method<SetInt>(Wall,66)(Wall,1);
+    for (Body* Item : CreationOrder) if (!Create(*Item)) return 9;
+    MotionEventObserver EventObserver; void* MotionController=nullptr;
+    if (ObserveEvents) {
+      using CreateMotion=void* (__thiscall*)(void*,MotionEventObserver*);
+      using AttachMotion=void (__thiscall*)(void*,void*); // VtMB takes ONE object arg, no SDK2013 bool.
+      MotionController=Method<CreateMotion>(Environment,39)(Environment,&EventObserver);
+      if (!MotionController) return 17;
+      Method<AttachMotion>(MotionController,2)(MotionController,Subject.Object);
+    }
+    fprintf(Output,"frame,time,host_dt,native_dt,arrival,interval,logical_x,shadow47_x,shadow47_y,shadow47_z,dist_squared,present,partner,rollback,corrected,blocked,deadline,timestep,ordinary_before,ordinary_after,event_count,event_min,event_max,event_sum\n");
+    for(size_t Base=0; Base<MovingInputs.size(); Base+=3) {
+      const auto& Feedback=MovingInputs[Base];
+      if (Feedback.Name!="subject") return 16;
+      for(size_t Offset=0; Offset<3; ++Offset) {
+        const auto& Submitted=MovingInputs[Base+Offset]; Body* Item=Bodies[Offset];
+        if (Submitted.Frame!=Feedback.Frame || Submitted.Name!=Item->Name) return 16;
+        Method<UpdateShadow>(Item->Object,46)(Item->Object,Submitted.Target,Zero,false,Submitted.Arrival);
+      }
+      const float NativeDt=std::fmin(Feedback.HostDt,.1f); //1002ea40, phys_timescale1.
+      using ClockValue=float (__thiscall*)(void*);
+      const float Timestep=Method<ClockValue>(Environment,28)(Environment);
+      const float OrdinaryBefore=Method<ClockValue>(Environment,30)(Environment);
+      EventObserver.Deltas.clear();
+      Method<Simulate>(Environment,26)(Environment,NativeDt);
+      const float OrdinaryAfter=Method<ClockValue>(Environment,30)(Environment);
+      float Position[3], Angles[3]; Method<ShadowPose>(Subject.Object,47)(Subject.Object,Position,Angles);
+      void* Partner=nullptr; const bool Present=Method<Contact>(Subject.Object,44)(Subject.Object,nullptr,&Partner);
+      Body* PartnerOwner=Partner?static_cast<Body*>(Method<GameData>(Partner,6)(Partner)):nullptr;
+      // Match the adapter's separate Source-float operand stores then double FVector arithmetic.
+      const double Delta[3]={double(Position[0])-Feedback.Logical[0],double(Position[1])-Feedback.Logical[1],double(Position[2])-Feedback.Logical[2]};
+      const double DistanceSquared=Delta[2]*Delta[2]+Delta[0]*Delta[0]+Delta[1]*Delta[1];
+      const float Interval=Feedback.Local-Feedback.Start;
+      float Corrected=Feedback.Local;
+      const float SpeedSquared=static_cast<float>(double(Feedback.Velocity[0])*Feedback.Velocity[0]+double(Feedback.Velocity[1])*Feedback.Velocity[1]+double(Feedback.Velocity[2])*Feedback.Velocity[2]);
+      if (Interval>0.f && SpeedSquared!=0.f && DistanceSquared>1.) {
+        const float Distance=std::sqrt(static_cast<float>(DistanceSquared));
+        const double Seconds=Distance/(std::sqrt(double(SpeedSquared))*Interval);
+        Corrected=static_cast<float>(Feedback.Local-std::fmax(0.,std::fmin(Seconds,double(Interval))));
+      }
+      const float Rollback=Feedback.Local-Corrected;
+      const bool Blocked=Interval>0.f && Rollback>0.f && Corrected<=Feedback.Start && Present;
+      float EventMin=0.f,EventMax=0.f,EventSum=0.f;
+      if (!EventObserver.Deltas.empty()) EventMin=EventObserver.Deltas.front();
+      for(float EventDt : EventObserver.Deltas) { EventMin=std::fmin(EventMin,EventDt); EventMax=std::fmax(EventMax,EventDt); EventSum+=EventDt; }
+      fprintf(Output,"%d,%.17g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.17g,%d,%s,%.9g,%.9g,%d,%.9g,%.9g,%.9g,%.9g,%u,%.9g,%.9g,%.9g\n",
+        Feedback.Frame,Feedback.HostTime,Feedback.HostDt,NativeDt,Feedback.Arrival,Interval,Feedback.Logical[0],Position[0],Position[1],Position[2],DistanceSquared,
+        Present,PartnerOwner?PartnerOwner->Name:"null",Rollback,Corrected,Blocked,Feedback.Deadline,Timestep,OrdinaryBefore,OrdinaryAfter,static_cast<unsigned>(EventObserver.Deltas.size()),EventMin,EventMax,EventSum);
+      printf("moving frame=%d time=%.9g dt=%.9g arrival=%.9g interval=%.9g dist2=%.9g contact=%d partner=%s rollback=%.9g blocked=%d\n",
+        Feedback.Frame,Feedback.HostTime,NativeDt,Feedback.Arrival,Interval,DistanceSquared,Present,PartnerOwner?PartnerOwner->Name:"null",Rollback,Blocked);
+    }
+    fclose(Output);
+    if (MotionController) { using DestroyMotion=void (__thiscall*)(void*,void*); Method<DestroyMotion>(Environment,40)(Environment,MotionController); }
+    using DestroyEnv=void (__thiscall*)(void*,void*); Method<DestroyEnv>(Physics,1)(Physics,Environment);
+    return 0;
+  }
   fprintf(Output,"phase,time,dt,present,partner,subject_x,subject_y,subject_z,first_x,first_y,first_z,second_x,second_y,second_z,contact_x,contact_y,contact_z,first_present,first_partner,second_present,second_partner,subject_target_x,subject_target_y,subject_target_z,first_target_x,first_target_y,first_target_z,second_target_x,second_target_y,second_target_z,host_dt,clock,subject_shadow_x,subject_shadow_y,subject_shadow_z,first_shadow_x,first_shadow_y,first_shadow_z,second_shadow_x,second_shadow_y,second_shadow_z,subject_pitch,subject_yaw,subject_roll,first_pitch,first_yaw,first_roll,second_pitch,second_yaw,second_roll\n");
   double Time = 0.; float LastDt=0.f, LastHostDt=0.f;
   auto Observe = [&](const char* Phase) {

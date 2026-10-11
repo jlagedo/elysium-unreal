@@ -1,5 +1,36 @@
 # Worker runs — L0-entity
 
+## Normal moving contact evidence — 2026-10-11 (after28c40da1)
+
+Sole fresh Sol High worker, no inherited history, proved normal START_OPEN/InputClose
+through positive local interval/velocity, object46 arrival, completed47/active226 and actual
+100a55b0/178. New NativeMovingFirstContact retains prior receiver assertions, uses separate
+scene lifetime, matches authored default wall material and proves repeated same-fence44
+qualification/selected-owner/provenance idempotence. No runtime code changed.
+
+Native first44 is20/.333333333; first178 at32/.533333333 has squared discrepancy
+1.0501758925050075. Matched public replay through the solve before native32 callback has
+47 discrepancy squared.57965414909080337 and no calculated178. Native callback-altered
+suffix inputs are excluded. Supported public SIM_NOTHING MotionEvent returns0 without force;
+confirmed environment39/40 and one-argument controller2 attach own its lifetime. Paired
+outputs are exact in all non-event CSV columns. Measured event delta is.0149999997,
+28 single-event frames and two events at1/9/18/27, compared with native once-GT request
+.0166666675. That is a concrete input/phase mismatch, not its sole causal responsibility
+or established timing/contact parity. Recovery is in physics-interaction.md and the pusher walk.
+
+Frozen10:26:40UTC build102150 exit0/29.5s; affected Mover16 at102220 passes16 clean;
+paired public102350 passes both exit0/all non-event equal. Coordinator default102655
+passes189 (110 clean/79 warned), no failed/notRun/inProcess. Original bounded19 arena102732
+passes19/19 in two boots/both host exit0; wrapper65.75s, startup27 errors/535 warnings.
+Full receipt paths/frozen hashes/reused unchanged generator54/map2/arm-consumer evidence
+are recorded in progress.md. Audit unchanged7946/16columns; no content/golden edits,
+ledger regeneration/kernel --check, worker commit/push or full layer gate claim.
+
+Coordinator exact seven-path checkpoint includes this record. Original23/88 remains;
+moving timing, contact mechanics and independent candidate encounter equivalence stay OPEN.
+Next is supported Chaos simulation-event delta/count/phase, threading/lifetime and completed
+pose sampling verification before a faithful adapter repair, never a fixed.015/IVP schedule clone.
+
 Each run is one worker's job (`../method.md`): the slice briefs listed, in order, in one go (`briefs/`). Bundled from
 consecutive slices of one subsystem up to ~1.5 KB of retail code or 8 functions. Estimated minutes =
 25 fixed + 20 per KB of retail code.

@@ -13,6 +13,19 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Normal moving first-contact evidence packet (2026-10-11; coordinator gated):
+  actual START_OPEN/InputClose produces normal object46 arrival, positive local interval
+  and linear velocity, then completed47/active226/100a55b0/178 without injected state.
+  Native first44 is frame20; first178 frame32 has discrepancy squared1.0501758925050075.
+  Matched public service replay through that pre-callback solve has discrepancy squared
+  .57965414909080337 and no calculated178. Supported zero-force MotionEvent observation
+  preserves all non-event outputs and measures .0149999997 event delta versus native
+  once-GT request .0166666675. This producer-phase mismatch is established, not its sole
+  causal responsibility or parity. Runtime is unchanged; moving timing/contact equivalence,
+  candidate encounter equivalence, original23/88 and all L0 closing requirements stay OPEN.
+  Next: verify supported Chaos callback delta/count/phase, threading/lifetime and completed
+  pose sample before an adapter repair; no fixed.015 scheduler or IVP mechanism clone.
+
 - Reached pusher feedback packet (2026-10-11; frozen gates reviewed): generic226
   moves1/8 and scoped door/button/elevator inputs now retain Source pose/clock/deadline
   rules, native brush recipes and moving restore, common-solid v3 query/solve filters,
@@ -1059,3 +1072,51 @@ and named timing/encounter limits. Its current hand verdict emits a separate han
 comment, so this metadata edit changes no generated executable or runtime/test hash.
 The final annotation gate reruns the same54 pipeline tests, all passing in1.65s:
 `E:/elysium-work/codex/l0-pusher-freeze-20261011/pipeline54-final-annotation.xml`.
+
+### Frozen gate checkpoint — normal moving contact evidence, 2026-10-11
+
+The sole fresh Sol High worker reused main28c40da1. Four functional/walk paths plus
+matching physics oracle and progress/runs form this exact seven-path evidence packet.
+Runtime, generator, audit, hooks, maps and tracked game content are unchanged. Source
+froze10:26:40UTC. Original NativeDoorFeedbackObserver assertions remain; the new case
+adds initial identity/velocity/material, normal target/arrival/clocks, current incarnation,
+first44, production226/178 and repeated same-fence44 idempotence witnesses. Its query
+advances subject qualification before standard RefreshContactOutputs at the same completed
+solve fence; it does not claim observation after that refresh or full mechanical parity.
+
+The normal prefix reaches native44 at20/.333333333 without178 and actual178 at32/.533333333.
+Public replay ends before that native callback; its frame32 squared discrepancy is below
+the unchanged strict1in² gate. Suffix frames following native altered targets are excluded.
+Paired public MotionEvent observation returns SIM_NOTHING0, ignores output references and
+uses confirmed public create/one-argument attach/destroy lifetime. All non-event CSV columns
+are exact matches. Measured .015 events occur once in28 frames and twice at1/9/18/27.
+This identifies an event-input/phase contract gap in once-GT PrepareShadow, not the sole
+cause of different contact/receiver timing or permission for a retail scheduler clone.
+
+Coherent final --arm build passes exit0/29.5s:
+`E:/elysium-work/logs/20261011T102150.355278Z-build.json`.
+Affected Mover16 passes16 clean/0 failed/notRun/inProcess:
+`E:/elysium-work/reports/tests/20261011T102220.711038Z-elysium-substrate-mover/index.json`.
+Paired public replay passes both processes exit0 and all non-event columns equal:
+`E:/elysium-work/research/vphysics-contacts/20261011T102350.497103Z/index.json`.
+Coordinator default189 passes110 clean/79 warned/0 failed/notRun/inProcess:
+`E:/elysium-work/reports/tests/20261011T102655.089584Z-elysium-session-elysium-substrate/index.json`;
+wrapper `E:/elysium-work/logs/20261011T102654.937512Z-test.json`, exit0/30.1s.
+Original bounded19 arena passes19/19 in two boots, both hosts exit0:
+`E:/elysium-work/reports/arena/20261011T102732.302155Z/index.json`;
+wrapper `E:/elysium-work/logs/20261011T102732.055412Z-arena.json`, exit0/65.75s.
+Ordinary first_unmet values are null; both deliberate refusal selftests retain inverted passes.
+Startup27 errors/535 warnings remain separate from scenario results; no failure is waived.
+
+Unchanged generator/map input evidence is reused after diff inspection: pipeline54 at
+`E:/elysium-work/codex/l0-pusher-freeze-20261011/pipeline54-final-annotation.xml`,
+actual v3 map2-clean receipt074423.155641Z, and prior untouched arm consumers095713.837350Z.
+No ledger regeneration/kernel --check ran. Audit remains7946 rows of16 columns.
+Functional SHA256 after final gates: test46A70450EC3A10C0DE81CC61949A228F566709C51D7D076C951CEA32B39B3A47;
+probe wrapper6875CC61889E76471B614BE81B8AB2CBF1E98F553C865BEBC7BA1AE5C6790466;
+probe C++3E68CC5C861D31E4EA7FEC1CBBEE54943710B68C7ABE113909585D0F535CA4FF.
+Only documentation bookkeeping follows source freeze. Coordinator owns exact-path commit;
+no push, full arm/full arena/boot-order closure or original run closure is claimed.
+Next fresh packet verifies public Chaos per-event delta/count/phase and safe callback
+lifetime/output/sample boundary before implementation. Moving178 mismatch and independent
+candidate encounter/mechanical equivalence remain required open observers.
