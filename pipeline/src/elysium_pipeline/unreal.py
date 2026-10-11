@@ -167,7 +167,7 @@ _HEADLESS_EDITOR_ARGS = ("-NoLiveCoding", "-noP4", "-nosound", _UNCONTROLLED_CHA
 
 def _run(config, runner, executable: Path | str, args: Sequence[str], *,
          timeout: float | None = None, idle_timeout: float | None = None,
-         category: int | None = None) -> None:
+         category: int | None = None, native_audio: bool = False) -> None:
     arguments = list(map(str, args))
     executable_name = Path(executable).name.casefold()
     tail_lines = None
@@ -182,7 +182,8 @@ def _run(config, runner, executable: Path | str, args: Sequence[str], *,
         lowered = {argument.casefold() for argument in arguments}
         if "-unattended" in lowered:
             arguments.extend(flag for flag in _HEADLESS_EDITOR_ARGS
-                             if flag.casefold() not in lowered)
+                             if flag.casefold() not in lowered
+                             and not (native_audio and flag.casefold() == "-nosound"))
     # Passed only when set: every launch but the automation run leaves it unset, and a runner
     # stand-in written against the older signature keeps working for them.
     bounds = {"timeout": timeout}
@@ -1134,7 +1135,7 @@ def prepare_arm_tier(config, runner, prefixes: Sequence[str]) -> tuple[bool, boo
 
 
 def run_tests(config, runner, filter_name: str | Sequence[str] = DEFAULT_TEST_FILTER, *,
-              parity_stems: Sequence[str] = ()) -> dict:
+              parity_stems: Sequence[str] = (), native_audio: bool = False) -> dict:
     """Run an automation selection and report what actually executed.
 
     `filter_name` is one prefix or several, and every prefix runs in ONE editor boot (Unreal takes
@@ -1184,7 +1185,7 @@ def run_tests(config, runner, filter_name: str | Sequence[str] = DEFAULT_TEST_FI
     try:
         _run(config, runner, editor_executable(config, commandlet=True), arguments,
              timeout=TEST_TIMEOUT_SECONDS, idle_timeout=TEST_IDLE_TIMEOUT_SECONDS,
-             category=ExitCode.UNREAL_OR_BAKE)
+             category=ExitCode.UNREAL_OR_BAKE, native_audio=native_audio)
     except ProcessTimeout as exc:
         # A killed run leaves a report directory the caller would otherwise never be pointed
         # at, and the only statement of which test wedged is in the streamed output: the last

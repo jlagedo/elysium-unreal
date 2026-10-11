@@ -1,5 +1,41 @@
 # L0 progress — the orchestrator's log
 
+## Selected live SoundEmitter source/native lifetime prerequisite — 2026-10-11 (after db4d174c)
+
+Current sound cycle supplies the whole selected authored table, public sound-script-data export/import,
+explicit value-copied resolver-to-typed native audio API and selected native preparation/map barrier.
+UP-first raw sources, first-root manifest selection, ordered duplicate/scalar/wave producers, defaults,
+gender bounds, retained names and process source/missing caches are real. Source-bound availability
+distinguishes validated authored absence from missing bakes/unknowns; all attempts remain ordered.
+Presence/absence is captured exporter fact, not authentication; unknown source coverage fails closed.
+Actual chosen cached text/Size is copied synchronously and checked against raw metadata on reload/GI.
+
+Native family191559.823695Z proves physical WASAPI48000,48 descriptors/138 waves,13 absent and125
+native attempts yielding121 ready streaming/chunks2 SoundWaves, and actual playing shipped
+Concrete.Impact with gain/pitch/attenuation/fixed location. Lifecycle proves pending121 before reload
+and shutdown, generation1→2→3, ready handle ownership release, copied requests after reload, literal
+owner/epoch cancellation with three initially playing controls and an unrelated surviving voice.
+Public shutdown state remains empty over three callback frames; no private eviction/callback claim.
+Separate normal -nosound arm preserves simulation readiness and refuses native resolve/submit.
+
+Functional26 frozen at prejob-v5-lifecycle/sources.json SHA
+dc77770f3949b948061f74d242bdfb18a192b115b6765d3930c78de0b03856ed under
+E:/elysium-work/codex/l0-sound-producer-implementation-20261011. Only two NEW fixture files changed
+after first branch review; unchanged191 pipeline tests and public export/import receipts are reused.
+Final --arm build passes; native2/2 and affected arms/substrate21/21 pass; default194/194 passes
+with171 existing warnings. Exact six sound/KV arena scenarios pass in one boot, first_unmet null;
+wrapper27 existing editor Python startup errors/22 warnings retained separately.
+Doctor192539.665978Z passes with21 existing warnings; repo-only192549.532611Z passes with zero.
+Detailed receipts, recovery, failed trials and limitations are in
+[walks/L0-sound-producer.md](walks/L0-sound-producer.md).
+
+Generic attenuation x87 runtime precision and unselected nonfile native adapter remain OPEN.
+Actual impact consumer0x1002cd50/dispatcher and generic EmitSound wiring remain OPEN; no acoustic,
+packaged-cook or full-map parity claim. **0 original packages newly closed;23/88 complete,65 remaining.**
+Full L0 stays OPEN. Exact-path review precedes local commit; owner planning/save-policy changes
+remain separate dirty work. No push, audit/hooks/retail ledger/golden edits or next implementation
+packet belongs to this cycle. Close this checkpoint, then STOP.
+
 ## Declared raw material input/product/native effect — 2026-10-11 (after dc6c25bf)
 
 One serial worker closes the bounded declared JSON material producer/effect contract, including

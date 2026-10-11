@@ -67,6 +67,7 @@ EXPORT_V2_COMMANDS = (
     "particle-glb", "particles-glb",
     "font-glb", "fonts-glb", "font-list-glb",
     "sound-script-glb", "sound-scripts-glb",
+    "sound-script-data-glb", "physics-surfaces-glb",
     "sentence-glb", "sentences-glb",
     "dsp-preset-glb", "dsp-presets-glb",
     "sound-scheme-glb", "sound-schemes-glb",
@@ -109,6 +110,7 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 #: commands of their own, each with its own editor boot, and a level was not loadable between
 #: them. They are stages of `bake map` now; their offline halves still live under `importers/`.
 IMPORT_COMMANDS = ("vdata", "dialogue", "sound", "sound-schemes", "scripts", "engine-config",
+                   "sound-script-data", "physics-surfaces",
                    "ai-schedules",
                    "ui-strings", "textures",
                    "surface-properties", "materials",

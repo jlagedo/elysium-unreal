@@ -113,6 +113,9 @@ namespace ElysiumKeyValuesLoader
 		int32 PathID = 0;
 		uint8 Cache = 1;
 		IElysiumRetailSiteSink* Sites = nullptr;
+		// Optional synchronous observation of the ACTUAL selected cache/owned source. Borrowed
+		// arguments expire with this call; a consumer needing them later must copy the values.
+		TFunction<void(const FString& FileName, const FString& ChosenText, int32 Size)> SelectedTextObserver;
 	};
 
 	// `0x102480f0` `(this, filename, fs, pathID, cache)`. `Target` is ECX: the caller's node, renamed by

@@ -9,6 +9,8 @@ class UAudioComponent;
 class USceneComponent;
 class USoundWave;
 class IConsoleObject;
+struct FElysiumScriptNativeHost;
+namespace ElysiumSoundScript { struct FSoundParameters; class FSourceTable; }
 // A request may carry a whole authored falloff instead of a radius (the body-sound path builds one
 // from a Source sound level). Held by shared pointer to an INCOMPLETE type on purpose: the settings
 // struct drags `Sound/SoundAttenuation.h` and its generated header behind it, and this header is
@@ -299,7 +301,15 @@ public:
 	// gate: readiness is the baked family's presence, and that is one asset-registry index built
 	// once on first use (AUD1.2 -- it was a directory probe while the corpus was read loose).
 	static bool IsSoundCorpusPresent();
-	bool IsReadyForMapActivation() const { return PendingPrefetches == 0; }
+	bool IsReadyForMapActivation();
+	bool IsSoundScriptNativeReady();
+	// Explicit live script boundary. Outputs remain retail values; channel/owner-only belong to caller.
+	bool ReloadSoundScripts(FString& Error);
+	bool ResolveSoundScript(const TCHAR* Name, ElysiumSoundScript::FSoundParameters& Out, FString& Error);
+	FElysiumVoiceHandle SubmitResolvedScript(const ElysiumSoundScript::FSoundParameters& Params,
+		const FElysiumAudioRequest& RequestTemplate, FString& Error);
+	const ElysiumSoundScript::FSourceTable* SoundScriptTable() const;
+	TArray<FString> ScriptReadinessEvidence() const;
 
 	FElysiumVoiceEventDelegate& OnVoiceEvent() { return VoiceEvents; }
 	FElysiumNoiseEventDelegate& OnGameplayNoise() { return NoiseEvents; }
@@ -365,6 +375,13 @@ private:
 	float OutputGain(const FElysiumAudioRequest& Request) const;
 	void RealizeVoice(FElysiumVoiceHandle Handle, USoundWave* Wave, USoundWave* LoopWave);
 	void EmitGameplayNoise(const FElysiumAudioVoice& Voice);
+	void PrepareSoundScripts();
+	void ReleaseSoundScripts();
+	FString SoundScriptReadinessError() const;
+	TSharedPtr<FElysiumScriptNativeHost> ScriptHost;
+	uint64 ScriptGeneration = 0;
+	UPROPERTY()
+	TArray<TObjectPtr<USoundWave>> ScriptRetainedWaves;
 
 	TMap<FString, FElysiumSoundAssetRow> SoundAssets;
 	// What `Prefetch` primed: the wave is held (so the load is not undone by a GC) and its

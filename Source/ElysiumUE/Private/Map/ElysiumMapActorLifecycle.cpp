@@ -980,7 +980,7 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 	P.bAnimationPreloadReady = bAnimationPreloadReady && !bNativeAnimationPreloadPending
 		&& !bNativeAnimationPreloadFailed && !bCharacterModelsPending;
 	P.bAnimationPreloadPending = bNativeAnimationPreloadPending || bCharacterModelsPending;
-	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
 	P.bAudioPrefetchReady = !Audio || Audio->IsReadyForMapActivation();
 	P.bMenuBackdrop = bMenuBackdrop;
 	const EElysiumCollisionBuildState CollisionState = Collision

@@ -200,19 +200,103 @@ validation runs only for a record the init pass flagged. `AddSound` `0x101b4d30`
 de-duplicate the developer message. There is no script lookup on this path; the row was removed.
 UNRECOVERED: the `filesystem_stdio` `FileExists` body (search paths, pack files, case); the runtime
 x87 precision control (whether `trunc(base + span * x)` sees a float32 or an extended sum); the
-`volume` / `pitch` / `soundlevel` / `attenuation` key parsers (`0x101b2420`, `0x101b2570`,
-`0x101b2630`, `0x1012f640`, `0x101b4900`); the second wave vector at `rec+0x34`; why `0x101b1120`
-and `0x101b14d0` decompile identically.
+generic runtime precision of the scalar/attenuation calculations; writers of the second wave
+vector at `rec+0x34` outside the selected source chain; why `0x101b1120` and `0x101b14d0`
+decompile identically. The selected ordered key producers are recovered below.
 
 Port: `Source/ElysiumUE/Private/Audio/ElysiumSoundScriptTable.{h,cpp}` (`FTable::FindSound`,
 `SampleInterval`, `SelectWave`, `FTable::GetParametersForSound`, `FTable::MarkMissingWaves`;
 `IEngineRandom` / `FSessionRandom` for `VEngineRandom001` over the named `SoundScript` stream --
 vstdlib's formulas, the generator the codebase's named-stream swap; `IFileExists` / `FGameSoundFiles`
-for slot 9 over the bake and the deployed corpus). The missing-sample cache lives on the table rather
-than as a process static (DevMsg de-duplication only). The table is filled by the arena's
-`sound_script` fixture; the manifest reader `AddSoundsFromFile` `0x101b4240` and the key parser
-`FUN_101b3bb0` that fill `DAT_1072be18` in the game are not ported, so the EmitSound workers do not
-yet call the resolver. Proven by `Arena/scenarios/audio/l0_sound_script_resolve.json`.
+for slot 9 over the bake and the deployed corpus). Isolated arena tables retain their own
+missing-sample cache; the live per-GameInstance source host selects the process cache. The selected
+manifest reader `AddSoundsFromFile` `0x101b4240` and ordered key parser `0x101b3bb0` now populate
+the production table from whole deployed source capsules. The existing arena resolver witness
+`Arena/scenarios/audio/l0_sound_script_resolve.json` remains unchanged. The explicit live
+ResolveSoundScript/SubmitResolvedScript boundary is proved below; generic EmitSound workers and
+the impact consumer `0x1002cd50` are still unwired by this prerequisite.
+
+### 3.1 Selected live SoundEmitter source and native lifetime (2026-10-11)
+
+All retail addresses here are `vampire.dll` unless marked. `BaseInit` `0x101b2c60` visits children
+of the FIRST manifest root in authored order: case-insensitive `precache_file` sets the file's
+precache flag, `declare_file` clears it, unknown keys warn. The required manifest failing to open
+fails initialization. A referenced file failing to open removes its appended file record, warns,
+then continues. Store the filename in 127 bytes but load the original full path. Existing
+`ElysiumKeyValuesLoader::LoadFile` supplies cache1/`ParseRoots`: successful open remains success
+for empty/comment/malformed text. The process source-text cache at `0x102482f0` persists across
+reload and new hosts; reloading a changed file under the same filename still observes cached text.
+
+`AddSoundsFromFile` `0x101b4240` visits ALL selected file root siblings with children. A
+case-insensitive existing name wins across files; skip its key parser and waves entirely.
+Constructor/defaults precede the ordered repeated-key producer `0x101b3bb0`: last scalar wins,
+waves append, and every `rndwave` child value is consumed irrespective of its key. The selected
+scalar producers are `0x101b2420`, `0x101b2570`, `0x101b2630`, `0x1012f640`, `0x101b4900`,
+`0x101b49f0`; wave/gender producers are `0x101b3830`, `0x101b3770`, `0x101b3990`. Scalar input
+uses a 127-byte comma-token buffer and stored float base/range; descriptor text is bounded to31
+bytes. Volume accepts VOL_NORM, pitch accepts100/95/120 symbols, soundlevel accepts the installed30
+symbols. Attenuation uses `a == 0 ? 0 : trunc(20/a + 50)` and numeric interval endpoints without
+reordering descending ranges; attenuation does not overwrite soundlevel text. No intervening
+float store is introduced in the stated double/ST0 adapter model: stored float0.8 yields74 there.
+Retail runtime x87 precision control remains UNRECOVERED;74 is not a measured retail result.
+The selected shipped table has no attenuation rows.
+
+The first case-insensitive `$gender` produces male/category1 then female/category2, preserving
+`0x101b3990`'s one bounded copied-byte counter across prefix and suffix. Safe bounds replace a
+potential stack overwrite; the selected table contains no gender, non-ASCII, nonfinite or
+overflow inputs. It contains48 accepted entries/138 waves, maximum41 bytes, and descending volume
+ranges. SecondList has no writer in this chain and stays empty. The quiet `0x101b4740` pass runs
+once after population. Explicit shutdown/reload `0x101b2e30` clears descriptors/file records/waves
+and active source bindings while retaining name symbols and the process missing-sample cache.
+
+`0x101afff0` attempts each eligible authored wave in order and ignores its precache return.
+The engine callee `engine.dll 0x200018e0` → `0x200f8060` → `0x200f8640` obtains metadata through
+`0x2003cf20`: failed file open at `0x2003cf88` takes `0x2003cfa5`, writes size-1 and returns
+normally through `0x2003cfbf`–`0x2003cfe1`; this missing arm neither aborts nor fails table init.
+Ten exact authored names are absent in this installation (13 attempts): six d1_town wood_creaks,
+one impact/physics/flesh/heavy/hit_hard1.wav, three impact/physics/glass/bottle/hit_hard waves.
+Different `surfaces/physics/...` names are not substitutes. Exact-name coverage includes ordinary
+pack directories, pack010's3568 zero-offset/zero-size names and empty9-byte pack100/102 directories,
+plus loose roots. This proves names for the selected fact capture, not general retail mountability.
+
+The independent `sound-script-data` capsule retains whole raw manifest/table bytes, origins,
+hashes, ordered declarations, missing references and candidate availability. Import rederives
+the first-root selection and complete ordered candidate projection before any writes. Presence
+and absence remain exporter-observed installation facts, like origin; a self-consistent factual
+flip cannot be authenticated by importer/runtime without the original installation. Absent is
+emitted only with complete error-free coverage of all relevant local sources; unknown coverage
+fails closed. The runtime binds the metadata to value copies of the ACTUAL cache-selected text
+and raw Size through the loader's optional synchronous observer. Byte/source/order mismatch,
+unknown status, present-but-unbaked and failed native preparation block readiness. Only verified
+authored absence with a missing baked asset terminates that ordered attempt with a warning.
+All waves, missing flags, resolver outputs/draws and missing-cache semantics remain intact.
+
+Unreal owns asynchronous asset loading, native precache and streaming chunks. The per-GI host
+uses a public device handle, `Precache(wave,false,false,false)` and observed Done state. Streaming
+waves require LoadZerothChunk; chunks>1 require a valid retained public FAudioChunkHandle for
+chunk1 delivered on the game thread. Weak UObject plus generation checks fence old callbacks;
+reload/shutdown cancel loads and release adapter-owned handles/wave references. Table/native
+ownership survives map teardown. Value-copied resolved parameters cross the explicit typed audio
+request API: direct wave path, caller owner/placement, gain, pitch/100 once, and existing
+ElysiumSoundLevel attenuation. Channel and owner-only flags remain resolver outputs for callers;
+generic channel replacement and recipient policy are not claimed.
+
+Map activation joins general Prefetch readiness with selected-script readiness. A ready script
+still resolves/submits while unrelated general Prefetch is pending. Explicit normal test
+`-nosound` permits populated/error-free simulation only; native readiness and Resolve/Submit
+permission stay false. No editor/commandlet/NullAudio readiness shortcut is introduced.
+
+Retained native191559.823695Z/automation191559.994586Z proves physical WASAPIMixer48000,
+121 SoundWaves (compression0, streaming1, chunks2), nativeDone/zeroth/chunk1 readiness and an
+actual playing shipped Concrete.Impact AudioComponent with gain/pitch/attenuation/fixed placement.
+Lifecycle observes pending121 before reload and shutdown, generation1→2→3, ready ownership release,
+copied requests after reload, three live controls, literal OwnerCanceled/MapEpochRetired events,
+an unrelated surviving voice, and no host/owned native rows/descriptors/voices after shutdown
+across three callback frames. This proves adapter ownership safety, not unseen delegate invocation,
+engine-global cache eviction or acoustic parity. Generic nonfile native mapping remains OPEN.
+See `docs/specs/layers/L0-entity/walks/L0-sound-producer.md` and
+`docs/contracts/seam_sound_script_data.md` for receipts and
+the capsule contract. Impact dispatch/consumer wiring and full L0 remain OPEN.
 
 ## 4. DSP / reverb bank
 

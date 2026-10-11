@@ -298,6 +298,9 @@ class Lane:
     #: already publish (`seam_map_unit_contract.md`, "Derived products"); it is written through the
     #: same atomic write, byte-equality read-back, stamp and prune as a capsule.
     derived_of: Callable[[Mapping[str, Any]], Mapping[str, bytes]] | None = None
+    #: Optional semantic validation against verified raw capsules, before any target is written.
+    #: Whole-source lanes use this to check that published selections match their manifest bytes.
+    capsule_guard: Callable[[Mapping[str, Any], Mapping[str, bytes]], None] | None = None
 
 
 def _targets_current(destination_root: Path, targets: dict[str, Any]) -> bool:
@@ -396,6 +399,8 @@ def _deploy_unit(
     root, members = read_unit(unit, extension, require_capsule=lane.derived_of is None)
     if lane.unit_guard is not None:
         lane.unit_guard(sorted(members))
+    if lane.capsule_guard is not None:
+        lane.capsule_guard(root, members)
     targets: dict[str, dict[str, Any]] = {}
 
     # A capsule member deploys wherever `target_of` names; a derived product names its own

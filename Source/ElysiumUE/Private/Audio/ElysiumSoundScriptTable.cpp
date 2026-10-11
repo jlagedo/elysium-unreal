@@ -77,6 +77,13 @@ namespace
 
 namespace ElysiumSoundScript
 {
+	void FTable::ClearSource()
+	{
+		Nodes.Reset();
+		NodeBySymbol.Reset();
+		WaveSymbols.Reset();
+		Waves.Reset();
+	}
 	// --- VEngineRandom001 -------------------------------------------------------------------------
 
 	uint32 FSessionRandom::Generate()
@@ -461,14 +468,17 @@ namespace ElysiumSoundScript
 		//         (0x101b361c), `DevMsg("...sound '%s' references wave '%s' which doesn't exist on
 		//         disk!\n", name, wave)` (string 0x10599348, 0x101b3628) and returns false (0x101b3631).
 		const FString CacheKey = FString::Printf(TEXT("%s:%s"), NameOrNull(Name), *Out.SoundName);
-		if (MissingSampleCache.Contains(FExactKey(CacheKey)))
+		// Only plain strings are process-shared; editor GameInstances never share UObject state.
+		static TSet<FExactKey> ProcessMissingSampleCache;
+		TSet<FExactKey>& Cache = bProcessMissingCache ? ProcessMissingSampleCache : MissingSampleCache;
+		if (Cache.Contains(FExactKey(CacheKey)))
 		{
 			Emit(Sites, TEXT("sndscript.resolve"), GResolveFn, 0x101b360bu, TEXT("branch"),
 				FString::Printf(TEXT("cache=hit key=%s"), *CacheKey));
 			Emit(Sites, TEXT("sndscript.resolve"), GResolveFn, 0x101b3631u, TEXT("return"), TEXT("result=0 arm=missing reported=0"));
 			return false;
 		}
-		MissingSampleCache.Add(FExactKey(CacheKey));
+		Cache.Add(FExactKey(CacheKey));
 		Emit(Sites, TEXT("sndscript.resolve"), GResolveFn, 0x101b361cu, TEXT("write"),
 			FString::Printf(TEXT("cache=add key=%s"), *CacheKey));
 		UE_LOG(LogElysiumSoundScriptTable, Verbose, TEXT("CSoundEmitterSystemBase::GetParametersForSound:  sound '%s' references wave '%s' which doesn't exist on disk!"),

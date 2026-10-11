@@ -17,6 +17,8 @@ Values are tagged `("loose", path)` or `("vpk", entry)` so `read` knows where th
 bytes live.
 """
 import os
+import struct
+import stat
 import threading
 
 from elysium_pipeline.formats import vpk
@@ -111,6 +113,55 @@ def invalidate_index_cache():
     """Forget every memoized index; the next `build_index` call rebuilds."""
     with _INDEX_LOCK:
         _INDEX_CACHE.clear()
+
+
+def sound_name_coverage():
+    """Known exact sound names plus complete/unknown coverage, without changing the index.
+
+    No payload extraction or mountability inference: even a zero-size named row prevents
+    an absence claim. Unsupported/unreadable sources remain explicit coverage issues.
+    """
+    names, issues, packs, loose = {}, [], [], []
+    try:
+        with os.scandir(GAME) as entries:
+            paths = sorted(e.path for e in entries
+                           if e.name.lower().startswith("pack") and e.name.lower().endswith(".vpk"))
+    except OSError as error:
+        paths = []
+        issues.append(f"pack directory {GAME}: {error}")
+    for path in paths:
+        try:
+            rows = vpk.index_vpk(path, complete_names=True)
+            packs.append({"path": os.path.basename(path), "names": len(rows),
+                          "bytes": os.stat(path).st_size})
+            names.update({key: ("vpk", value) for key, value in rows.items() if key.startswith("sound/")})
+        except (OSError, ValueError, struct.error) as error:
+            issues.append(f"pack {path}: {error}")
+    for root in reversed(LOOSE_ROOTS + [GAME]):
+        tree = os.path.join(root, "sound")
+        try:
+            if not stat.S_ISDIR(os.stat(tree).st_mode):
+                issues.append(f"loose sound tree is not a directory: {tree}")
+                continue
+        except FileNotFoundError:
+            loose.append({"root": root, "missing": True})
+            continue
+        except OSError as error:
+            issues.append(f"loose tree {tree}: {error}")
+            continue
+        def onerror(error):
+            issues.append(f"loose tree {tree}: {error}")
+        loose.append({"root": root, "missing": False})
+        for dirpath, subdirs, files in os.walk(tree, onerror=onerror):
+            for dirname in subdirs:
+                path = os.path.join(dirpath, dirname)
+                if os.path.islink(path) or os.path.isjunction(path):
+                    issues.append(f"uncovered linked sound directory: {path}")
+            for filename in files:
+                path = os.path.join(dirpath, filename)
+                key = os.path.relpath(path, root).replace("\\", "/").lower()
+                names[key] = ("loose", path)
+    return names, {"complete": not issues, "issues": issues, "packs": packs, "looseRoots": loose}
 
 
 def read(idx, key):

@@ -137,6 +137,9 @@ public class ElysiumUE : ModuleRules
 		// target with no MCP plugin present.
 		if (Target.Type == TargetType.Editor)
 		{
+			// Editor native audio fixture verifies deployed source SHA through the supported engine
+			// crypto service; GenericPlatformMisc's SHA256 entry point is unimplemented on Win64.
+			PrivateDependencyModuleNames.Add("PlatformCryptoContext");
 			PublicDefinitions.Add("ELYSIUM_WITH_MCP=1");
 			PrivateDependencyModuleNames.AddRange(new string[]
 			{

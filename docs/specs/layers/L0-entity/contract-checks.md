@@ -14,6 +14,24 @@ observer requiring reproduction. Existing baked geometry is an available backend
 proof of complete body callbacks, lifecycle, model failure/override arms or shadow feedback.
 The physics rows below remain subject to those observable checks before layer closure.
 
+Selected live SoundEmitter prerequisite (2026-10-11): the manifest/table/key producers now
+populate the live per-GI descriptor table from whole deployed capsules. Runtime binds availability
+to actual cache1-selected source text and Size; reload retains names/process caches and cannot mix
+old cached source with new metadata. Import rederives raw first-root selection and ordered candidates;
+availability is a captured installation fact, with absence allowed only under complete error-free
+name coverage. Validated authored absence terminates each ordered precache attempt with a warning,
+matching the recovered nonfatal missing callee; present-unbaked/unknown/mismatch/native failure block.
+
+Physical-device native fixtures prove121 actual streaming SoundWaves, native Done/zeroth/chunk1,
+playing typed requests, actual pending reload/shutdown generation fences, retained handle release,
+copied request lifetime and literal owner/epoch events with an unrelated live voice. Public shutdown
+adapter state is observed across callback frames; private cache eviction/unseen callback execution
+is not claimed. Normal -nosound has a separate populated simulation gate and denies native requests.
+Unreal owns load/mixer/chunks and the existing attenuation curve. Channel/recipient policy and generic
+EmitSound are not established here. See [walks/L0-sound-producer.md](walks/L0-sound-producer.md).
+The broader cleanup/indexed shared-default/dispatch rows below remain OPEN; this prerequisite
+does not promote historical engine-replaced classifications or close impact consumer0x1002cd50.
+
 | subsystem | address | function | maps | what it does | how the port replaces it |
 |---|---|---|---|---|---|
 | audio | `0x1024c000` | Global::FUN_1024c000 | 108 | Remove a range from a pointer array by shifting the remaining entries with memmove. | This shifts the retail string-pool block array. The port’s std::string and std::map storage has no matching contiguous block array. |
@@ -30,7 +48,7 @@ The physics rows below remain subject to those observable checks before layer cl
 | audio | `0x1022a200` | Global::FUN_1022a200 | 107 | Destroy CSoundScheme's raw control arrays, reset mix state, and call the base destructor. | UE-managed scheme state and the manager's map-unload cleanup replace Source raw-array teardown. |
 | audio | `0x101b6120` | Global::FUN_101b6120 | 104 | Releases the sound-script record's owned buffers and resets its internal size and pointer fields. | This is cleanup for Source's internal sound-emitter memory; the UE audio subsystem owns its asset and request lifetimes. |
 | audio | `0x101b65e0` | Global::FUN_101b65e0 | 104 | Releases one sound-script buffer and resets its size and capacity fields. | This is Source sound-emitter buffer management; Unreal containers and asset ownership replace that storage layer. |
-| audio | `0x101b78f0` | Global::FUN_101b78f0 | 104 | Returns a sound-script parameter record by index, or a shared default record for the sentinel index. | This is an indexed lookup into Source's internal sound-emitter table; the port submits concrete baked audio sources and has no equivalent parameter-record table |
+| audio | `0x101b78f0` | Global::FUN_101b78f0 | 104 | Returns a sound-script parameter record by index, or a shared default record for the sentinel index. | The selected live manifest now populates the parameter-record table and explicit resolver API. This does not establish this indexed/shared-default consumer's complete contract or generic EmitSound wiring; the row remains OPEN. |
 | audio | `0x101cdac0` | Global::FUN_101cdac0 | 95 | Dispatches a sound through IEngineSound, resolving ! sentence names and adding the sound-emission flag. | UE owns voice playback through the audio subsystem. Source ! sentence resolution and IEngineSound dispatch flags have no equivalent; the NPC sound code also ide |
 | audio | `0x100ae090` | CBaseEntity::PrecacheSound | 61 |  |  |
 | audio | `0x1025cb70` | Global::FUN_1025cb70 | 61 | Return a huge fixed-stride audio record by index or the lazily initialized NIL sentinel. | The 0x5f324-byte record array and sentinel belong to Source audio’s internal registry. The port uses packaged USoundWave assets and UE cache rows. |

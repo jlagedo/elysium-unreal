@@ -57,42 +57,64 @@ def _find_dir_offset_tail(f, n):
             return cand
     raise ValueError("could not locate VPK directory")
 
-def index_vpk(path):
+def index_vpk(path, *, complete_names=False):
     """Return {lowercase_name: (path, offset, size)} for one .vpk.
 
     Reads only the directory extent: the footer names where the directory starts,
     so the file data ahead of it never enters memory."""
     with open(path, "rb") as f:
         n = f.seek(0, os.SEEK_END)
-        try:
-            pos = _find_dir_offset_tail(f, n)
-            f.seek(pos)
-            data = f.read()                     # directory plus footer only
-            pos = 0
-        except ValueError:
-            # The tail probes found no directory. Re-probe on the whole file so a pack
-            # with an unexpected footer still indexes -- loudly, because the tail read
-            # covers every layout the full-buffer probe accepts, and a pack that needs
-            # this path is a layout worth knowing about. When the full probe fails too,
-            # this raises exactly as the tail probe did.
-            f.seek(0)
+        count = None
+        if complete_names:
+            # Presence coverage uses the observed count/offset/flag footer and must never
+            # mistake an unsupported or partially parsed directory for an empty name set.
+            if n < 9:
+                raise ValueError("incomplete VPK name footer")
+            f.seek(n - 9)
+            count, offset, flag = struct.unpack("<IIB", f.read(9))
+            if flag not in (0, 1) or offset > n - 9:
+                raise ValueError("unsupported VPK name footer")
+            f.seek(offset)
             data = f.read()
-            pos = _find_dir_offset(data)
-            print(f"  warning: {os.path.basename(path)}: VPK directory located only by "
-                  f"a full-file probe, not from the tail", file=sys.stderr)
+            pos = 0
+        else:
+            try:
+                pos = _find_dir_offset_tail(f, n)
+                f.seek(pos)
+                data = f.read()                     # directory plus footer only
+                pos = 0
+            except ValueError:
+                # Preserve the ordinary index's permissive fallback and existing layouts.
+                f.seek(0)
+                data = f.read()
+                pos = _find_dir_offset(data)
+                print(f"  warning: {os.path.basename(path)}: VPK directory located only by "
+                      f"a full-file probe, not from the tail", file=sys.stderr)
     entries = {}
-    end = len(data) - 8
+    end = len(data) - (9 if complete_names else 8)
+    rows = 0
     while pos < end:
+        if complete_names and (pos + 4 > end or rows >= count):
+            raise ValueError("incomplete VPK name directory")
         name_len = _u32(data, pos)
         if name_len == 0 or name_len > 256:
+            if complete_names:
+                raise ValueError("invalid VPK name length")
             break  # ran into the footer
+        if complete_names and pos + 4 + name_len + 8 > end:
+            raise ValueError("incomplete VPK name row")
         name = data[pos + 4: pos + 4 + name_len]
         if not all(32 <= c < 127 for c in name):
+            if complete_names:
+                raise ValueError("invalid VPK name bytes")
             break
         pos += 4 + name_len
         offset, size = _u32(data, pos), _u32(data, pos + 4)
         pos += 8
+        rows += 1
         entries[name.decode("ascii").lower().replace("\\", "/")] = (path, offset, size)
+    if complete_names and (rows != count or pos != end):
+        raise ValueError("VPK name count/extent mismatch")
     return entries
 
 def index_all(vpk_dir, verbose=False):

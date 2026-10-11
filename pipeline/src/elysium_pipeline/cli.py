@@ -2641,6 +2641,25 @@ def export_v2_physics_surfaces_glb(ctx: typer.Context) -> None:
              action, require_game=True, activity=True)
 
 
+@export_v2_app.command("sound-script-data-glb")
+def export_v2_sound_script_data_glb(ctx: typer.Context) -> None:
+    """Capsule the live sound manifest and every whole selected source table."""
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.exporters import sound_script_data_glb
+        console.print(sound_script_data_glb.export_table(config.export_v2_root))
+    _execute(_state(ctx), "export_v2 sound-script-data-glb", ExitCode.OFFLINE_EXPORT,
+             action, require_game=True, activity=True)
+
+
+@import_app.command("sound-script-data")
+def import_sound_script_data(ctx: typer.Context) -> None:
+    """Deploy whole live SoundEmitter sources into Content/ElysiumCorpus/audio/scripts."""
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import sound_script_data as importer
+        _run_corpus_lane(config, importer.import_sound_script_data, "sound-script-data")
+    _execute(_state(ctx), "import sound-script-data", ExitCode.OFFLINE_EXPORT, action, require_work=False)
+
+
 @import_app.command("ai-schedules")
 def import_ai_schedules(ctx: typer.Context) -> None:
     """Deploy the NPC schedule texts and id spaces into Content/ElysiumCorpus/ai/schedules."""
@@ -3940,6 +3959,8 @@ def test_command(
         None, "--stem", help="Widen the per-model parity slice (repeatable)."
     ),
     json_output: bool = typer.Option(False, "--json"),
+    native_audio: bool = typer.Option(False, "--native-audio",
+                                    help="Keep native audio enabled for audio device/voice fixtures."),
     all_tiers: bool = typer.Option(
         False, "--all",
         help="Run every tier (`Elysium.`): the default tier, then arm, content and slow."),
@@ -3992,7 +4013,10 @@ def test_command(
                      else "on; the build is current")
                   + " (`uv run elysium build` switches it off, `build --arm` keeps it)")
         try:
-            summary = unreal.run_tests(config, runner, selection, parity_stems=stems or ())
+            options = {"parity_stems": stems or ()}
+            if native_audio:
+                options["native_audio"] = True
+            summary = unreal.run_tests(config, runner, selection, **options)
         except unreal.UnrealFailure as failure:
             # The run failed on its verdict: the summary is the answer, so it is shown before the
             # error line rather than left inside the exception.

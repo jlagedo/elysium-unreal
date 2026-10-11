@@ -368,6 +368,7 @@ bool LoadFile(const TSharedPtr<FKvNode>& Target, const FKvLoadArgs& Args, TArray
 		}
 	}
 	// 5. `cursor = buf`. 6. The root loop.
+	if (Args.SelectedTextObserver) { Args.SelectedTextObserver(Args.FileName, Text.IsValid() ? *Text : Owned, Size); }
 	FKvReader Reader(Text.IsValid() ? *Text : Owned, Args.Sites);
 	ParseRoots(Target, Reader, OutRoots);
 	// 7. `local_8 != NULL -> free(local_8)`; return 1 (parse success is not reported).

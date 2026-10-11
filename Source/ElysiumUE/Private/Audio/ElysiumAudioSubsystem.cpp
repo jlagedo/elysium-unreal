@@ -5,6 +5,13 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumSoundAssets.h"
 #include "ElysiumUserSettings.h"
+#include "Audio/ElysiumSoundScriptSource.h"
+#include "ElysiumSoundLevel.h"
+#include "ContentStreaming.h"
+#include "ElysiumKeyValuesLoader.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Misc/FileHelper.h"
 
 #include "AudioDevice.h"
 #include "Components/AudioComponent.h"
@@ -23,6 +30,32 @@
 #include "UObject/SoftObjectPath.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAudio, Log, All);
+
+// Per-GameInstance native service state. Public RAII handles retain engine cache resources.
+struct FElysiumScriptNativeWave
+{
+	FSoftObjectPath Path;
+	USoundWave* Wave = nullptr; // owned by ScriptRetainedWaves, never accessed before generation fence
+	FAudioChunkHandle Chunk;
+	bool bSetupStarted = false;
+	bool bChunkPending = false;
+	bool bZerothReady = false;
+	FString Error;
+};
+struct FElysiumScriptNativeHost
+{
+	ElysiumSoundScript::FSourceTable Source;
+	TArray<FElysiumScriptNativeWave> Native;
+	TArray<TSharedPtr<FStreamableHandle>> Loads;
+	TArray<ElysiumSoundScript::FPrecacheAttempt> Eligible;
+	TArray<FString> AttemptOutcomes;
+	FAudioDeviceHandle Device;
+	FString Error;
+	int32 PendingAssets = 0;
+	bool bLoadStarted = false;
+};
+
+#include "Audio/ElysiumAudioSoundScripts.inl"
 
 // This is a debug override, not a saved setting. A fresh launch is audible.
 static TAutoConsoleVariable<int32> CVarMute(
@@ -138,6 +171,11 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// One asset-registry scan of `/ElysiumBaked/Sounds`, and one warning if the bake never ran.
 	// Done here rather than on the first request so the cost is paid at subsystem start.
 	IsSoundCorpusPresent();
+	FString ScriptError;
+	if (!ReloadSoundScripts(ScriptError))
+	{
+		UE_LOG(LogElysiumAudio, Error, TEXT("SoundEmitter: %s"), *ScriptError);
+	}
 
 	// Every voice carries its owner's map epoch, so unloading a map is what stops the ambient bed
 	// and the dialogue line it was holding.
@@ -238,6 +276,8 @@ bool UElysiumAudioSubsystem::IsSoundCorpusPresent()
 
 void UElysiumAudioSubsystem::Deinitialize()
 {
+	ReleaseSoundScripts();
+	ScriptHost.Reset();
 	if (MapEpochRetiredHandle.IsValid())
 	{
 		if (UElysiumMapSubsystem* Maps = GetGameInstance()
@@ -1015,6 +1055,7 @@ void UElysiumAudioSubsystem::HandleAudioFinished(UAudioComponent* Component)
 
 void UElysiumAudioSubsystem::TickAudio(float /*DeltaSeconds*/)
 {
+	PrepareSoundScripts();
 	const double Now = AudioClock();
 	// Retire the async loads that have landed. Holding a completed handle keeps nothing alive that
 	// the voice does not already own.

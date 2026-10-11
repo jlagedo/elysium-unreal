@@ -43,6 +43,16 @@ def test_an_already_present_flag_is_not_duplicated() -> None:
         assert unreal._UNCONTROLLED_CHANGELISTS_OFF in argv
 
 
+def test_native_audio_omits_only_automatic_nosound(tmp_path):
+    config = _config(str(tmp_path))
+    ordinary, native = RecordingRunner(), RecordingRunner()
+    unreal._run(config, ordinary, Path("UnrealEditor-Cmd.exe"), ["-unattended"])
+    unreal._run(config, native, Path("UnrealEditor-Cmd.exe"), ["-unattended"], native_audio=True)
+    assert native.calls[0][0] == [arg for arg in ordinary.calls[0][0] if arg != "-nosound"]
+    assert "-NoLiveCoding" in native.calls[0][0]
+    assert "-noP4" in native.calls[0][0]
+
+
 def test_interactive_editor_keeps_live_coding_and_sound() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         config = _config(temporary)

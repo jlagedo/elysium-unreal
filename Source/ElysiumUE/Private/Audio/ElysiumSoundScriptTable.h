@@ -188,6 +188,9 @@ namespace ElysiumSoundScript
 		int32 Count() const { return Nodes.Num(); }           // `FUN_101b3220`: `*(this + 0x64)`
 		int32 NameCount() const { return Names.Num(); }       // the symbol table's `+0x12`
 		int32 WaveCount() const { return Waves.Num(); }
+		// Shutdown 0x101b2e30 retains +0x70 name symbols and the process missing-sample cache.
+		void ClearSource();
+		void UseProcessMissingCache() { bProcessMissingCache = true; }
 
 	private:
 		struct FNode
@@ -202,5 +205,6 @@ namespace ElysiumSoundScript
 		TMap<FExactKey, uint16> WaveSymbols; // `+0xB0`: exact name -> symbol
 		TArray<FString> Waves;               // by symbol
 		TSet<FExactKey> MissingSampleCache;  // `DAT_1072c078`: `<sound>:<wave>` keys already reported
+		bool bProcessMissingCache = false;
 	};
 }

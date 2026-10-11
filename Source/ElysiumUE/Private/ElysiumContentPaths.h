@@ -565,6 +565,16 @@ struct FElysiumContentPaths
 	// on import -- 2.1 has no `dont_write_bytecode` -- and the lane leaves those files alone rather
 	// than pruning them as orphans (`importers/scripts.py`, `Lane.kept_suffixes`).
 	static FString ScriptsDir() { return CorpusRoot() / TEXT("scripts"); }
+	// Whole live SoundEmitter sources, deployed separately from the Python scripts lane.
+	static FString AudioScriptFile(const FString& Rel)
+	{
+		FString Sub = CorpusRel(Rel);
+		if (!Sub.StartsWith(TEXT("scripts/")) || Sub.Contains(TEXT(":")) || Sub.Contains(TEXT("..")) || Sub.Contains(TEXT("//")))
+		{
+			return FString();
+		}
+		return CorpusRoot() / TEXT("audio") / Sub;
+	}
 	static FString DlgDir() { return CorpusRoot() / TEXT("dlg"); }
 	static FString ScriptModuleFile(const FString& Module) { return ScriptsDir() / Module / (Module + TEXT(".py")); }
 	// Console config. VtMB's `cfg/*` alias + cvar tables (Valve console syntax), deployed by

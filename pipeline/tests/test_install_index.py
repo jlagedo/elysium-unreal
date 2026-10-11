@@ -30,6 +30,38 @@ def pack_bytes(files):
     return payload + bytes(directory) + struct.pack("<I", len(payload)) + b"\x00"
 
 
+def test_sound_coverage_complete_skipped_pack_presence_and_patch_precedence(tmp_path, monkeypatch):
+    game, patch = tmp_path / 'Vampire', tmp_path / 'Unofficial_Patch'
+    game.mkdir(); (patch / 'sound').mkdir(parents=True)
+    name = b'sound/present.wav'
+    (game / 'pack010.vpk').write_bytes(struct.pack('<I', len(name)) + name + struct.pack('<II', 0, 0)
+                                     + struct.pack('<IIB', 1, 0, 1))
+    (game / 'pack100.vpk').write_bytes(bytes(9))
+    (patch / 'sound/present.wav').write_bytes(b'patch')
+    monkeypatch.setattr(install, 'GAME', os.fspath(game))
+    monkeypatch.setattr(install, 'LOOSE_ROOTS', [os.fspath(patch)])
+    names, coverage = install.sound_name_coverage()
+    assert coverage['complete'] and not coverage['issues']
+    assert names['sound/present.wav'] == ('loose', os.fspath(patch / 'sound/present.wav'))
+    assert 'sound/missing.wav' not in names
+    (patch / 'sound/present.wav').unlink()
+    assert install.sound_name_coverage()[0]['sound/present.wav'][0] == 'vpk'
+
+
+def test_sound_coverage_pack_and_loose_errors_never_claim_complete(tmp_path, monkeypatch):
+    game = tmp_path / 'Vampire'; (game / 'sound').mkdir(parents=True)
+    (game / 'pack000.vpk').write_bytes(b'unsupported')
+    monkeypatch.setattr(install, 'GAME', os.fspath(game))
+    monkeypatch.setattr(install, 'LOOSE_ROOTS', [])
+    assert not install.sound_name_coverage()[1]['complete']
+    (game / 'pack000.vpk').write_bytes(bytes(9))
+    with mock.patch.object(install.os, 'walk') as walk:
+        walk.side_effect = lambda tree, onerror: (onerror(PermissionError('unreadable')) or iter(()))
+        assert not install.sound_name_coverage()[1]['complete']
+    with mock.patch.object(install.os, 'scandir', side_effect=PermissionError('pack directory')):
+        assert not install.sound_name_coverage()[1]['complete']
+
+
 @pytest.fixture
 def install_roots(tmp_path, monkeypatch):
     """A two-root install -- retail plus the patch -- pinned onto `install`'s module globals.

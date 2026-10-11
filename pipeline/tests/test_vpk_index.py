@@ -66,6 +66,39 @@ def reference_index(path):
     return entries
 
 
+def test_complete_names_zero_offset_empty_and_default_unchanged(tmp_path):
+    path = tmp_path / 'pack010.vpk'
+    name = b'sound/exists.wav'
+    directory = struct.pack('<I', len(name)) + name + struct.pack('<II', 0, 0)
+    path.write_bytes(directory + struct.pack('<IIB', 1, 0, 1))
+    assert vpk.index_vpk(path, complete_names=True) == {'sound/exists.wav': (path, 0, 0)}
+    with pytest.raises(ValueError):
+        vpk.index_vpk(path)
+    path.write_bytes(bytes(9))
+    assert vpk.index_vpk(path, complete_names=True) == {}
+    with pytest.raises(ValueError):
+        vpk.index_vpk(path)
+
+
+@pytest.mark.parametrize('body', [b'', bytes(8), struct.pack('<IIB', 1, 0, 0),
+    struct.pack('<IIB', 0, 0, 2), b'\x02\x00\x00\x00x' + struct.pack('<IIB', 1, 0, 0),
+    struct.pack('<I', 1) + b'x' + struct.pack('<II', 0, 0) + struct.pack('<IIB', 2, 0, 0)])
+def test_complete_names_rejects_unknown_or_partial_coverage(tmp_path, body):
+    path = tmp_path / 'pack000.vpk'
+    path.write_bytes(body)
+    with pytest.raises((ValueError, struct.error)):
+        vpk.index_vpk(path, complete_names=True)
+
+
+def test_complete_names_uses_same_rows_for_ordinary_pack(tmp_path):
+    path = tmp_path / 'pack000.vpk'
+    blob = b'wave'
+    name = b'Sound/Present.wav'
+    path.write_bytes(blob + struct.pack('<I', len(name)) + name + struct.pack('<II', 0, len(blob))
+                     + struct.pack('<IIB', 1, len(blob), 0))
+    assert vpk.index_vpk(path, complete_names=True) == vpk.index_vpk(path)
+
+
 class _CountingFile:
     """A read-binary file whose reads and opens total into a shared counter."""
 
