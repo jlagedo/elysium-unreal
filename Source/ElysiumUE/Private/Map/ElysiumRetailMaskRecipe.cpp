@@ -17,6 +17,8 @@ namespace ElysiumRetailMask
 		case ElysiumContents::SightMask: // 0x804091, its brush half
 		case 0x4081u:
 		case 0x202400bu:                 // MASK_NPCSOLID: IsValidCover, IsAreaClear, CanStandAt
+		case 0x200400bu:                 //base2371003e7a0, pusher102/position10035a70
+		case 0x400bu:                    //10036590 removes MONSTER for a non-solid entity
 		case ElysiumContents::NpcMask:   // 0x2400b: CanFitAtNode, the wander probe
 		case 0x2000bu:                   // InitLinks
 		case 0x201400bu:                 // MASK_PLAYERSOLID
@@ -82,6 +84,7 @@ namespace ElysiumRetailMask
 			Out.Channel = ECC_Pawn;
 		}
 		Out.bCharacters = (RetailMask & Monster) != 0;
+		Out.bCommonSolidOnly = RetailMask == 0x200400b || RetailMask == 0x400b;
 		Out.bMovers = (RetailMask & Moveable) != 0;
 		Out.bProps = Out.bCharacters;
 		return Out;

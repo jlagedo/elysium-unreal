@@ -13,6 +13,18 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Reached pusher feedback packet (2026-10-11; frozen gates reviewed): generic226
+  moves1/8 and scoped door/button/elevator inputs now retain Source pose/clock/deadline
+  rules, native brush recipes and moving restore, common-solid v3 query/solve filters,
+  creation-owned world identity, qualifying native contact lifetime, and ordered
+  174/175/178 receivers. Actual native, map/save and relative candidate append/reverse
+  witnesses pass. This supersedes earlier moves1/8 and world-body ownership gaps only
+  within that verified scope. Final gate evidence and limitations are below and in
+  `walks/L0-pusher-feedback.md`; original23/88 and the full L0 closing gate stay OPEN.
+  Moving first44 publication timing and native-retail candidate encounter equivalence
+  are not closed. Higher player repeat/rotation consumption, specialized trigger leaves,
+  continuous FuncRotating and broader creator/multiobject contracts remain named frontiers.
+
 - Selected saved-recipe packet (2026-10-11; coordinator accepted):
   actual model Spawn registers owned authored inputs on successful Chaos identity. Ordered Physics
   block saves/reconstructs native pose/velocities/sleep/gravity/current mass/damping and recipes;
@@ -961,3 +973,89 @@ preservation repair. No tracked game content/goldens changed, and no push is aut
 Original23/88 remains unchanged and full Goal/L0 stays open. Next dependency is recovered
 moves1/8 pusher feedback and its actual needed producers, while collision-event delivery, broader
 NPC/cache/creator/child-removal/fluids/multiobject contracts remain explicitly unfinished.
+
+### Frozen gate checkpoint — reached pusher feedback, 2026-10-11
+
+The sole Sol High worker reused main `e798fe5b`; the coordinator reviews and owns the
+exact-path commit. Recovery/contract is `walks/L0-pusher-feedback.md`. Chaos supplies
+geometry, broadphase, contact generation and rigid mechanics. Retained observable rules
+include Source float pose/threshold arithmetic, distinct move1/move8 clock/deadline arms,
+clear-before-arrival outputs, live callback parent/identity reads, reverse transaction
+publication and rollback, and authored brush/default/save inputs. Production map adoption
+and actual root/parented native moving-save reentry are covered separately from controlled
+receiver inputs; matching a logical target does not prove complete solved trajectory parity.
+
+Contact receipts establish genuine native qualifying points, staggered birth/reentry,
+retirement revealing the older survivor, selected-null versus retired partner, worldspawn
+creation GameData, live contents rejection, sleep/no-advance provenance and actual178.
+Matched public arrival0 baseline/mirror/swizzle select First, matching the bounded final
+native receiver. The former Second expectation used arrivalDt and was rejected as an input
+mismatch. Public47 pose and actual admitted .001/.1 host-clock inputs are recorded. This
+does not establish universal equal-time priority or moving first-contact publication parity.
+At the ordinary first opposed frame, active226 has interval0 and exits without44/178;
+the separate controlled40cm rewind is downstream receiver proof only.
+
+Required gate diagnoses were resolved against the oracle, preserving observers:
+SAVE-only clock fields now use datamap SAVE generation without expanding external bindings30;
+PhysicsRestore retires freshly spawned baseline native incarnations before reconstructing
+saved bodies, retaining duplicate/refusal and alias guards. Elevator tests use admitted
+frames and isolate the original native scene before replacement reentry. Genesis retains
+full-angle coverage through an actual info_target, separately asserting InitTrigger clears
+firetrans angles. The first bounded19 arena failed only initial sliding171 solidity. Whole
+100ef260/100f1c60/100c8d60 proved the packet's early MoveType/Solid writes were wrong.
+The runtime writes were relocated to each leaf's actual endpoint/model/START_OPEN order;
+the original `l0_angle_motion` direction bits, sentinels, dirty words and Solid0/called0
+expectation were unchanged. The final original scenario passes; no failure was waived.
+
+Final coherent build passes exit0, 28.6s:
+`E:/elysium-work/logs/20261011T095635.298729Z-build.json`.
+Final affected51 passes (38 clean, 13 warning results), zero failed/notRun/inProcess,
+all9 ModelPhysics and15 Mover plus DoorElevator clean:
+`E:/elysium-work/reports/tests/20261011T095713.837350Z-elysium-substrate-modelphysics-elysium-s-0a6cc81c/index.json`;
+wrapper `E:/elysium-work/logs/20261011T095712.310104Z-test.json`, exit0, 24.5s.
+Coordinator refrozen default188 passes (109 clean, 79 warning results), zero
+failed/notRun/inProcess:
+`E:/elysium-work/reports/tests/20261011T095812.964862Z-elysium-session-elysium-substrate/index.json`;
+wrapper `E:/elysium-work/logs/20261011T095812.808219Z-test.json`, exit0, 26.6s.
+Coordinator original bounded19 arena passes19/19:
+`E:/elysium-work/reports/arena/20261011T095907.740197Z/index.json`;
+`arena/index.json` has18 passes and `map-sm_hub_1-l0_transition_state/index.json`
+has1 pass beneath that directory, both process exit0. Wrapper
+`E:/elysium-work/logs/20261011T095907.533155Z-arena.json` passes exit0, 63.672s.
+Two deliberate refusal selftests retain their inverted pass contracts. Startup27 errors
+and535 warnings remain outside passing scenario results; the prior run had534 warnings.
+The normalized delta includes a female_citizen_2 adopted-stand vocabulary/scripted-sequence
+fallback animation warning; asynchronous audio completion lines also differ. This is reported
+content-animation evidence, not a scenario failure or unchanged exact warning-count claim.
+
+Unchanged generator/kernel-closed/map-payload pipeline54 is reused after final generated
+diff inspection, zero errors/failures/skips:
+`E:/elysium-work/codex/l0-pusher-freeze-20261011/pipeline54-default-repair.xml`.
+Default128 true and existing hand225/233/232 bodies are preserved; intended hand90/102/
+174/175/178/239(bool)/226 mappings remain explicit. No retail ledger regeneration or
+kernel --check ran. Actual v3 witness maps retain common-solid metadata, each-hull base237,
+profile/PN query/navigation observers (2 clean, zero failed/warnings):
+`E:/elysium-work/reports/tests/20261011T074423.155641Z-elysium-content-mapcollision-tutorial-el-7fec4772/index.json`.
+Derived bakes/probe output remain ignored/outside tracked game data.
+
+Next bounded contract is moving first44 publication under matched admitted host delta,
+arrival/countdown and actual47/velocity/local-clock inputs, with normal226 threshold/gate
+reach and actual178 consequence. Native first44 at .6167 versus public false until .6333
+remains an explicit observer frontier; do not infer a delay/sort/axis rule or rebuild IVP
+topology. Full native-retail partition encounter equivalence is separately OPEN despite
+verified relative append/reverse callbacks. Player repeated-touch/pending-yaw consumers,
+specialized trigger leaves, continuous FuncRotating, solid6 undefined initial displacement,
+broader body/controller/constraint/ragdoll/multiobject/fluid and deferred r022 work remain
+outside this packet's acceptance. Original23/88 and all five full L0 closing requirements
+remain OPEN. No worker commit/push, full arm test or full arena run occurred. Only this
+progress/runs bookkeeping followed the final runtime/test freeze; the exact-path manifest
+is refreshed for coordinator commit review.
+Functional runtime/test/pipeline hashes remain unchanged through this final bookkeeping.
+The required hooks.tsv owner row names10036bd0's +207c=2/+2080+=deltaYaw L3
+pending-view writes; L0 retains their order before the shared angular-velocity write.
+Higher consumption and persistence are explicitly unrecovered, not saved player parity.
+The final226 CHAIN_HAND description was corrected to the verified partial pusher routing
+and named timing/encounter limits. Its current hand verdict emits a separate hand-body
+comment, so this metadata edit changes no generated executable or runtime/test hash.
+The final annotation gate reruns the same54 pipeline tests, all passing in1.65s:
+`E:/elysium-work/codex/l0-pusher-freeze-20261011/pipeline54-final-annotation.xml`.

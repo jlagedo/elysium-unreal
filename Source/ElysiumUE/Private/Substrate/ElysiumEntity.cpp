@@ -48,13 +48,27 @@ bool FElysiumEntity::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, 
 	{ OutError = TEXT("saved physics field has no owner or already has an object"); return false; }
 	RetireReconstructedPhysics();
 	AActor* NativeOwner = World->GetOwnerActor();
-	auto* Component = NewObject<UElysiumPhysicsPropComponent>(NativeOwner);
-	Component->RegisterComponent();
-	NativeOwner->AddInstanceComponent(Component);
-	Component->SetVisibility(false); // service only; entity renderer still owns its art
+	const bool bExistingBrush = State.Recipe.Kind == EElysiumPhysicsRecipeKind::Brush && Body;
+	UPrimitiveComponent* Component = State.Recipe.Kind == EElysiumPhysicsRecipeKind::Brush
+		? static_cast<UPrimitiveComponent*>(bExistingBrush ? Body : NewObject<UElysiumBrushComponent>(NativeOwner))
+		: static_cast<UPrimitiveComponent*>(NewObject<UElysiumPhysicsPropComponent>(NativeOwner));
+	if (auto* Brush = Cast<UElysiumBrushComponent>(Component))
+	{
+		TArray<FElysiumConvexHull> Hulls;
+		for (const TArray<FVector>& Vertices : State.Recipe.BrushHulls)
+		{ FElysiumConvexHull& Hull = Hulls.AddDefaulted_GetRef(); Hull.Vertices = Vertices; }
+		Brush->InitBrush(Handle, Hulls, static_cast<EElysiumBrushSolidity>(State.Recipe.BrushSolidity), State.Recipe.BrushContentsSignature);
+	}
+	if (!bExistingBrush)
+	{
+		Component->RegisterComponent();
+		NativeOwner->AddInstanceComponent(Component);
+		Component->SetVisibility(false); // model service only; entity renderer owns its art
+	}
 	if (!ElysiumModelPhysics::Restore(Component, World->PhysicsSurfaces(), State, OutError))
-	{ Component->DestroyComponent(); return false; }
-	ReconstructedPhysics = Component;
+	{ if (!bExistingBrush) Component->DestroyComponent(); return false; }
+	if (!bExistingBrush) ReconstructedPhysics = Component;
+	if (auto* Brush = Cast<UElysiumBrushComponent>(Component)) Body = Brush;
 	ElysiumModelPhysics::SetGameData(ElysiumModelPhysics::ActorIdentity(Component), *this);
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Component));
 	if (State.bShadowMember) World->AddPhysicsShadow(*this);
@@ -63,7 +77,7 @@ bool FElysiumEntity::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, 
 
 void FElysiumEntity::RetireReconstructedPhysics()
 {
-	if (UElysiumPhysicsPropComponent* Component = ReconstructedPhysics.Get())
+	if (UPrimitiveComponent* Component = ReconstructedPhysics.Get())
 	{
 		ElysiumModelPhysics::Destroy(Component);
 		Component->DestroyComponent();
@@ -86,6 +100,13 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	Class = &InClass;
 	TargetName = InDef.TargetName;
 	ConstructBaseEntity();
+	if (InDef.Classname.Equals(TEXT("worldspawn"), ESearchCase::IgnoreCase))
+	{
+		//1023ae40→1023b840, after base construction and before map keyvalues.
+		// Native world geometry is owned by the separate world service, not this entity body.
+		SetSolid(1);
+		SetMoveType(8, 0);
+	}
 
 	// `CreateEntityByName`'s order after the constructor returns: the edict is attached (the
 	// `CServerNetworkProperty` word `+0x2e0`, NULL for the whole constructor above), then the
@@ -456,6 +477,10 @@ UPrimitiveComponent* FElysiumEntity::GetAttachBody() const
 
 USceneComponent* FElysiumEntity::GetAttachChild() const
 {
+	// A native shadow's solved component (and its visual) is independent of MoveParent.
+	// UE refuses runtime attachment of a simulating child; welding would change mechanics.
+	// The logical graph already supplies its full absolute target before native solve.
+	if (Body && ElysiumModelPhysics::ActorIdentity(Body) && Body->IsSimulatingPhysics()) return nullptr;
 	return GetAttachBody();
 }
 
@@ -961,6 +986,55 @@ void FElysiumEntity::InvalidateTransform(uint32 SelfBits, uint32 ChildBits)
 		}
 		Child = World->Resolve(Child->MovePeer);
 	}
+}
+
+void FElysiumEntity::SetLocalVelocity(const FVector& Value)
+{
+	if (Velocity == Value) return;
+	InvalidateTransform(0x1000u, 0u);
+	Velocity = Value;
+	bNetworkChanged = true;
+}
+
+void FElysiumEntity::SetLocalAngularVelocity(const FVector& Value)
+{
+	if (AngularVelocity == Value) return;
+	InvalidateTransform(0x2000u, 0u);
+	AngularVelocity = Value;
+	bNetworkChanged = true;
+}
+
+void FElysiumEntity::SetAbsoluteVelocity(const FVector& Value)
+{
+	//100b2770: invalidate descendants before clearing this entity's dirty word.
+	InvalidateTransform(0x1000u, 0u);
+	EFlags &= ~0x1000u;
+	FElysiumEntity* Parent = World ? World->Resolve(MoveParent) : nullptr;
+	if (!Parent) { Velocity = Value; return; }
+	const FVector Relative = Value - Parent->GetPusherAbsoluteVelocity();
+	Parent->GetAbsOrigin();
+	if (!Parent->bCoordinateFrameValid) Parent->RefreshRuntimeFrame();
+	float Source[3]; ElysiumRetailMatrix::ToSourceInches(Relative, Source);
+	const float* Matrix = Parent->CoordinateFrame;
+	Velocity = ElysiumRetailMatrix::FromSourceInches(
+		static_cast<float>(Source[0] * Matrix[0] + Source[1] * Matrix[4] + Source[2] * Matrix[8]),
+		static_cast<float>(Source[0] * Matrix[1] + Source[1] * Matrix[5] + Source[2] * Matrix[9]),
+		static_cast<float>(Source[0] * Matrix[2] + Source[1] * Matrix[6] + Source[2] * Matrix[10]));
+}
+
+FVector FElysiumEntity::GetPusherAbsoluteVelocity()
+{
+	//100b1d10: no angular cross product; parent raw frame rotates the local velocity.
+	FElysiumEntity* Parent = World ? World->Resolve(MoveParent) : nullptr;
+	if (!Parent) return Velocity;
+	Parent->GetAbsOrigin();
+	if (!Parent->bCoordinateFrameValid) Parent->RefreshRuntimeFrame();
+	float Source[3]; ElysiumRetailMatrix::ToSourceInches(Velocity, Source);
+	const float* Matrix = Parent->CoordinateFrame;
+	return ElysiumRetailMatrix::FromSourceInches(
+		static_cast<float>(Source[0] * Matrix[0] + Source[1] * Matrix[1] + Source[2] * Matrix[2]),
+		static_cast<float>(Source[0] * Matrix[4] + Source[1] * Matrix[5] + Source[2] * Matrix[6]),
+		static_cast<float>(Source[0] * Matrix[8] + Source[1] * Matrix[9] + Source[2] * Matrix[10])) + Parent->GetPusherAbsoluteVelocity();
 }
 
 void FElysiumEntity::MarkPartitionTreeDirty()

@@ -3,13 +3,16 @@
 
 /** Semantic reconstruction inputs, not Source's tree/allocator or IVP object layout.
  * PhysObjectHeader_t's observer is the Physics save block (10043c70/100443e0). */
-enum class EElysiumPhysicsRecipeKind : uint8 { Model, Bbox };
+enum class EElysiumPhysicsRecipeKind : uint8 { Model, Bbox, Brush };
 struct FElysiumPhysicsBodyRecipe
 {
 	EElysiumPhysicsRecipeKind Kind = EElysiumPhysicsRecipeKind::Model;
 	bool bStatic = false; // 1002e7e0 sixth argument selects env#8, independently of surface.
 	FString ModelAsset;
 	FString Surface;
+	TArray<TArray<FVector>> BrushHulls; // authored convex inputs, never visual mesh bounds
+	uint8 BrushSolidity = 0;
+	uint8 BrushContentsSignature = 0;
 	FVector BboxMin = FVector::ZeroVector;
 	FVector BboxMax = FVector::ZeroVector;
 	float MassKg = 1.f;

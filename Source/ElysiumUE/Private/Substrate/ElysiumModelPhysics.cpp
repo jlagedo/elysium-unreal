@@ -3,6 +3,16 @@
 #include "ElysiumPhysicalMaterial.h"
 #include "ElysiumPhysicsSurfaceProps.h"
 #include "ElysiumPhysicsPropComponent.h"
+#include "ElysiumBrushComponent.h"
+#include "ElysiumEntityDefs.h"
+#include "ElysiumWorldCollisionActor.h"
+#include "EngineUtils.h"
+#include "Chaos/ContactModification.h"
+#include "Chaos/SimCallbackObject.h"
+#include "Chaos/Collision/CollisionConstraintAllocator.h"
+#include "PBDRigidsSolver.h"
+#include "PhysicsProxy/SingleParticlePhysicsProxy.h"
+#include "Chaos/PBDRigidsEvolutionGBF.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "PhysicsEngine/BodySetup.h"
@@ -19,8 +29,8 @@ namespace
 	struct FPhysicsRecipeAssociation
 	{
 		void* Actor = nullptr;
-		UStaticMeshComponent* Producer = nullptr; // equality only, valid also during component destruction
-		TWeakObjectPtr<UStaticMeshComponent> Component;
+		UPrimitiveComponent* Producer = nullptr; // equality only, valid also during component destruction
+		TWeakObjectPtr<UPrimitiveComponent> Component;
 		FElysiumPhysicsBodyRecipe Recipe;
 	};
 	// Semantic manager#2/model and manager#1/bbox associations (10044db0/10044f60).
@@ -28,12 +38,212 @@ namespace
 	TArray<FPhysicsRecipeAssociation> PhysicsRecipeAssociations;
 	struct FNativeAssociation
 	{
-		void* Actor; TWeakObjectPtr<UStaticMeshComponent> Component; UStaticMeshComponent* Producer;
+		void* Actor; TWeakObjectPtr<UPrimitiveComponent> Component; UPrimitiveComponent* Producer;
 		uint64 Incarnation; FElysiumEntityWorld* World = nullptr; FElysiumEntityHandle Owner;
 		bool bCollectNativeOutput = false;
 		bool bPendingInactive = false;
 	};
 	TArray<FNativeAssociation> NativeAssociations;
+	struct FWorldCreationAssociation
+	{
+		void* Actor; Chaos::FUniqueIdx UniqueIdx; TWeakObjectPtr<UElysiumWorldCollisionComponent> Component;
+		UElysiumWorldCollisionComponent* Producer; FElysiumEntityWorld* World; FElysiumEntityHandle Owner;
+		uint64 Generation;
+	};
+	TArray<FWorldCreationAssociation> WorldCreationAssociations; //object6 only, never active226
+	uint64 NextWorldGeneration = 0;
+	void RetireWorldContact(void* Actor);
+	void ForgetCompletedWorld(UWorld* World);
+	struct FSolveFilterIdentity
+	{
+		const void* Proxy; Chaos::FUniqueIdx UniqueIdx; bool bWorld; bool bCommonSolid; bool bBaseMask; uint64 Generation;
+	};
+	struct FSolveFilterInput : Chaos::FSimCallbackInput
+	{
+		TArray<FSolveFilterIdentity> Identities;
+		void Reset() { Identities.Reset(); }
+	};
+	double FrictionContactSkinCm();
+	struct FNativeContactOutput
+	{
+		const void* Shapes[2];
+		const void* Geometry[2];
+		const void* Proxies[2];
+		Chaos::FUniqueIdx UniqueIds[2];
+		uint64 Generations[2];
+		bool bInitial;
+	};
+	struct FSolveFilterOutput : Chaos::FSimCallbackOutput
+	{
+		TArray<FNativeContactOutput> Contacts;
+		void Reset() { Contacts.Reset(); }
+	};
+	class FSolveFilterCallback final : public Chaos::TSimCallbackObject<FSolveFilterInput,
+		FSolveFilterOutput, Chaos::ESimCallbackOptions::ContactModification | Chaos::ESimCallbackOptions::Presimulate>
+	{
+		virtual FName GetFNameForStatId() const override { return FName(TEXT("ElysiumContentsPairFilter")); }
+		virtual void OnPreSimulate_Internal() override {} //public output finalization registration
+		virtual void OnContactModification_Internal(Chaos::FCollisionContactModifier& Modifier) override
+		{
+			const FSolveFilterInput* Input = GetConsumerInput_Internal();
+			if (!Input) return;
+			FSolveFilterOutput& Output = GetProducerOutputData_Internal();
+			for (Chaos::FContactPairModifier& Pair : Modifier)
+			{
+				const auto Particles = Pair.GetParticlePair();
+				const FSolveFilterIdentity* Identities[2] = { nullptr, nullptr };
+				for (int32 Side = 0; Side < 2; ++Side)
+					if (Particles[Side])
+						Identities[Side] = Input->Identities.FindByPredicate([&](const FSolveFilterIdentity& Entry)
+						{ return Entry.Proxy == Particles[Side]->PhysicsProxy() && Entry.UniqueIdx == Particles[Side]->UniqueIdx(); });
+				bool bRejected = false;
+				if (Identities[0] && Identities[1]) for (int32 Side = 0; Side < 2; ++Side)
+					if (Identities[Side]->bWorld && !Identities[Side]->bCommonSolid && !Identities[1 - Side]->bWorld
+						&& Identities[1 - Side]->bBaseMask)
+					{ Pair.Disable(); bRejected = true; break; } //1002f603..63f: contents & OTHER237, before solve/44
+				if (bRejected || !((Identities[0] && !Identities[0]->bWorld) || (Identities[1] && !Identities[1]->bWorld))) continue;
+				const auto* First = Particles[0]; const auto* Second = Particles[1];
+				if (!First || !Second) continue;
+				Output.Contacts.Add({{Pair.GetShape(0),Pair.GetShape(1)}, {Pair.GetContactGeometry(0),Pair.GetContactGeometry(1)},
+					{First->PhysicsProxy(),Second->PhysicsProxy()}, {First->UniqueIdx(),Second->UniqueIdx()},
+					{Identities[0] ? Identities[0]->Generation : 0, Identities[1] ? Identities[1]->Generation : 0}, Pair.GetIsInitialContact()});
+			}
+		}
+	};
+	struct FSolveFilterRegistration { Chaos::FPBDRigidsSolver* Solver; FSolveFilterCallback* Callback; };
+	TMap<UWorld*, FSolveFilterRegistration> SolveFilters;
+	void CleanupSolveFilter(UWorld* World, bool, bool)
+	{
+		if (const FSolveFilterRegistration* Registration = SolveFilters.Find(World))
+			Registration->Solver->UnregisterAndFreeSimCallbackObject_External(Registration->Callback);
+		SolveFilters.Remove(World);
+		ForgetCompletedWorld(World);
+		WorldCreationAssociations.RemoveAll([World](const FWorldCreationAssociation& Entry)
+		{
+			const bool bRemove = !Entry.Component.IsValid() || Entry.Component->GetWorld() == World;
+			if (bRemove) RetireWorldContact(Entry.Actor);
+			return bRemove;
+		});
+	}
+	void PrepareSolveFilter(UWorld& World, FPhysScene& Scene)
+	{
+		static const FDelegateHandle CleanupHandle = FWorldDelegates::OnWorldCleanup.AddStatic(&CleanupSolveFilter);
+		(void)CleanupHandle;
+		auto* Solver = Scene.GetSolver(); if (!Solver) return;
+		FSolveFilterRegistration* Registration = SolveFilters.Find(&World);
+		if (!Registration)
+			Registration = &SolveFilters.Add(&World, { Solver, Solver->CreateAndRegisterSimCallbackObject_External<FSolveFilterCallback>() });
+		FSolveFilterInput* Input = Registration->Callback->GetProducerInputData_External();
+		Input->Identities.Reset();
+		for (const FNativeAssociation& Entry : NativeAssociations)
+			if (UPrimitiveComponent* Component = Entry.Component.Get(); Component && Component->GetWorld() == &World
+				&& ElysiumModelPhysics::ActorIdentity(Component) == Entry.Actor)
+				if (FElysiumEntity* Owner = Entry.World ? Entry.World->Resolve(Entry.Owner) : nullptr)
+				{
+					ElysiumModelPhysics::Identity(Component)->SetContactModification(true);
+					const auto* Proxy = static_cast<Chaos::FSingleParticlePhysicsProxy*>(Entry.Actor);
+					Input->Identities.Add({ Proxy, Proxy->GetGameThreadAPI().UniqueIdx(), false, false,
+						ElysiumModelPhysics::SolidMask(Owner->Flags, Owner->AsPlayer() != nullptr) == 0x200400b, Entry.Incarnation });
+				}
+		for (TActorIterator<AElysiumWorldCollisionActor> It(&World); It; ++It)
+		{
+			TArray<UElysiumWorldCollisionComponent*> Components;
+			for (UElysiumWorldCollisionComponent* Component : It->Bodies) Components.Add(Component);
+			if (It->Displacement) Components.Add(It->Displacement);
+			for (UElysiumWorldCollisionComponent* Component : Components)
+				if (auto* Proxy = ElysiumModelPhysics::ActorIdentity(Component))
+					{
+						const auto* Association = WorldCreationAssociations.FindByPredicate([Component, Proxy](const FWorldCreationAssociation& Entry)
+						{ return Entry.Producer == Component && Entry.Actor == Proxy; });
+						Input->Identities.Add({ Proxy, Proxy->GetGameThreadAPI().UniqueIdx(), true, Component->bCommonSolid, false,
+							Association ? Association->Generation : 0 });
+					}
+		}
+	}
+	// Chaos can retain cached constraints until its next maintenance step after proxy removal.
+	// A retired producer is distinct from a surviving world contact with null GameData.
+	TSet<void*> RetiredNativeActors;
+	struct FObservedContact
+	{
+		const void* Constraint;
+		void* Partner;
+		uint64 PartnerIncarnation;
+		uint64 Birth;
+	};
+	struct FCompletedContactBirth
+	{
+		UWorld* World; FNativeContactOutput Contact; uint64 Sequence; uint64 Birth = 0;
+		bool bQualified = false; bool bInitialTransition = false;
+		double OutputTime = -1.; double BirthTime = -1.;
+	};
+	TArray<FCompletedContactBirth> CompletedContactBirths;
+	void ForgetCompletedWorld(UWorld* World)
+	{ CompletedContactBirths.RemoveAll([World](const FCompletedContactBirth& Entry){ return Entry.World == World; }); }
+	void ForgetCompletedActor(void* Actor)
+	{ CompletedContactBirths.RemoveAll([Actor](const FCompletedContactBirth& Entry){ return Entry.Contact.Proxies[0] == Actor || Entry.Contact.Proxies[1] == Actor; }); }
+	TMap<uint64, TArray<FObservedContact>> ContactRosters;
+	void RetireWorldContact(void* Actor)
+	{
+		if (!Actor) return;
+		RetiredNativeActors.Add(Actor);
+		ForgetCompletedActor(Actor);
+		for (auto& Roster : ContactRosters)
+			Roster.Value.RemoveAll([Actor](const FObservedContact& Contact) { return Contact.Partner == Actor; });
+	}
+	uint64 NextContactBirth = 0;
+	void ConsumeContactOutputs(UWorld* World)
+	{
+		const FSolveFilterRegistration* Registration = SolveFilters.Find(World);
+		if (!Registration) return;
+		while (auto Output = Registration->Callback->PopOutputData_External())
+			for (const FNativeContactOutput& Contact : Output->Contacts)
+			{
+				if (RetiredNativeActors.Contains(const_cast<void*>(Contact.Proxies[0])) || RetiredNativeActors.Contains(const_cast<void*>(Contact.Proxies[1]))) continue;
+				bool bCurrent = true;
+				for (int32 Side = 0; Side < 2 && bCurrent; ++Side)
+				{
+					if (!Contact.Generations[Side]) continue; //unowned native partner: validated against completed constraint before44
+					const auto* Native = NativeAssociations.FindByPredicate([&](const FNativeAssociation& Entry)
+					{ return Entry.Actor == Contact.Proxies[Side] && Entry.Incarnation == Contact.Generations[Side]; });
+					const auto* StaticWorld = WorldCreationAssociations.FindByPredicate([&](const FWorldCreationAssociation& Entry)
+					{ return Entry.Actor == Contact.Proxies[Side] && Entry.Generation == Contact.Generations[Side]; });
+					UPrimitiveComponent* Component = Native ? Native->Component.Get() : StaticWorld ? StaticWorld->Component.Get() : nullptr;
+					auto* Proxy = ElysiumModelPhysics::ActorIdentity(Component);
+					FElysiumEntity* CreationOwner = Native ? (Native->World ? Native->World->Resolve(Native->Owner) : nullptr)
+						: StaticWorld ? StaticWorld->World->Resolve(StaticWorld->Owner) : nullptr;
+					bCurrent = Proxy && Proxy == Contact.Proxies[Side] && Proxy->GetGameThreadAPI().UniqueIdx() == Contact.UniqueIds[Side]
+						&& CreationOwner != nullptr;
+				}
+				if (!bCurrent) continue; //pooled output from a retired proxy/owner epoch cannot repopulate its contacts
+				FCompletedContactBirth* Prior = CompletedContactBirths.FindByPredicate([&](const FCompletedContactBirth& Entry)
+				{ return Entry.World == World && Entry.Contact.Shapes[0] == Contact.Shapes[0] && Entry.Contact.Shapes[1] == Contact.Shapes[1]
+					&& Entry.Contact.Geometry[0] == Contact.Geometry[0] && Entry.Contact.Geometry[1] == Contact.Geometry[1]
+					&& Entry.Contact.Proxies[0] == Contact.Proxies[0] && Entry.Contact.Proxies[1] == Contact.Proxies[1]
+					&& Entry.Contact.UniqueIds[0] == Contact.UniqueIds[0] && Entry.Contact.UniqueIds[1] == Contact.UniqueIds[1]; });
+				if (!Prior)
+				{
+					const int32 NewIndex = CompletedContactBirths.Add({World,Contact,++NextContactBirth});
+					CompletedContactBirths[NewIndex].OutputTime = Output->InternalTime;
+				}
+				else
+				{
+					Prior->bInitialTransition |= Contact.bInitial && !Prior->Contact.bInitial;
+					Prior->Sequence = ++NextContactBirth;
+					Prior->Contact = Contact;
+					Prior->OutputTime = Output->InternalTime;
+				}
+			}
+	}
+	// Environment2600f920 ->2603a730 ->260477d0/26050c20/2603e880.
+	// The authored default is stored through float108 before its final float11c store.
+	// Native geometry supplies surface separation; this threshold only qualifies44's roster.
+	double FrictionContactSkinCm()
+	{
+		constexpr double DefaultToleranceMetres = 0.00634745988029331;
+		const float FirstStore = static_cast<float>(DefaultToleranceMetres * (0.10000000149011612 + 0.8999999761581421));
+		const float SkinMetres = static_cast<float>(static_cast<double>(FirstStore) + DefaultToleranceMetres + 2.5 * DefaultToleranceMetres);
+		return static_cast<double>(SkinMetres) * 100.;
+	}
 	uint64 NextNativeIncarnation = 0;
 	TArray<uint64> NativeSolveOutputs;
 	TMap<UWorld*, TArray<uint64>> NativeActiveOrders; // each native environment has its observable order
@@ -59,7 +269,7 @@ namespace
 		FPhysicsCommand::ExecuteWrite(Body.GetPhysicsActor(), [&Tensor](const FPhysicsActorHandle& Handle)
 		{ FPhysicsInterface::SetLocalInertiaTensor_AssumesLocked(Handle, Tensor); });
 	}
-	bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
+	bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError);
 }
 
@@ -67,10 +277,21 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 {
 	uint8 Kind = static_cast<uint8>(State.Recipe.Kind);
 	Ar << State.EntityIndex << State.FieldName << Kind;
-	if (Kind > static_cast<uint8>(EElysiumPhysicsRecipeKind::Bbox)) Ar.SetError();
+	if (Kind > static_cast<uint8>(EElysiumPhysicsRecipeKind::Brush)) Ar.SetError();
 	State.Recipe.Kind = static_cast<EElysiumPhysicsRecipeKind>(Kind);
 	Ar << State.bHasObject;
 	Ar << State.Recipe.bStatic << State.Recipe.ModelAsset << State.Recipe.Surface << State.Recipe.BboxMin << State.Recipe.BboxMax;
+	Ar << State.Recipe.BrushSolidity << State.Recipe.BrushContentsSignature;
+	int32 HullCount = State.Recipe.BrushHulls.Num(); Ar << HullCount;
+	if (HullCount < 0 || HullCount > 65536) { Ar.SetError(); return Ar; }
+	if (Ar.IsLoading()) State.Recipe.BrushHulls.SetNum(HullCount);
+	for (TArray<FVector>& Hull : State.Recipe.BrushHulls)
+	{
+		int32 VertexCount = Hull.Num(); Ar << VertexCount;
+		if (VertexCount < 4 || VertexCount > 65536) { Ar.SetError(); return Ar; }
+		if (Ar.IsLoading()) Hull.SetNum(VertexCount);
+		for (FVector& Vertex : Hull) Ar << Vertex;
+	}
 	Ar << State.Recipe.MassKg << State.Recipe.InertiaScale << State.Recipe.LinearDamping << State.Recipe.AngularDamping;
 	Ar << State.Recipe.bMassCenter << State.Recipe.MassCenterCm;
 	Ar << State.Recipe.RotInertiaLimit << State.Recipe.Volume << State.Recipe.Drag << State.Recipe.RollingDrag << State.Recipe.SolidPairsJson;
@@ -90,10 +311,10 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	return Ar;
 }
 
-void ElysiumModelPhysics::RetireRecipe(UStaticMeshComponent* Component)
+void ElysiumModelPhysics::RetireRecipe(UPrimitiveComponent* Component)
 {
 	// 10045110: first matching model association, otherwise first bbox; sleeping is not removal.
-	for (EElysiumPhysicsRecipeKind Kind : { EElysiumPhysicsRecipeKind::Model, EElysiumPhysicsRecipeKind::Bbox })
+	for (EElysiumPhysicsRecipeKind Kind : { EElysiumPhysicsRecipeKind::Model, EElysiumPhysicsRecipeKind::Bbox, EElysiumPhysicsRecipeKind::Brush })
 	{
 		const int32 Found = PhysicsRecipeAssociations.IndexOfByPredicate([Component, Kind](const FPhysicsRecipeAssociation& Entry)
 			{ return Entry.Producer == Component && Entry.Recipe.Kind == Kind; });
@@ -101,7 +322,7 @@ void ElysiumModelPhysics::RetireRecipe(UStaticMeshComponent* Component)
 	}
 }
 
-UStaticMeshComponent* ElysiumModelPhysics::ComponentFor(void* Actor)
+UPrimitiveComponent* ElysiumModelPhysics::ComponentFor(void* Actor)
 {
 	if (!Actor) return nullptr;
 	for (const FNativeAssociation& Entry : NativeAssociations)
@@ -128,12 +349,18 @@ void ElysiumModelPhysics::SetGameData(void* Actor, FElysiumEntity& Entity)
 
 void ElysiumModelPhysics::ForgetGameData(FElysiumEntity& Entity)
 {
+	WorldCreationAssociations.RemoveAll([&](const FWorldCreationAssociation& Entry)
+	{
+		const bool bRemove = Entry.World == Entity.World && Entry.Owner == Entity.Handle;
+		if (bRemove) RetireWorldContact(Entry.Actor);
+		return bRemove;
+	});
 	for (FNativeAssociation& Entry : NativeAssociations)
 		if (Entry.World == Entity.World && Entry.Owner == Entity.Handle)
 		{ Entry.World = nullptr; Entry.Owner = FElysiumEntityHandle::Invalid(); }
 }
 
-void ElysiumModelPhysics::RecordNativeOutput(UStaticMeshComponent* Component)
+void ElysiumModelPhysics::RecordNativeOutput(UPrimitiveComponent* Component)
 {
 	const UWorld* NativeWorld = Component ? Component->GetWorld() : nullptr;
 	// OnSyncBodies publishes in the engine's EndPhysics tick. SkipPhysicsUpdate alone also
@@ -152,7 +379,7 @@ void ElysiumModelPhysics::RecordNativeOutput(UStaticMeshComponent* Component)
 		}
 }
 
-void ElysiumModelPhysics::RecordNativeActivity(UStaticMeshComponent* Component, bool bAwake)
+void ElysiumModelPhysics::RecordNativeActivity(UPrimitiveComponent* Component, bool bAwake)
 {
 	for (FNativeAssociation& Entry : NativeAssociations)
 		if (Entry.Producer == Component && Component->IsSimulatingPhysics())
@@ -164,7 +391,7 @@ void ElysiumModelPhysics::RecordNativeActivity(UStaticMeshComponent* Component, 
 		}
 }
 
-void ElysiumModelPhysics::Wake(UStaticMeshComponent* Component)
+void ElysiumModelPhysics::Wake(UPrimitiveComponent* Component)
 {
 	if (FBodyInstance* Body = Identity(Component)) { Body->WakeInstance(); RecordNativeActivity(Component, true); }
 }
@@ -189,6 +416,12 @@ TArray<ElysiumModelPhysics::FNativeOutput> ElysiumModelPhysics::ActiveOutputs(FE
 		return !Entry || Entry->World == &World;
 	});
 	return Result;
+}
+
+ElysiumModelPhysics::FNativeOutput ElysiumModelPhysics::CaptureIdentity(void* Actor)
+{
+	const FNativeAssociation* Entry = NativeAssociations.FindByPredicate([Actor](const FNativeAssociation& Item) { return Item.Actor == Actor; });
+	return { Actor, Entry ? Entry->Incarnation : 0 };
 }
 
 bool ElysiumModelPhysics::IsCurrentOutput(const FNativeOutput& Output)
@@ -236,7 +469,206 @@ bool ElysiumModelPhysics::GetPosition(void* Actor, FVector& OriginCm, FRotator& 
 	return true;
 }
 
-void ElysiumModelPhysics::RetireNative(UStaticMeshComponent* Component)
+FElysiumEntity* ElysiumModelPhysics::GameDataForObject(void* Actor)
+{
+	if (!Actor) return nullptr;
+	for (const FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.Actor == Actor && Entry.World && ComponentFor(Actor)) return Entry.World->Resolve(Entry.Owner);
+	for (const FWorldCreationAssociation& Entry : WorldCreationAssociations)
+		if (Entry.Actor == Actor && Entry.Component.IsValid() && ActorIdentity(Entry.Component.Get()) == Actor
+			&& static_cast<Chaos::FSingleParticlePhysicsProxy*>(Actor)->GetGameThreadAPI().UniqueIdx() == Entry.UniqueIdx)
+			return Entry.World->Resolve(Entry.Owner);
+	return nullptr;
+}
+
+void ElysiumModelPhysics::BindWorldCreationOwners(FElysiumEntityWorld& World)
+{
+	WorldCreationAssociations.RemoveAll([&](const FWorldCreationAssociation& Entry)
+	{
+		if (Entry.World != &World) return false;
+		RetireWorldContact(Entry.Actor); return true;
+	});
+	FElysiumEntity* WorldEntity = nullptr;
+	for (const auto& Entity : World.Entities())
+		if (Entity && Entity->Def && Entity->Def->Classname.Equals(TEXT("worldspawn"), ESearchCase::IgnoreCase))
+		{ WorldEntity = Entity.Get(); break; }
+	UWorld* NativeWorld = World.GetOwnerActor() ? World.GetOwnerActor()->GetWorld() : nullptr;
+	if (!WorldEntity || !NativeWorld) return;
+	for (TActorIterator<AElysiumWorldCollisionActor> It(NativeWorld); It; ++It)
+	{
+		TArray<UElysiumWorldCollisionComponent*> Components;
+		for (UElysiumWorldCollisionComponent* Component : It->Bodies) Components.Add(Component);
+		if (It->Displacement) Components.Add(It->Displacement);
+		for (UElysiumWorldCollisionComponent* Component : Components)
+			if (Component)
+			{
+				auto* Proxy = ActorIdentity(Component);
+				WorldCreationAssociations.Add({ Proxy, Proxy ? Proxy->GetGameThreadAPI().UniqueIdx() : Chaos::FUniqueIdx(), Component, Component, &World, WorldEntity->Handle, ++NextWorldGeneration });
+				if (Proxy) RetiredNativeActors.Remove(Proxy);
+			}
+	}
+}
+
+void ElysiumModelPhysics::RetireWorldActor(UElysiumWorldCollisionComponent* Component)
+{
+	for (FWorldCreationAssociation& Entry : WorldCreationAssociations)
+		if (Entry.Producer == Component && Entry.Actor)
+		{
+			RetireWorldContact(Entry.Actor);
+			Entry.Actor = nullptr; Entry.UniqueIdx = Chaos::FUniqueIdx(); //component/owner survive native recreation
+		}
+}
+
+void ElysiumModelPhysics::RebindWorldActor(UElysiumWorldCollisionComponent* Component)
+{
+	if (auto* Proxy = ActorIdentity(Component))
+		for (FWorldCreationAssociation& Entry : WorldCreationAssociations)
+			if (Entry.Producer == Component)
+			{
+				Entry.Actor = Proxy; Entry.UniqueIdx = Proxy->GetGameThreadAPI().UniqueIdx(); Entry.Generation = ++NextWorldGeneration;
+				RetiredNativeActors.Remove(Proxy);
+			}
+}
+
+UPrimitiveComponent* ElysiumModelPhysics::OwnedComponent(const FElysiumEntity& Entity)
+{
+	for (const auto& Entry : NativeAssociations)
+		if (Entry.World == Entity.World && Entry.Owner == Entity.Handle)
+			if (UPrimitiveComponent* Component = ComponentFor(Entry.Actor)) return Component;
+	return nullptr;
+}
+
+TArray<UPrimitiveComponent*> ElysiumModelPhysics::WorldComponents(const FElysiumEntityWorld& World)
+{
+	TArray<UPrimitiveComponent*> Components;
+	for (const FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.World == &World)
+			if (UPrimitiveComponent* Component = ComponentFor(Entry.Actor)) Components.AddUnique(Component);
+	return Components;
+}
+
+bool ElysiumModelPhysics::GetContactPoint(void* Actor, void*& OtherActor, FString* Provenance)
+{
+	OtherActor = nullptr;
+	if (Provenance) Provenance->Reset();
+	const FNativeAssociation* Owner = NativeAssociations.FindByPredicate([Actor](const FNativeAssociation& Entry) { return Entry.Actor == Actor; });
+	if (!Owner) return false;
+	const uint64 OwnerIncarnation = Owner->Incarnation;
+	FBodyInstance* Body = Identity(ComponentFor(Actor));
+	if (!Body) return false;
+	// Solver state is read only after its outstanding jobs finish. No UObject/owner table is
+	// accessed by the solver thread; copy native contact identities before game-side arbitration.
+	if (auto* Solver = Body->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>()) Solver->WaitOnPendingTasks_External();
+	ConsumeContactOutputs(ComponentFor(Actor)->GetWorld());
+	TArray<FObservedContact> Current;
+	TSet<uint64> SurvivingNativePairs;
+	FPhysicsCommand::ExecuteRead(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
+	{
+		const auto* Particle = NativeActor->GetHandle_LowLevel();
+		if (!Particle) return;
+		Particle->ParticleCollisions().VisitConstCollisions([&](const Chaos::FPBDCollisionConstraint& Contact)
+		{
+			const auto* First = Contact.GetParticle0(); const auto* Second = Contact.GetParticle1();
+			FCompletedContactBirth* Completed = CompletedContactBirths.FindByPredicate([&](const FCompletedContactBirth& Entry)
+			{ return Entry.World == ComponentFor(Actor)->GetWorld() && Entry.Contact.Shapes[0] == Contact.GetShape0()
+				&& Entry.Contact.Shapes[1] == Contact.GetShape1() && Entry.Contact.Geometry[0] == Contact.GetImplicit0()
+				&& Entry.Contact.Geometry[1] == Contact.GetImplicit1() && First && Second
+				&& Entry.Contact.Proxies[0] == First->PhysicsProxy() && Entry.Contact.Proxies[1] == Second->PhysicsProxy()
+				&& Entry.Contact.UniqueIds[0] == First->UniqueIdx() && Entry.Contact.UniqueIds[1] == Second->UniqueIdx(); });
+			if (Completed) SurvivingNativePairs.Add(Completed->Sequence);
+			// A cached pair allocation is not an observed friction contact. Preserve the strict
+			// entry/inclusive retirement skin from2603e6d0/2603e880 using current native points.
+			bool bQualifyingPoint = false;
+			if (!Contact.GetDisabled() && !Contact.GetIsProbe())
+				for (int32 PointIndex = 0; PointIndex < Contact.NumManifoldPoints(); ++PointIndex)
+					if (Contact.IsManifoldPointActive(PointIndex))
+					{
+						const auto& Point = Contact.GetManifoldPoint(PointIndex);
+						if (Point.ContactPoint.IsSet() && FMath::Max(static_cast<double>(Point.ContactPoint.Phi), 0.) < FrictionContactSkinCm())
+							bQualifyingPoint = true;
+					}
+			if (!bQualifyingPoint)
+			{ if (Completed) Completed->bQualified = false; return Chaos::ECollisionVisitorResult::Continue; }
+			const auto* Partner = Contact.GetParticle0() == Particle ? Contact.GetParticle1() : Contact.GetParticle0();
+			void* PartnerObject = Partner ? const_cast<void*>(static_cast<const void*>(Partner->PhysicsProxy())) : nullptr;
+			if (RetiredNativeActors.Contains(PartnerObject)) return Chaos::ECollisionVisitorResult::Continue;
+			if (const auto* Association = NativeAssociations.FindByPredicate([PartnerObject](const FNativeAssociation& Entry) { return Entry.Actor == PartnerObject; }))
+				if (static_cast<Chaos::FSingleParticlePhysicsProxy*>(Association->Actor)->GetHandle_LowLevel() != Partner)
+					return Chaos::ECollisionVisitorResult::Continue; //cached old particle cannot impersonate a reused proxy
+			if (const auto* Association = WorldCreationAssociations.FindByPredicate([PartnerObject](const FWorldCreationAssociation& Entry) { return Entry.Actor == PartnerObject; }))
+				if (!Association->Component.IsValid() || ActorIdentity(Association->Component.Get()) != PartnerObject
+					|| static_cast<Chaos::FSingleParticlePhysicsProxy*>(PartnerObject)->GetHandle_LowLevel() != Partner
+					|| Partner->UniqueIdx() != Association->UniqueIdx)
+					return Chaos::ECollisionVisitorResult::Continue;
+			if (!Completed) return Chaos::ECollisionVisitorResult::Continue;
+			if (!Completed->bQualified || Completed->bInitialTransition)
+			{ Completed->Birth = Completed->Sequence; Completed->BirthTime = Completed->OutputTime; }
+			Completed->bQualified = true; Completed->bInitialTransition = false;
+			if (Provenance)
+			{
+				*Provenance += FString::Printf(TEXT("partner=%s sequence=%llu birth=%llu birthTime=%.17g outputTime=%.17g initial=%d; "),
+					*FElysiumEntityWorld::AiTraceName(GameDataForObject(PartnerObject)), Completed->Sequence, Completed->Birth,
+					Completed->BirthTime, Completed->OutputTime, Completed->Contact.bInitial);
+
+			}
+			Current.Add({ &Contact, PartnerObject, 0, Completed->Birth });
+			return Chaos::ECollisionVisitorResult::Continue;
+		});
+	});
+	// Absence from a modifier output batch is not retirement (sleep/no-advance).
+	// Absence from the current completed native pair roster is actual retirement.
+	CompletedContactBirths.RemoveAll([&](const FCompletedContactBirth& Entry)
+	{ return (Entry.Contact.Proxies[0] == Actor || Entry.Contact.Proxies[1] == Actor) && !SurvivingNativePairs.Contains(Entry.Sequence); });
+	TArray<FObservedContact>& Roster = ContactRosters.FindOrAdd(OwnerIncarnation);
+	Roster.RemoveAll([&](const FObservedContact& Previous)
+	{
+		return !Current.ContainsByPredicate([&](const FObservedContact& Contact)
+		{ return Contact.Constraint == Previous.Constraint && Contact.Partner == Previous.Partner; });
+	});
+	// Completed public native lifecycle supplies births, independent of query traversal order.
+	// Sleeping/no-output survivors retain provenance. Native generation/service chronology
+	// and the retained newest-surviving selection are separate observer contracts.
+	for (FObservedContact& Contact : Current)
+	{
+		FObservedContact* Previous = Roster.FindByPredicate([&](const FObservedContact& Existing)
+		{ return Contact.Constraint == Existing.Constraint && Contact.Partner == Existing.Partner; });
+		if (Previous) Previous->Birth = Contact.Birth;
+		else
+		{
+			if (const auto* Partner = NativeAssociations.FindByPredicate([&](const FNativeAssociation& Entry) { return Entry.Actor == Contact.Partner; }))
+				Contact.PartnerIncarnation = Partner->Incarnation;
+			Roster.Add(Contact); //2603b4f0 prepends; newest surviving birth is44's first
+		}
+	}
+	const FObservedContact* Selected = nullptr;
+	for (const auto& Contact : Roster) if (!Selected || Contact.Birth > Selected->Birth) Selected = &Contact;
+	if (!Selected) return false;
+	OtherActor = Selected->Partner;
+	if (Selected->PartnerIncarnation != 0)
+	{
+		const auto* Partner = NativeAssociations.FindByPredicate([&](const FNativeAssociation& Entry)
+		{ return Entry.Actor == Selected->Partner && Entry.Incarnation == Selected->PartnerIncarnation; });
+		if (!Partner) OtherActor = nullptr;
+	}
+	return true; //selected native/world partner with no GameData still dispatches Blocked(nullptr)
+}
+
+bool ElysiumModelPhysics::CreateBrush(UElysiumBrushComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
+	const FElysiumPhysicsBodyRecipe& Recipe, FString& OutError)
+{
+	if (Recipe.Kind != EElysiumPhysicsRecipeKind::Brush)
+	{ OutError = TEXT("brush creator requires an authored brush recipe"); return false; }
+	return CreatePhysicsRecipe(Component, Surfaces, Recipe, false, OutError);
+}
+
+void ElysiumModelPhysics::RefreshContactOutputs(FElysiumEntityWorld& World)
+{
+	TArray<void*> Actors;
+	for (const auto& Entry : NativeAssociations) if (Entry.World == &World) Actors.Add(Entry.Actor);
+	for (void* Actor : Actors) { void* Partner = nullptr; GetContactPoint(Actor, Partner); }
+}
+
+void ElysiumModelPhysics::RetireNative(UPrimitiveComponent* Component)
 {
 	// Called before Super::OnDestroyPhysicsState releases Chaos. No field may retain a dead actor.
 	TArray<void*> RetiringActors;
@@ -246,12 +678,17 @@ void ElysiumModelPhysics::RetireNative(UStaticMeshComponent* Component)
 		RemoveShadow(NativeAssociations[Index].Actor);
 		if (auto* Order = NativeActiveOrders.Find(Component->GetWorld())) Order->RemoveSingleSwap(NativeAssociations[Index].Incarnation);
 		RetiringActors.Add(NativeAssociations[Index].Actor);
+		RetiredNativeActors.Add(NativeAssociations[Index].Actor);
+		ForgetCompletedActor(NativeAssociations[Index].Actor);
+		ContactRosters.Remove(NativeAssociations[Index].Incarnation);
 		NativeAssociations.RemoveAt(Index);
 	}
 	if (const auto* Order = NativeActiveOrders.Find(Component->GetWorld()); Order && Order->IsEmpty()) NativeActiveOrders.Remove(Component->GetWorld());
 	RetireRecipe(Component); //10158520 ->10045110 precedes native deletion and observer callbacks.
 	for (void* Actor : RetiringActors)
 	{
+		for (auto& Roster : ContactRosters)
+			Roster.Value.RemoveAll([Actor](const FObservedContact& Contact) { return Contact.Partner == Actor; }); //2603cf30: retire contact, expose survivor
 		ShadowAssociations.RemoveAll([Actor](const FShadowAssociation& Entry) { return Entry.Actor == Actor; });
 		TArray<FElysiumEntity*> Referencing;
 		for (const FNativeReference& Entry : NativeReferences)
@@ -282,7 +719,7 @@ const FElysiumPhysicsBodyRecipe* ElysiumModelPhysics::RecipeFor(void* Actor)
 
 bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutState)
 {
-	UStaticMeshComponent* Component = ComponentFor(Actor);
+	UPrimitiveComponent* Component = ComponentFor(Actor);
 	const FElysiumPhysicsBodyRecipe* Recipe = RecipeFor(Actor);
 	const FBodyInstance* NativeBody = Identity(Component);
 	if (!NativeBody || !Recipe) return false;
@@ -319,7 +756,7 @@ void ElysiumModelPhysics::RemoveShadow(void* Actor)
 	const FShadowAssociation* Entry = FindShadow(Actor);
 	if (!Entry) return;
 	const FElysiumPhysicsShadowState State = Entry->State;
-	if (UStaticMeshComponent* Component = ComponentFor(Actor))
+	if (UPrimitiveComponent* Component = ComponentFor(Actor))
 		if (FBodyInstance* Body = Identity(Component))
 		{
 			Component->SetMassOverrideInKg(NAME_None, State.SavedMassKg, true);
@@ -332,7 +769,7 @@ void ElysiumModelPhysics::RemoveShadow(void* Actor)
 bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float AngularSpeedDegrees,
 	bool bAllowMovement, bool bAllowRotation)
 {
-	UStaticMeshComponent* Component = ComponentFor(Actor);
+	UPrimitiveComponent* Component = ComponentFor(Actor);
 	FBodyInstance* Body = Identity(Component);
 	if (!Body || !Component->IsSimulatingPhysics() || !FMath::IsFinite(LinearSpeedInches) || !FMath::IsFinite(AngularSpeedDegrees)) return false;
 	FShadowAssociation* Entry = FindShadow(Actor);
@@ -359,7 +796,7 @@ bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float 
 bool ElysiumModelPhysics::UpdateShadow(void* Actor, const FVector& OriginCm, const FQuat& Rotation,
 	bool bGravityMode, float ArrivalSeconds)
 {
-	UStaticMeshComponent* Component = ComponentFor(Actor); FBodyInstance* Body = Identity(Component);
+	UPrimitiveComponent* Component = ComponentFor(Actor); FBodyInstance* Body = Identity(Component);
 	if (!Body || OriginCm.ContainsNaN() || Rotation.ContainsNaN() || !Rotation.IsNormalized() || !FMath::IsFinite(ArrivalSeconds)) return false;
 	FShadowAssociation* Entry = FindShadow(Actor);
 	if (!Entry) return false;
@@ -447,6 +884,23 @@ namespace
 float ElysiumModelPhysics::PreparePhysicsFrame(UWorld& World, float FrameSeconds, float TimeScale, bool bSimulating)
 {
 	FPhysScene* Scene = World.GetPhysicsScene(); if (!Scene) return 0.f;
+	// A component physics rebuild retains its creation owner, but never the retired proxy.
+	for (int32 Index = WorldCreationAssociations.Num() - 1; Index >= 0; --Index)
+	{
+		FWorldCreationAssociation& Entry = WorldCreationAssociations[Index];
+		UElysiumWorldCollisionComponent* Component = Entry.Component.Get();
+		if (Component && Component->GetWorld() != &World) continue;
+		auto* Proxy = ActorIdentity(Component);
+		if (!Proxy || Proxy != Entry.Actor || Proxy->GetGameThreadAPI().UniqueIdx() != Entry.UniqueIdx)
+		{
+			RetireWorldContact(Entry.Actor);
+			if (!Component) { WorldCreationAssociations.RemoveAt(Index); continue; }
+			if (!Proxy) { Entry.Actor = nullptr; Entry.UniqueIdx = Chaos::FUniqueIdx(); continue; }
+			Entry.Actor = Proxy; Entry.UniqueIdx = Proxy->GetGameThreadAPI().UniqueIdx(); Entry.Generation = ++NextWorldGeneration;
+			RetiredNativeActors.Remove(Proxy);
+		}
+	}
+	PrepareSolveFilter(World, *Scene);
 	auto& NativeActiveOrder = NativeActiveOrders.FindOrAdd(&World);
 	//26010900/26010c20: remove prior pending inactivity before solving, last-entry replacement.
 	for (int32 Index = NativeActiveOrder.Num() - 1; Index >= 0; --Index)
@@ -471,32 +925,32 @@ float ElysiumModelPhysics::PreparePhysicsFrame(UWorld& World, float FrameSeconds
 	if (Delta > 0.f)
 		for (FShadowAssociation& Entry : ShadowAssociations)
 		{
-			UStaticMeshComponent* Component = ComponentFor(Entry.Actor);
+			UPrimitiveComponent* Component = ComponentFor(Entry.Actor);
 			if (Component && Component->GetWorld() == &World)
 				if (FBodyInstance* Body = Identity(Component)) PrepareShadow(*Body, Entry.State, Delta);
 		}
 	return Delta;
 }
 
-FBodyInstance* ElysiumModelPhysics::Identity(UStaticMeshComponent* Component)
+FBodyInstance* ElysiumModelPhysics::Identity(UPrimitiveComponent* Component)
 {
 	FBodyInstance* Body = Component && !Component->IsBeingDestroyed() ? Component->GetBodyInstance() : nullptr;
 	return Body && Body->IsValidBodyInstance() ? Body : nullptr;
 }
 
-bool ElysiumModelPhysics::IsActive(UStaticMeshComponent* Component)
+bool ElysiumModelPhysics::IsActive(UPrimitiveComponent* Component)
 {
 	const FBodyInstance* Body = Identity(Component);
 	return Body && Component->IsSimulatingPhysics() && Body->IsInstanceAwake();
 }
 
-Chaos::FSingleParticlePhysicsProxy* ElysiumModelPhysics::ActorIdentity(UStaticMeshComponent* Component)
+Chaos::FSingleParticlePhysicsProxy* ElysiumModelPhysics::ActorIdentity(UPrimitiveComponent* Component)
 {
 	const FBodyInstance* NativeBody = Identity(Component);
 	return NativeBody ? NativeBody->GetPhysicsActor() : nullptr;
 }
 
-void ElysiumModelPhysics::Destroy(UStaticMeshComponent* Component)
+void ElysiumModelPhysics::Destroy(UPrimitiveComponent* Component)
 {
 	if (Component)
 	{
@@ -554,7 +1008,7 @@ bool ElysiumModelPhysics::CreateBbox(UStaticMeshComponent* Component, FElysiumPh
 
 namespace
 {
-bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
+bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 	const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError)
 {
 	OutError.Reset();
@@ -562,7 +1016,25 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 	bool bSucceeded = false;
 	ON_SCOPE_EXIT { if (!bSucceeded) ElysiumModelPhysics::Destroy(Component); };
 	auto* Proxy = Cast<UElysiumPhysicsPropComponent>(Component);
-	if (!Proxy) { OutError = TEXT("body recipe requires native selected-body component"); return false; }
+	auto* Brush = Cast<UElysiumBrushComponent>(Component);
+	if (!Proxy && !Brush) { OutError = TEXT("body recipe requires a native recipe component"); return false; }
+	if (Brush)
+	{
+		if (Recipe.Kind != EElysiumPhysicsRecipeKind::Brush || Recipe.BrushHulls.IsEmpty())
+		{ OutError = TEXT("brush requires authored convex reconstruction inputs"); return false; }
+		TArray<FElysiumConvexHull> Hulls;
+		for (const TArray<FVector>& Vertices : Recipe.BrushHulls)
+		{
+			if (Vertices.Num() < 4 || Vertices.ContainsByPredicate([](const FVector& V) { return V.ContainsNaN(); }))
+			{ OutError = TEXT("invalid authored brush convex"); return false; }
+			FElysiumConvexHull& Hull = Hulls.AddDefaulted_GetRef(); Hull.Vertices = Vertices;
+		}
+		if (Recipe.BrushSolidity > static_cast<uint8>(EElysiumBrushSolidity::Passable))
+		{ OutError = TEXT("invalid brush solidity recipe"); return false; }
+		Brush->InitBrush(Brush->GetOwningEntity(), Hulls, static_cast<EElysiumBrushSolidity>(Recipe.BrushSolidity), Recipe.BrushContentsSignature);
+	}
+	else
+	{
 	Proxy->RecipeBody = nullptr;
 	Proxy->bUseSelectedBody = true;
 	if (Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox)
@@ -590,6 +1062,7 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 		if (!Inputs || !Inputs->bSourceBody || !Inputs->SelectedBody || Inputs->SelectedBody->AggGeom.GetElementCount() == 0)
 		{ OutError = TEXT("saved model recipe requires the selected source collision cook"); return false; }
 		Proxy->SetStaticMesh(Mesh);
+	}
 	}
 	if (!FMath::IsFinite(Recipe.InertiaScale) || Recipe.InertiaScale == 0.f
 		|| !FMath::IsFinite(Recipe.LinearDamping) || Recipe.LinearDamping < 0.f
@@ -621,15 +1094,23 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 	Component->BodyInstance.InertiaTensorScale = FVector(FMath::Sqrt(Recipe.InertiaScale < 0.f ? 1.f : Recipe.InertiaScale));
 	Component->BodyInstance.bStartAwake = !bStartAsleep;
 	Component->BodyInstance.bGenerateWakeEvents = true;
-	Proxy->OnComponentWake.AddUniqueDynamic(Proxy, &UElysiumPhysicsPropComponent::NativeWake);
-	Proxy->OnComponentSleep.AddUniqueDynamic(Proxy, &UElysiumPhysicsPropComponent::NativeSleep);
+	if (Proxy)
+	{
+		Proxy->OnComponentWake.AddUniqueDynamic(Proxy, &UElysiumPhysicsPropComponent::NativeWake);
+		Proxy->OnComponentSleep.AddUniqueDynamic(Proxy, &UElysiumPhysicsPropComponent::NativeSleep);
+	}
+	else
+	{
+		Brush->OnComponentWake.AddUniqueDynamic(Brush, &UElysiumBrushComponent::NativeWake);
+		Brush->OnComponentSleep.AddUniqueDynamic(Brush, &UElysiumBrushComponent::NativeSleep);
+	}
 	Component->SetLinearDamping(Recipe.LinearDamping);
 	Component->SetAngularDamping(Recipe.AngularDamping);
 	Component->SetMassOverrideInKg(NAME_None, Mass, true);
 	Component->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Component->SetMobility(Recipe.bStatic ? EComponentMobility::Static : EComponentMobility::Movable);
 	Component->SetSimulatePhysics(!Recipe.bStatic);
-	if (Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox) Component->RecreatePhysicsState();
+	if (Recipe.Kind != EElysiumPhysicsRecipeKind::Model) Component->RecreatePhysicsState();
 	FBodyInstance* Body = ElysiumModelPhysics::Identity(Component);
 	if (!Body) { ElysiumModelPhysics::Destroy(Component); OutError = TEXT("Chaos body creation failed"); return false; }
 	if (Recipe.bMassCenter)
@@ -643,6 +1124,7 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 		if (bStartAsleep) Body->PutInstanceToSleep();
 		else Body->WakeInstance();
 	}
+	RetiredNativeActors.Remove(ElysiumModelPhysics::ActorIdentity(Component));
 	NativeAssociations.Add({ ElysiumModelPhysics::ActorIdentity(Component), Component, Component, ++NextNativeIncarnation });
 	if (!Recipe.bStatic && !bStartAsleep) ElysiumModelPhysics::RecordNativeActivity(Component, true);
 	FPhysicsRecipeAssociation& Entry = PhysicsRecipeAssociations.AddDefaulted_GetRef();
@@ -655,14 +1137,14 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 }
 }
 
-bool ElysiumModelPhysics::Restore(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
+bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 	const FElysiumSavedPhysicsBody& State, FString& OutError)
 {
 	Destroy(Component);
 	if (!Component || !ValidShadow(State.Shadow) || (State.Shadow.bInstalled && State.Recipe.bStatic)
 		|| (State.bShadowMember && !State.Shadow.bInstalled)
 		|| State.Pose.ContainsNaN() || State.LinearVelocity.ContainsNaN() || State.AngularVelocityRadians.ContainsNaN()
-		|| static_cast<uint8>(State.Recipe.Kind) > static_cast<uint8>(EElysiumPhysicsRecipeKind::Bbox)
+		|| static_cast<uint8>(State.Recipe.Kind) > static_cast<uint8>(EElysiumPhysicsRecipeKind::Brush)
 		|| !FMath::IsFinite(State.CurrentMassKg) || State.CurrentMassKg <= 0.f
 		|| !FMath::IsFinite(State.CurrentLinearDamping) || State.CurrentLinearDamping < 0.f
 		|| !FMath::IsFinite(State.CurrentAngularDamping) || State.CurrentAngularDamping < 0.f)
@@ -677,6 +1159,7 @@ bool ElysiumModelPhysics::Restore(UStaticMeshComponent* Component, FElysiumPhysi
 	if (!State.CollisionProfile.IsNone()) Component->SetCollisionProfileName(State.CollisionProfile);
 	Component->SetMaskFilterOnBodyInstance(State.CollisionMask);
 	if (!CreatePhysicsRecipe(Component, Surfaces, State.Recipe, State.bAsleep, OutError)) return false;
+	if (!State.CollisionProfile.IsNone()) Component->SetCollisionProfileName(State.CollisionProfile);
 	if (State.CollisionResponses.Num() == NativeResponseChannelCount)
 		for (int32 Channel = 0; Channel < NativeResponseChannelCount; ++Channel)
 			Component->SetCollisionResponseToChannel(static_cast<ECollisionChannel>(Channel), static_cast<ECollisionResponse>(State.CollisionResponses[Channel]));

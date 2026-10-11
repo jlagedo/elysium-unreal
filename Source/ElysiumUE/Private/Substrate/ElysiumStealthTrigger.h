@@ -25,6 +25,7 @@
 class FElysiumStealthModTrigger final : public FElysiumTriggerBase
 {
 public:
+	virtual void Spawn() override { InitTrigger(); } //101cb9e0
 	// `stealth_modifier` -> `m_nStealthMod` (+0x598). Integer, and signed: nothing in the parser or
 	// in the aggregate rejects a negative volume.
 	int32 StealthMod = 0;

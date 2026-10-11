@@ -90,19 +90,9 @@
 // Slots 174 `StartTouch` and 175 `Touch` — the `CBaseEntity` bodies and their two species arms.
 // -------------------------------------------------------------------------------------------------
 //
-// **Why these are not `hand:` rows.** Slot 174's and slot 175's Troika-line bodies are
-// `CBaseEntity::StartTouch` (`0x100a49d0`) and `CBaseEntity::Touch` (`0x100a4af0`), which sit in
-// 29c's band and carry **no verdict** — they are two of the 145 non-core `CBaseEntity` slots story
-// 29c-1's report set aside as "`CBaseEntity`'s story, not this one". `gen_kernel_shape` therefore
-// still emits their named stubs, and a definition of `FElysiumNpc::Touch` here would be a duplicate
-// symbol. The two base bodies are ported under their own names instead — exactly as story 29c-1's
-// cleanup landed `CBaseEntity`'s own slot-153 body as `FElysiumNpcBase::BaseEntityIsMoving` — and the
-// species dispatch sits on top of them.
-//
-// **GAP, named rather than patched:** nothing dispatches slot 175 in this runtime. There is no
-// per-frame entity-vs-entity touch pass here; the world's touch surface is begin/end only. Slot 174
-// IS wired, through `FElysiumEntity::OnTouchStart`, which is this runtime's touch-begin
-// notification and is retail's `StartTouch` by construction.
+// The L0 physical-link producer dispatches real174/175. NPC overrides retain the existing
+// species ingress once; base helpers share100a49d0/100a4af0 with the generic entity, including
+// installed callback and live authored-parent relay. OnTouchStart remains a legacy typed ingress.
 
 /** Slot 174 on the NPC line: the `CBaseEntity` body. `CNPC_VGhoulCroucher` overrides it
  *  (story 5 step 3). */
@@ -115,6 +105,8 @@ virtual void TouchSpecies(FElysiumEntity* Other);
  *  slot 174. Wired so `CNPC_VGhoulCroucher`'s burn arm is reachable by a real touch rather than only
  *  by a test. */
 virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override;
+virtual void StartTouch(FElysiumEntity* Other) override;
+virtual void Touch(FElysiumEntity* Other) override;
 
 // `CNPC_VGhoulCroucher::BurnPlayer` (`0x1037c090`) itself is family **SpeciesMisc10**'s
 // `FElysiumNpcGhoulCroucher::BurnPlayer(FElysiumEntity*, float)`, landed for the slot-24 caller. It is CALLED

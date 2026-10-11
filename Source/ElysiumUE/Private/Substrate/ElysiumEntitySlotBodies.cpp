@@ -62,6 +62,11 @@
 
 // --- File-scope helpers moved with the bodies (story 5 step 6) ---
 
+bool FElysiumEntity::IsTransparent() const
+{
+	return RenderMode != 0; //100aa840, actual Simple StandardFilterRules virtual90
+}
+
 namespace
 {
 	constexpr float BleedNoiseLowDamage = 10.0f;  // _DAT_1044e664
@@ -621,9 +626,7 @@ int32 FElysiumEntity::PhysicsSolidMaskForEntity() const
 {
 	// vampire.dll 0x1003e7a0: Flags (+0x434) takes precedence over m_pPlayer (+0xa8).
 	// The player self-pointer is supplied by the real class chain, independent of FL_CLIENT.
-	if ((Flags & 0x2000) != 0) return 0x202400b;
-	if (AsPlayer() != nullptr) return 0x201400b;
-	return 0x200400b;
+	return ElysiumModelPhysics::SolidMask(Flags, AsPlayer() != nullptr);
 }
 
 FVector FElysiumEntity::BulletSpreadOffset(const FVector& SpreadUnits, const FVector& RightAxis,
@@ -1104,8 +1107,9 @@ void FElysiumEntity::VPhysicsUpdate(void* Object)
 		return;
 	}
 	if (Move == 0) return;
+	if (Move == 1 || Move == 8) { VPhysicsUpdatePusher(Object); return; }
 
-	// Moves1/8 pusher feedback and other diagnostic arms remain unfinished.
+	// Other diagnostic arms remain unfinished.
 	ElysiumStub::FSurface Missing;
 	Missing.Kind = TEXT("slot"); Missing.Surface = TEXT("CBaseEntity::VPhysicsUpdate");
 	Missing.Address = TEXT("0x100b4f30"); Missing.Story = TEXT("29c");

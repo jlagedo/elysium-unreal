@@ -6,6 +6,7 @@
 #include "ElysiumEntityHandle.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumEventQueue.h"
+#include "ElysiumGameClock.h"
 #include "ElysiumFootstepTuning.h"   // FElysiumFootstepTuning — held by value below
 #include "ElysiumIOSink.h"
 #include "ElysiumSaveTypes.h"
@@ -47,15 +48,12 @@ class FElysiumEntityWorld;
 class FElysiumDataObjectAccessSystem;
 struct FElysiumTouchLink;
 
-// Source clamps `gpGlobals->frametime` and so does `FElysiumEntityWorld::FrameSeconds()`. The
-// floor keeps two ticks at the same clock (a fixture's `Tick(0.0); Tick(0.0);` admission pair)
-// from producing a zero epsilon, which would leave a stamp written exactly at `Now` not due on
-// the very tick that wrote it. The ceiling is what keeps the NPC think cadence observable under a
-// coarsely stepped clock.
+// Ordinary admitted host bounds from2008ba30. Native ingress supplies its actual
+// already-dilated frame input; worldless legacy Tick keeps its first seed separately.
 namespace ElysiumWorldClock
 {
-	inline constexpr double MinFrameSeconds = 1.0 / 128.0;
-	inline constexpr double MaxFrameSeconds = 0.1;
+	inline constexpr double MinFrameSeconds = ElysiumFrame::MinFrameSeconds;
+	inline constexpr double MaxFrameSeconds = ElysiumFrame::MaxFrameSeconds;
 	inline constexpr double DefaultFrameSeconds = 1.0 / 60.0;
 }
 
@@ -210,7 +208,7 @@ public:
 	// body into the player entity, then think-first — RunThinks(Now) then ServiceEvents(Now).
 	void Tick(double Now);
 	// Actual map host splits GameFrame step4 around Chaos Start/EndPhysics.
-	void BeginNativePhysicsFrame(double Now);
+	void BeginNativePhysicsFrame(double Now, double AdmittedFrameSeconds);
 	void FinishNativePhysicsFrame();
 
 	// --- Chokepoints ---
@@ -972,6 +970,8 @@ public:
 	// Not a service — nothing reads behaviour off it.
 	AActor* GetOwnerActor() const { return Owner; }
 	double NowSeconds() const;
+	TOptional<double> ExchangePhysicsThinkClock(TOptional<double> Value)
+	{ TOptional<double> Prior = PhysicsThinkClock; PhysicsThinkClock = Value; return Prior; }
 	// Arena caller-owned context strings. The buffers live with the world, so registered raw name
 	// pointers remain valid after the record runner detaches; production registration owns no text.
 	ANSICHAR* StageThinkContextName(const FString& Name);
@@ -1126,7 +1126,7 @@ private:
 	// The per-frame NPC record sync -- a named divergence, documented at the definition.
 	void SyncMovingNpcRecords();
 	void RunThinks(double Now);
-	void TickFrame(double Now, bool bDeferPhysics);
+	void TickFrame(double Now, bool bDeferPhysics, TOptional<double> AdmittedFrameSeconds = {});
 	void FinishFrame(double Now);
 	bool bNativeFramePending = false;
 	double NativeFrameNow = 0.0;
@@ -1474,10 +1474,10 @@ private:
 	// hold the clock.
 	double LastTickNow = 0.0;
 	TArray<TUniquePtr<TArray<ANSICHAR>>> ThinkContextFixtureNames;
-	// The clamped gap between the last two ticks. Seeded rather than zero, because the first tick
-	// has no previous one to measure against and a zero epsilon is not a shorter frame — it is a
-	// due test that answers no to a stamp standing exactly at the clock.
+	// The admitted frame interval. Native ingress supplies its actual dilated delta; only the
+	// first headless Tick without a preceding measurement retains the legacy 1/60 seed.
 	double LastFrameSeconds = ElysiumWorldClock::DefaultFrameSeconds;
+	TOptional<double> PhysicsThinkClock; //10033de0 scoped gpGlobals.curtime, never a saved clock
 	// Measured from `Tick` alone, and therefore NOT from `LastTickNow`: `Activate` and the pre-move
 	// `RunPlayerThink` stamp that one too, both with this same frame's clock, so measuring against
 	// it would report every frame as zero-length.

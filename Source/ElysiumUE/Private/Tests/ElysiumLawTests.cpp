@@ -1092,7 +1092,9 @@ bool FElysiumLawActivityTriggerTest::RunTest(const FString&)
 	const int32 ActsAfterEntry = Player->CriminalActCount();
 	for (double T = 0.1; T <= 6.0; T += 0.1)
 	{
-		World.Tick(T);            // the volume's refresh think
+		World.Tick(T);
+		//102108e0 refreshes on repeated collision175, with no synthetic leaf heartbeat.
+		World.RouteEntityTouch(Volume->Handle, World.PlayerHandle(), true);
 		World.RunPlayerThink(T);  // the expiry pass that would otherwise age it out
 	}
 	TestEqual(TEXT("an occupied volume re-asserts its level past the deadline it installs"),

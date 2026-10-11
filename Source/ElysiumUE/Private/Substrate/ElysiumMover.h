@@ -58,23 +58,26 @@ public:
 	enum class EMoveKind : uint8 { None, Linear, Angular };
 
 	// Start a constant-velocity move to a body-relative destination transform. `Speed` is in the
-	// source units the keyvalue carries: cm/s-equivalent for Linear (the caller converts Source
-	// inches → cm), deg/s for Angular. Schedules per-frame thinking; MoveDone() fires on arrival.
-	void LinearMove(const FVector& DestRelLoc, float SpeedCmPerSec);
+	// source units the keyvalue carries: inches/s for Linear and deg/s for Angular.
+	// The destination position is host cm; duration/velocity use retained Source float operands.
+	void LinearMove(const FVector& DestRelLoc, float SpeedSourceUnitsPerSec);
 	void AngularMove(const FRotator& DestRelRot, float SpeedDegPerSec);
 
 	EMoveKind MoveKind() const { return CurrentMove; }
-	// Slot 153, `CBaseEntity::IsMoving`: `m_vecVelocity != vec3_origin`. A mover's
-	// velocity is non-zero exactly while `LinearMove` / `AngularMove` has a move in flight (retail's
-	// `CBaseToggle` sets `m_vecVelocity` / `m_vecAngVelocity` for the move and zeroes them at
-	// `MoveDone`), which is what `CurrentMove` records. The slot's override on the mover line (it hid
-	// the slot as a `const` method before, story 5 commit B).
-	virtual bool IsMoving() override { return CurrentMove != EMoveKind::None; }
+	// Slot153 is the literal linear-velocity predicate. Angular moves remain observable through
+	// angular velocity and the installed arrival state, while this predicate can return false.
+	virtual bool IsMoving() override { return FElysiumEntity::IsMoving(); } //153 reads linear velocity only
+	virtual bool CreateVPhysics() override { return InitBrushPhysicsShadow(); }
+	virtual void Serialize(FElysiumSaveArchive& Ar) override;
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+	float MoveReboundDuration = 0.f, MoveReboundAmount = 0.f, MoveReboundStartTime = 0.f;
+	FVector MoveReboundVelocity = FVector::ZeroVector, MoveReboundAngularVelocity = FVector::ZeroVector;
 
 protected:
 	// Slot 133 `MoveDone`: fired once when a move reaches its target (the body is already snapped to
 	// the exact dest). `CBaseToggle`'s own is empty; the door overrides this to route HitTop/HitBottom.
-	virtual void MoveDone() override {}
+	virtual void MoveDone() override;
+	virtual float Slot135(float Interval) override;
 
 	// A swept move hit a blocker mid-flight. Base default: nothing (the move clamps and retries
 	// next frame). The door overrides to reverse + damage when closing.
@@ -137,6 +140,7 @@ private:
 	double   MoveDoneTime  = 0.0;
 
 	void BeginMove(EMoveKind Kind, const FVector& DestLoc, const FRotator& DestRot, double TravelSeconds);
+	void BeginRebound(EMoveKind Kind);
 };
 
 // `GetNPCOpenData` (door slot 246, `+0x3d8`)'s out struct, 0x1c bytes: `+0 Vector StandPos`,
@@ -238,7 +242,7 @@ public:
 	float Distance = 90.0f;    // arc in degrees (rotating) / lip-adjusted travel (sliding)
 	float Wait     = 4.0f;     // autoclose delay; -1 = stay open (STAY_OPEN)
 	float Lip      = 0.0f;     // inches subtracted from a slide's travel (sliding leaf)
-	int32 Dmg      = 0;        // crush damage dealt when blocked
+	float Dmg      = 0.f;      // +560 m_flBlockDamage, both directions
 
 	bool  bLocked  = false;    // Lock/Unlock + LOCKED spawnflag (0x800)
 
@@ -333,6 +337,8 @@ public:
 	// and the lock are neither keyvalues nor registered fields, and a
 	// rebuild from the def cannot re-derive them (it would put every door back at its spawn pose).
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+	virtual void Blocked(FElysiumEntity* Other) override;
 
 protected:
 	// Leaf hook: compute the OPEN body-relative transform from the door's keyvalues + spawnflags.
@@ -341,8 +347,8 @@ protected:
 	virtual void ComputeOpenTransform(FVector& OutOpenLoc, FRotator& OutOpenRot) const = 0;
 
 	// Leaf hook: issue the primitive move toward Open/Closed at Speed (AngularMove vs LinearMove).
-	// bResolveSwing carries retail CRotDoor::DoorGoUp's second arg: true resolves the activator-relative
-	// swing (the rotating leaf), false forces the fixed-forward open pose. The sliding leaf ignores it.
+	// bResolveSwing carries retail CRotDoor::DoorGoUp's second arg. With a live activator,
+	// false preserves a pre-issued rotating move; true resolves the new swing. The sliding leaf ignores it.
 	virtual void IssueMoveToOpen(bool bResolveSwing) = 0;
 	virtual void IssueMoveToClosed() = 0;
 
@@ -355,6 +361,9 @@ protected:
 	// 0x100ef260 does (`CALL [EAX+0x2ac]`, after Precache and before SetModel); `CRotDoor::Spawn`
 	// 0x100f1c60 does not (it reads its own axis from the angles), so the rotating leaf answers false.
 	virtual bool SpawnRunsSetMovedir() const { return true; }
+	virtual void ResetBlockedTracking() {} //249 CBaseDoor100ee400, rotating100f1990
+	bool bBlockedReopenAllowed = false; //+654 zero-initialized, CRotDoor::Blocked is its writer
+	bool bCharacterBlockedSwing = false; //+655 non-SAVE latch, cleared at HitTop
 
 	virtual void MoveDone() override;               // HitTop / HitBottom
 	virtual void OnMoveBlocked(const FHitResult& Hit) override;
@@ -370,14 +379,13 @@ protected:
 	void NotifyActivatorFullyOpen();
 
 	// bResolveSwing (retail CRotDoor::DoorGoUp's second arg): the normal player/logic-initiated open
-	// path passes true so the rotating leaf resolves its activator-relative swing; the block-reverse
-	// reissue (OnMoveBlocked) passes false so the leaf re-opens fixed-forward, never activator-relative.
-	void DoorGoUp(const FElysiumEntityHandle& Activator, bool bResolveSwing = true);
-	void DoorGoDown(const FElysiumEntityHandle& Activator);
+	// path passes true so the rotating leaf resolves its activator-relative swing. The actual178
+	// block-reverse passes false and can preserve its pre-issued move with a live activator.
+	void DoorGoUp(const FElysiumEntityHandle& Activator, bool bResolveSwing = true, bool bPropagateLinked = true);
+	void DoorGoDown(const FElysiumEntityHandle& Activator, bool bPropagateLinked = true);
 
-	// Test seam: the block-reverse open (DoorGoUp with bResolveSwing == false) is only reached in-engine
-	// through OnMoveBlocked, which needs a live pawn blocker in the swept arc. A content-free automation
-	// test drives that exact seam through this accessor. No production code references it.
+	// Historical test accessor for the protected DoorGoUp entry. Actual178 receiver/native contact
+	// evidence is separate; calling this accessor alone does not prove the block-reverse producer.
 	friend struct FElysiumDoorTestAccess;
 	// 0018/7's door-link suite drives a bodiless door's arrival (`MoveDone`, the HitTop / HitBottom
 	// arms) directly: a Substrate-tier door has no brush body, so its move never runs to the end.
@@ -400,16 +408,6 @@ protected:
 
 	EToggleState ToggleState = EToggleState::AtBottom;
 
-	// START_OPEN seats the body at the open pose on the first think — the brush body is built
-	// *after* Spawn() (BuildBrushBody follows Spawn in the world's load pass), so the pose can't be
-	// applied in Spawn() itself.
-	bool bStartOpenSeatPending = false;
-
-	// A restored door has to be re-seated at the pose its saved state implies, and the body
-	// does not exist while the snapshot is being applied. Serialize arms this and forces an
-	// immediate think; the seat pass snaps the pose and hands the saved think back.
-	bool  bRestoreSeatPending = false;
-	float RestoreResumeThink = ELYSIUM_NEVER_THINK;
 	TArray<FElysiumEntityHandle> Doorknobs;
 };
 

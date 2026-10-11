@@ -13,8 +13,23 @@
 #include "GameFramework/Pawn.h"
 #include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "Substrate/ElysiumModelPhysics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBrush, Log, All);
+
+void UElysiumBrushComponent::OnDestroyPhysicsState()
+{
+	ElysiumModelPhysics::RetireNative(this);
+	Super::OnDestroyPhysicsState();
+}
+
+void UElysiumBrushComponent::OnUpdateTransform(EUpdateTransformFlags Flags, ETeleportType Teleport)
+{
+	Super::OnUpdateTransform(Flags, Teleport);
+	if (EnumHasAnyFlags(Flags, EUpdateTransformFlags::SkipPhysicsUpdate)) ElysiumModelPhysics::RecordNativeOutput(this);
+}
+void UElysiumBrushComponent::NativeWake(UPrimitiveComponent*, FName) { ElysiumModelPhysics::RecordNativeActivity(this, true); }
+void UElysiumBrushComponent::NativeSleep(UPrimitiveComponent*, FName) { ElysiumModelPhysics::RecordNativeActivity(this, false); }
 
 EElysiumBrushSolidity ElysiumBrushSolidityForClass(const FString& Classname)
 {
@@ -110,8 +125,8 @@ void UElysiumBrushComponent::FinishInit(const FElysiumEntityHandle& InOwner,
 	SetMaskFilterOnBodyInstance(ElysiumRetailMask::MoverMaskBit);
 
 	// The single overlap tap (bound once; events fire only after RegisterComponent).
-	OnComponentBeginOverlap.AddDynamic(this, &UElysiumBrushComponent::HandleBeginOverlap);
-	OnComponentEndOverlap.AddDynamic(this, &UElysiumBrushComponent::HandleEndOverlap);
+	OnComponentBeginOverlap.AddUniqueDynamic(this, &UElysiumBrushComponent::HandleBeginOverlap);
+	OnComponentEndOverlap.AddUniqueDynamic(this, &UElysiumBrushComponent::HandleEndOverlap);
 }
 
 void UElysiumBrushComponent::ApplySolidity(EElysiumBrushSolidity Solidity)

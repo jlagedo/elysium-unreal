@@ -21,10 +21,30 @@
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumTriggerBase.h"
 #include "ElysiumWorldServices.h"
+#include "Player/ElysiumCommandBus.h"
+#include "Debug/ElysiumConsole.h"
 
 #include "Engine/GameInstance.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumTrigger, Log, All);
+
+void FElysiumTriggerBase::InitTrigger()
+{
+	//101c5080: angle221→171; authored parent254; solid; flags4, then8;93;105;draw.
+	const FVector SourceAngles = GetAngles();
+	if (static_cast<float>(SourceAngles.X) != 0.f || static_cast<float>(SourceAngles.Y) != 0.f
+		|| static_cast<float>(SourceAngles.Z) != 0.f) SetMovedir();
+	SetSolid(World && World->Resolve(ParentHandle) ? 6 : 1);
+	SetSolidFlags(static_cast<uint16>(RetailSolidFlags | 4u));
+	SetSolidFlags(static_cast<uint16>(bDisabled ? RetailSolidFlags & ~8u : RetailSolidFlags | 8u));
+	SetMoveType(0, 0);
+	FString CurrentModel = Model;
+	SetModel(CurrentModel.GetCharArray().GetData());
+	FElysiumConsole& ConsoleStore = ElysiumCommandBus::Console();
+	ConsoleStore.DeclareCvar(TEXT("showtriggers"), TEXT("0")); //101c4910
+	if ((SpawnFlags & 0x10) == 0 && FCString::Atoi(*ConsoleStore.GetCvar(TEXT("showtriggers"))) == 0)
+		EffectsWord |= 0x40u;
+}
 
 // logic_auto — map-load ignition (678 wires across all maps; 5 instances / 13 OnMapLoad rows on
 // the tutorial). Its only job is to fire its OnMapLoad outputs once the map is up.
@@ -239,13 +259,25 @@ private:
 	TArray<FElysiumEntityHandle> FilterHandles;
 };
 
-class FElysiumTriggerMultiple final : public FElysiumTriggerBase {};
+class FElysiumTriggerMultiple final : public FElysiumTriggerBase
+{
+public:
+	virtual void Spawn() override
+	{
+		InitTrigger();
+		InstallMultiTouch(); //101c6860 installs +1ec, then replaces literal zero wait
+		if (Wait == 0.f) Wait = .2f;
+	}
+};
 
 class FElysiumTriggerOnce final : public FElysiumTriggerBase
 {
 public:
 	virtual void Spawn() override
 	{
+		InitTrigger();
+		InstallMultiTouch();
+		if (Wait == 0.f) Wait = .2f;
 		// CTriggerOnce::Spawn (entity_io.md) unconditionally sets m_flWait = -1.0f, overriding any
 		// authored `wait` keyvalue Construct may have applied — self-removal is the base's wait == -1
 		// route, not a distinct trigger_once mechanism.
@@ -263,6 +295,7 @@ public:
 class FElysiumTriggerHurt final : public FElysiumTriggerBase
 {
 public:
+	virtual void Spawn() override { InitTrigger(); } //101c5e80 shared initialization
 	float Damage = 0.0f;      // damage / SetDamage — m_flDamage, scaled by the tick's own factor
 	int32 DamageType = 0;     // damagetype — m_bitsDamageInflict, the Source DMG_* mask
 
@@ -459,6 +492,7 @@ private:
 class FElysiumTriggerLook final : public FElysiumTriggerBase
 {
 public:
+	virtual void Spawn() override { InitTrigger(); } //101c6c50→Once→Init; typed look ingress retained
 	float LookTime = 0.5f;      // LookTime — required cumulative look seconds
 	float FieldOfView = 0.9f;   // FieldOfView — min forward·dir dot (1 = dead-on, 0 = 90°)
 
@@ -580,6 +614,7 @@ private:
 class FElysiumTriggerAutosave final : public FElysiumTriggerBase
 {
 public:
+	virtual void Spawn() override { InitTrigger(); } //101c97d0 single-player rules22=false
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
 		if (bDisabled || IsInert() || !PlayerPasses(Activator))
@@ -648,6 +683,7 @@ public:
 class FElysiumChangeLevel final : public FElysiumTriggerBase
 {
 public:
+	virtual void Spawn() override { InitTrigger(); } //101c74c0 shared initialization
 	FString DestMap;        // `map` — the destination map name (a baked level on the /ElysiumBaked mount)
 	FString LandmarkName;   // `landmark` — the info_landmark shared with the destination map
 

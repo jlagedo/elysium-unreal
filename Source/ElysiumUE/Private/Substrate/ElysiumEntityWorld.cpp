@@ -206,6 +206,7 @@ bool FElysiumEntityWorld::IsTriggerResolutionEnabled()
 
 double FElysiumEntityWorld::NowSeconds() const
 {
+	if (PhysicsThinkClock.IsSet()) return PhysicsThinkClock.GetValue();
 	// The clock is the game state's. Without one — a headless test world, or the worldless probe
 	// entity `elysium.classes` builds — fall back to the last time this world was ticked, so a think
 	// that measures elapsed time still reads the caller's clock. Only RunThinks/RunPlayerThink see
@@ -566,6 +567,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		}
 	}
 
+	ElysiumModelPhysics::BindWorldCreationOwners(*this);
 	// The spawn pass is finished, so this is what a rebuild of this map produces: record it
 	// as the omission baseline a freeze diffs against.
 	Baseline.Reset();
@@ -828,6 +830,7 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	// Construct/Spawn ran before a body existed. Apply every class's complete physical gate now;
 	// trigger StartDisabled participates without pretending the entity is hidden.
 	Ent.RefreshBrushBodyState();
+	Ent.CreateVPhysics(); //223: class-owned brush shadow producer after cooked geometry exists
 }
 
 FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEntityDef Def)
@@ -2101,9 +2104,9 @@ void FElysiumEntityWorld::Tick(double Now)
 	TickFrame(Now, false);
 }
 
-void FElysiumEntityWorld::BeginNativePhysicsFrame(double Now)
+void FElysiumEntityWorld::BeginNativePhysicsFrame(double Now, double AdmittedFrameSeconds)
 {
-	TickFrame(Now, true);
+	TickFrame(Now, true, AdmittedFrameSeconds);
 }
 
 void FElysiumEntityWorld::FinishNativePhysicsFrame()
@@ -2113,6 +2116,7 @@ void FElysiumEntityWorld::FinishNativePhysicsFrame()
 	if (!bActive || bApplyingSnapshot || bDetached) return;
 	//1002ea40: object game data receives226, even when its current field is an alias or null.
 	const auto ActiveSnapshot = ElysiumModelPhysics::ActiveOutputs(*this);
+	ElysiumModelPhysics::RefreshContactOutputs(*this); //contact births/retirements before any mutable226/178 callback
 	for (const auto& Output : ActiveSnapshot)
 		if (ElysiumModelPhysics::IsCurrentOutput(Output))
 			if (FElysiumEntity* Entity = ElysiumModelPhysics::GameDataFor(Output, *this)) Entity->VPhysicsUpdate(Output.Actor);
@@ -2129,7 +2133,7 @@ void FElysiumEntityWorld::FinishNativePhysicsFrame()
 	FinishFrame(NativeFrameNow);
 }
 
-void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics)
+void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics, TOptional<double> AdmittedFrameSeconds)
 {
 	// A new admitted host frame cannot retain a tail from a retired/paused frame.
 	bNativeFramePending = false;
@@ -2145,10 +2149,15 @@ void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics)
 	// Source clamps its own. It sits above the trigger-resolution gate deliberately: a suppressed
 	// frame is still a frame, and letting the gap accumulate across a run of them would hand the
 	// NPC think cadence one enormous epsilon on the frame resolution comes back.
-	LastFrameSeconds = bHasMeasuredFrame
-		? FMath::Clamp(Now - LastFrameMeasuredAt, ElysiumWorldClock::MinFrameSeconds,
-			ElysiumWorldClock::MaxFrameSeconds)
-		: ElysiumWorldClock::DefaultFrameSeconds;
+	const double FrameScale = GameState ? GameState->GameClock().GetScale() : 1.0;
+	if ((GameState && GameState->GameClock().IsPaused()) || FrameScale <= 0.0)
+		LastFrameSeconds = 0.0;
+	else if (AdmittedFrameSeconds.IsSet())
+		LastFrameSeconds = ElysiumFrame::ClampAdmittedFrameDelta(AdmittedFrameSeconds.GetValue(), FrameScale);
+	else
+		LastFrameSeconds = bHasMeasuredFrame
+			? ElysiumFrame::ClampAdmittedFrameDelta(Now - LastFrameMeasuredAt, FrameScale)
+			: ElysiumWorldClock::DefaultFrameSeconds;
 	LastFrameMeasuredAt = Now;
 	bHasMeasuredFrame = true;
 	if (!IsTriggerResolutionEnabled())
@@ -2462,6 +2471,12 @@ void FElysiumEntityWorld::RunThinks(double Now)
 			continue;
 		}
 		FElysiumEntity& Ent = *EntPtr;
+		if (!bApplyingSnapshot && !Ent.IsInert() && (Ent.GetMoveType() == 1 || Ent.GetMoveType() == 8))
+		{
+			if (Ent.GetMoveType() == 1) Ent.PhysicsParent(static_cast<float>(FrameSeconds()));
+			else Ent.PhysicsPusher(static_cast<float>(FrameSeconds()));
+			continue;
+		}
 		if (bApplyingSnapshot || Ent.ThinkCallback.IsNone() || Ent.IsInert() || Ent.NextThink == ELYSIUM_NEVER_THINK || Ent.NextThink > Now)
 		{
 			continue;

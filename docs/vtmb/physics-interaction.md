@@ -592,8 +592,17 @@ game-rules slot 76 at offset `0x130`, with start/end/mins/maxs/mask, entity, its
 entity again, and trace output. It is not an entity custom-collision predicate or callback.
 Single-player rules inherit slot 76 `0x10128fa0`: an ordinary centered Ray_t, Simple filter with
 the passed entity/group, engine TraceRay, optional debug trace, then return 1. It does not set
-the cylindrical flag. Neither that engine-backed function nor nonzero damage-type overrides
-are completed by this packet.
+the cylindrical flag. The nonzero engine-backed function remains unreached by every retail
+server class: a complete `vtmb_slot(slot=189,module="vampire.dll",limit=1000)` census on
+2026-10-11 returned all 497 class rows, no truncation, with footer `497 class(es) fill slot
+189; 2 dispatch site(s) target it`. The unique implementation is `100ad850`, whose corpus
+body is explicitly labelled vampire.dll and returns literal zero after diagnostic scope
+push/pop. The census includes CBasePlayer/CHL2_Player, CAI_BaseNPC and its subclasses,
+doors/buttons, props and weapons. The coordinator independently repeated the full census.
+There is no nonzero selector producer and no higher-layer hook to invent. In the distinct
+pusher caller `10036810`, a nonzero selector would dispatch engine49; that exact arm remains
+unimplemented under the no-map-reached rule, with an explicit diagnostic if introduced by
+future port code. Zero must still call actual virtual102, preserving genuine overrides.
 
 The zero arm reads `m_CollisionGroup +0x368`, then slot 211 `GetSolidFlags`, initializes the
 centered ray and tests bit `0x40`. Extents are `(maxs-mins)*0.5`, center is `(maxs+mins)*0.5`,
@@ -1115,3 +1124,131 @@ after pair links. Child232 `100a69e0` reads angles before origin and submits obj
 Deferred untouch and EventQueue follow existing postphysics sequencing. Detailed recovery,
 native witnesses and explicit unrecovered frontier are in
 `docs/specs/layers/L0-entity/walks/L0-native-publication.md`. Original23/88 remains open.
+## Pusher contact selection and qualification recovery (2026-10-11)
+
+This is a recovered observable contract, not an acceptance claim for the provisional
+Chaos adapter. `vphysics.dll` object44 `260184a0` reads the owner body's friction-link
+head at `+28` directly. Constructor `2603b4f0` prepends a newly created link to both
+bodies (`2603b538..54f`, `2603b5a0..5b7`); `2603cf30` unlinks it while preserving
+the relative order of surviving links. Thus44 selects the newest **created surviving
+friction link**. A live selected partner with null creation game data produces
+`Blocked(nullptr)`; it does not select an older partner instead. Retirement removes
+the contact and exposes the older survivor. Cached broadphase allocation chronology
+does not define this observable priority.
+
+`26050c20` permits a friction link only when the collision pair's status masked by
+`3c0000` equals `c0000`. It searches `26050ba0`/`2603eb40` for an existing link with
+matching bodies and geometry feature identity; an existing match is reused without
+a new birth. `2603ea70` implements the geometry feature equivalences. These engine
+geometry details are evidence for persistent qualifying-contact identity, not a
+requirement to port IVP features or topology.
+
+The wake path `2603e6d0` refreshes the collision pair with `2604a7c0`, excludes
+pair flags `3000` and `c000`, and admits distance at `+54` strictly below
+`260f18d4`, then calls `2604cc80`. The actual collision solve path `2604e7f0`
+also reaches `2604cc80`. Link refresh/retirement `2603e880` and `2605fc40` removes
+a link when its distance at `+58` is **greater than or equal to** `260f18d4`, or
+the associated pair flags masked by `300` equal `100`. The admitted distance can
+be positive; a proposed `Chaos Phi <= 0` gate was therefore not the retail rule.
+
+The threshold is part of the initialized geometry service, not zero-filled BSS.
+`260477c0` initializes the configuration base `260f17b8`; actual environment
+construction `2600f920` calls `2603a730`, then `260477d0` with double words
+`49939620/3f79ffcb`, value `0.00634745988029331` in native metres. PE constants
+used by the constructor are double `260c94b0=0.10000000149011612`,
+`260ca668=0.8999999761581421`, `260c92d0=0`, and `260ca670=2.5`.
+Let `d` be that parameter. The float at base `+108` is
+`float(d*(260c94b0+260ca668)+d*260c92d0)`; the x87 retained sum of that
+float plus `d` is used at `26047870..47c` to store
+`float(float_at_108+d+2.5*d)` at base `+11c = 260f18d4`.
+The resulting threshold is `0.028563570231199265` metres,
+`2.8563570231199265` Unreal centimetres. Do not replace the constructor argument
+with a nominal quarter-inch value or the threshold with a rounded inch count.
+Only this query-visible qualification/retirement threshold is needed by the
+substrate; Chaos continues to own contact generation and rigid mechanics.
+
+UE5.8 public `FContactPairModifier` exposes real shape identity, contact-point
+separation and an initial-contact indication; `TSimCallbackObject` exposes
+contact modification and post-solve phases with queued outputs. Current source
+uses completed public contact-modification outputs guarded by proxy/UniqueIdx,
+creation incarnation and owner epoch, with eager post-completion qualification.
+This replaces the provisional activation-index inference. Staggered qualification,
+skin exit/reentry, survivor/null selection, retirement/recreation and no-advance
+observers have bounded native proof. Matched admitted-clock, zero-arrival public
+baseline/mirror/swizzle comparisons select First, matching the final native44 and
+actual178 observer; the earlier Second expectation used per-frame arrivalDt.
+This is bounded input/receiver evidence, not universal same-step priority parity.
+Native first qualifying44 is earlier (.6167 versus retail .6333) in these inputs.
+Actual active226 at that first native frame has LocalTime=StartFrame=0 and zero
+velocity, exits before44, and emits no178. Moving-pusher first-contact publication
+timing remains OPEN, separately from the controlled full-rewind44-to178 witness.
+Required witnesses use real geometry and native
+contacts, including staggered and same-step multiple partners, positive skin
+boundaries, survivor selection, null game data, sleep/no-advance and incarnation
+retirement. No private Chaos container-cookie access or IVP topology clone is
+authorized by this recovery.
+
+Native diagnostic `20261011T051945.771606Z-elysium-substrate-mover-nativecontactlif-ab852b55`
+uses actual `func_door` spawn/brush223 recipes and completed Chaos frames. Its index
+and detailed `E:/elysium-work/logs/20261011T051945.621574Z-test.log` record four active
+initial points on first birth, four new points on staggered second birth while first
+survives, separation exposing first, and second rebirth. Immediate destruction of
+second leaves a cached native constraint; the repaired incarnation/retired-proxy
+check excludes it and exposes first. This differs from a surviving world contact
+with intentionally null GameData, which remains selected/null. Native surface gap
+`Phi=2.7997694` cm stays eligible; `Phi=3.09926963` cm in four still-cached points
+is rejected. This supports the surface-gap interpretation for these native convex
+inputs, and verifies that a cached allocation alone cannot imply contact presence.
+
+Historical early diagnostic (before supported output lifecycle and matched
+controller inputs): the +X-to-+Y physical face change alters native contact normals and initial shape
+points, but public `bInitialContact` remains false and the saved friction anchors
+are retained. UE5.8 `AssignSavedManifoldPoints` explicitly matches saved anchors;
+`SetSolverResults` can slide them or store current detected points. Thus public
+initial flags and saved anchors alone do not establish the retail type-specific
+feature equivalence in `2603ea70`, and the provisional pair roster still selects
+second after that face change. This outcome is evidence, not an accepted retail
+selection result. Recreated partners admitted in the same native step produce
+eight initial points and the activation adapter selects first; the Source-relative
+chronology remains unproved. The qualifying-feature and same-step order contract
+was **OPEN**. That diagnostic does not establish a Source feature topology
+dependency. Current bounded input/receiver results and remaining timing limits
+are classified above and in L0-pusher-feedback.md; no universal native44/178
+parity claim follows.
+
+## Pusher mover endpoint recovery corrections (2026-10-11)
+
+`101c17e0` stores its destination Source QAngle and subtracts slot221's retained
+local Source QAngle directly. Arrival `101c19e0` and rebound `101c10d0` use the same
+representation. Reflecting pitch/yaw again inside these operations is a port
+defect; reflection belongs to the native pose service. `100f2520` compares the
+retained local slot221 words to endpoints, without normalizing full turns, and
+calls249 after either endpoint match. Sliding `100eff90` reads local220 instead.
+
+Rotating START_OPEN `100f1c60` sets angle2 through64, replaces angle2 with old
+angle1, captures the current angle as new angle1, negates movedir and sets state1.
+Sliding START_OPEN `100ef260` seats position2 and sets state0 while keeping its
+endpoints. Restored moving entities retain their saved clock/destination; the
+spawn-only rotating swap must not run again during restore.
+
+`100f3030` with a live activator, no ONEWAY flag and second argument0 preserves
+the AngularMove pre-issued by `100f3900` Blocked. Calling that helper alone is not
+an input producer for a fixed-forward reopen. ONEWAY/null activator takes the fixed
+endpoint arm. Actual receiver and output-order witnesses are still required.
+
+DoorUse `100efc90` step4 admits moving-up/down reissue only when the movement-type
+word `+558` is zero. LinearMove `101c1520` writes1 and AngularMove `101c17e0`
+writes2. Replacing that word with slot153's linear-velocity predicate was wrong for
+angular movement. The retained actual angular guard case now skips that reissue.
+At a nominal one-second deadline, actual accumulated float LocalTime is
+`0.999999702`; the next actual frame admits completion. The diagnostic retains the
+below-deadline state observer before advancing, rather than relaxing its deadline.
+
+PE `101c159c..15ef` confirms Source float endpoint operands, float delta X/Y stores,
+Z FST before its multiply, a float squared-length argument store, and `101371d0`
+FSQRT with no float return store. Duration remains on x87 through division by the
+authored float speed and deadline addition; only the deadline and velocity words
+are stored. Angular `101c17e0` has the matching arithmetic over Source QAngles.
+The host mover must not round duration before deadline or divide centimetre-vector
+length by an already converted centimetre speed. Rebound setup follows the local
+velocity write. The ordinary no-motion equality arm writes type/destination before133.

@@ -20,6 +20,7 @@ public:
 
 	virtual void Spawn() override
 	{
+		SetMoveType(8, 0); SetSolid(1); //10115e50
 		CurrentFloor = 0;       // CFuncElevator::Spawn 0x1020f220
 		TargetFloor = INDEX_NONE;
 		bRestoreSeatPending = false;
@@ -62,7 +63,7 @@ public:
 		TargetFloor = Requested;
 		Passed.Init(false, 8);
 		const FVector Destination(Origin.X, Origin.Y, Def->ElevatorFloors[Requested]);
-		LinearMove(Destination, Speed * MoverInchToCm);
+		LinearMove(Destination, Speed); // authored inches/s
 		CurrentFloor = INDEX_NONE;
 		PlayMoverSoundRel(StartSound);
 		static const FName OnMoveStart(TEXT("OnMoveStart"));
@@ -107,7 +108,6 @@ public:
 		{
 			return;
 		}
-		TickMove(World ? World->NowSeconds() : 0.0);
 		if (IsMoving())
 		{
 			FirePassedFloors();
@@ -116,16 +116,25 @@ public:
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
 	{
-		int32 SavedFloor = CurrentFloor == INDEX_NONE ? TargetFloor : CurrentFloor;
-		Ar << SavedFloor;
-		Ar << bLocked;
+		FElysiumMoverBase::Serialize(Ar);
+		Ar << CurrentFloor; Ar << TargetFloor; Ar << MoveStartZ; Ar << LastActivator; Ar << bLocked;
+		for (int32 Index = 0; Index < 8; ++Index)
+		{
+			bool Word = Passed.IsValidIndex(Index) && Passed[Index];
+			Ar << Word;
+			if (Ar.IsLoading()) { if (Passed.Num() != 8) Passed.Init(false, 8); Passed[Index] = Word; }
+		}
 		if (Ar.IsLoading())
 		{
-			CurrentFloor = FMath::Clamp(SavedFloor, 0, 7);
-			TargetFloor = INDEX_NONE;
-			bRestoreSeatPending = true;
-			NextThink = 0.0f;
+			if (CurrentFloor < -1 || CurrentFloor > 7 || TargetFloor < -1 || TargetFloor > 7 || !FMath::IsFinite(MoveStartZ)) { Ar.SetError(); return; }
+			bRestoreSeatPending = MoveKind() == EMoveKind::None;
+			if (bRestoreSeatPending) NextThink = 0.0f;
 		}
+	}
+	void OnPostRestore(FElysiumEntityWorld& InWorld) override
+	{
+		LastActivator = InWorld.RestoreHandle(LastActivator);
+		FElysiumMoverBase::OnPostRestore(InWorld);
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
@@ -141,6 +150,10 @@ public:
 protected:
 	virtual void MoveDone() override
 	{
+		FElysiumEntityWorld* const EntityWorld = World;
+		const FElysiumEntityHandle Self = Handle;
+		FElysiumMoverBase::MoveDone();
+		if (EntityWorld && EntityWorld->Resolve(Self) != this) return;
 		FirePassedFloors();
 		const int32 Arrived = TargetFloor;
 		TargetFloor = INDEX_NONE;

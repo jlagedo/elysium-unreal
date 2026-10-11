@@ -31,6 +31,7 @@ public:
 
 	/** The contents signature every brush in this body answers with. */
 	UPROPERTY(VisibleAnywhere, Category = "Elysium|Collision") uint8 Signature = 0;
+	UPROPERTY(VisibleAnywhere, Category = "Elysium|Collision") bool bCommonSolid = false;
 
 	/** The payload's cooked body. Referenced, never owned -- the asset outlives the level load. */
 	UPROPERTY(VisibleAnywhere, Category = "Elysium|Collision") TObjectPtr<UBodySetup> Body;
@@ -48,6 +49,8 @@ public:
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override { return nullptr; }
 	virtual void PostLoad() override;
+	virtual void OnCreatePhysicsState() override;
+	virtual void OnDestroyPhysicsState() override;
 };
 
 /**

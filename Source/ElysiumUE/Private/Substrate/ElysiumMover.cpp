@@ -99,26 +99,34 @@ namespace
 
 	// The per-component tolerance ResolveToggleStateFromTransform matches a live body pose against an
 	// endpoint with — PE-verified `_DAT_10454b8c = 0.001f` in retail CBaseDoor/CRotDoor. Degrees for a
-	// swing, cm for a slide.
+	// swing, Source inches for a slide.
 	constexpr float DoorResyncTolerance = 0.001f;
 
 	// |a-b| <= tol on each component, mirroring retail ResolveToggleStateFromTransform's float compares.
 	bool VectorComponentsWithin(const FVector& A, const FVector& B, float Tol)
 	{
-		return FMath::Abs(A.X - B.X) <= Tol
-			&& FMath::Abs(A.Y - B.Y) <= Tol
-			&& FMath::Abs(A.Z - B.Z) <= Tol;
+		return FMath::Abs(static_cast<float>(A.X/2.54) - static_cast<float>(B.X/2.54)) <= Tol
+			&& FMath::Abs(static_cast<float>(A.Y/2.54) - static_cast<float>(B.Y/2.54)) <= Tol
+			&& FMath::Abs(static_cast<float>(A.Z/2.54) - static_cast<float>(B.Z/2.54)) <= Tol;
 	}
 
-	// Same per-component test on Euler angles, taken on the shortest signed delta so a body angle that
-	// round-trips through a 360-wrapped representation still reads as its endpoint. Retail compared raw
-	// QAngle floats; a door swing stays well under 180°, so the normalized delta is the same reading.
+	//100f2520 compares retained Source QAngle words, including full turns, without normalization.
 	bool RotatorComponentsWithin(const FRotator& A, const FRotator& B, float Tol)
 	{
-		return FMath::Abs(FRotator::NormalizeAxis(A.Pitch - B.Pitch)) <= Tol
-			&& FMath::Abs(FRotator::NormalizeAxis(A.Yaw   - B.Yaw))   <= Tol
-			&& FMath::Abs(FRotator::NormalizeAxis(A.Roll  - B.Roll))  <= Tol;
+		return FMath::Abs(static_cast<float>(A.Pitch) - static_cast<float>(B.Pitch)) <= Tol
+			&& FMath::Abs(static_cast<float>(A.Yaw) - static_cast<float>(B.Yaw)) <= Tol
+			&& FMath::Abs(static_cast<float>(A.Roll) - static_cast<float>(B.Roll)) <= Tol;
 	}
+
+	float DoorAngleDifference(float First, float Second)
+	{
+		//1013d580: raw subtraction followed by repeated float stores, preserving +/-180 ties.
+		float Delta = First - Second;
+		if (First > Second) { while (Delta > 180.f) Delta -= 360.f; }
+		else { while (Delta < -180.f) Delta += 360.f; }
+		return Delta;
+	}
+	float DoorFartherFromZero(float A, float B);
 
 }
 
@@ -126,135 +134,147 @@ namespace
 
 void FElysiumMoverBase::SnapBody(const FVector& RelLoc, const FRotator& RelRot)
 {
+	SetOrigin(RelLoc);
+	SetAngles(RelRot);
 	if (Body)
 	{
-		Body->SetRelativeLocationAndRotation(RelLoc, RelRot, /*bSweep*/ false);
+		Body->SetRelativeLocationAndRotation(RelLoc,
+			ElysiumModelPhysics::SourceRotation(FVector(RelRot.Pitch, RelRot.Yaw, RelRot.Roll)), /*bSweep*/ false);
 	}
 }
 
 void FElysiumMoverBase::BeginMove(EMoveKind Kind, const FVector& DestLoc, const FRotator& DestRot, double TravelSeconds)
 {
-	if (!Body)
-	{
-		return;   // R1 — a bodiless mover has nothing to move; stay inert
-	}
-	CurrentMove   = Kind;
-	MoveStartLoc  = Body->GetRelativeLocation();
-	MoveStartRot  = Body->GetRelativeRotation();
-	MoveDestLoc   = DestLoc;
-	MoveDestRot   = DestRot;
-	MoveStartTime = World ? World->NowSeconds() : 0.0;
-	// A degenerate (zero-travel) move still needs one think to snap + fire MoveDone.
-	MoveDoneTime  = MoveStartTime + FMath::Max(TravelSeconds, 0.0);
-	NextThink     = MoveStartTime;   // due on the next Tick (think-first, R4)
+	CurrentMove = Kind;
+	MoveDestLoc = DestLoc;
+	MoveDestRot = DestRot;
+	PhysicsMoveDoneTime = static_cast<float>(LocalTime + TravelSeconds);
 }
 
-void FElysiumMoverBase::LinearMove(const FVector& DestRelLoc, float SpeedCmPerSec)
+void FElysiumMoverBase::BeginRebound(EMoveKind Kind)
 {
-	const FVector Start = Body ? Body->GetRelativeLocation() : FVector::ZeroVector;
-	const double Dist = (DestRelLoc - Start).Size();
-	const double Secs = SpeedCmPerSec > KINDA_SMALL_NUMBER ? Dist / SpeedCmPerSec : 0.0;
-	BeginMove(EMoveKind::Linear, DestRelLoc, Body ? Body->GetRelativeRotation() : FRotator::ZeroRotator, Secs);
+	if (MoveReboundDuration > 0.f)
+	{
+		MoveReboundStartTime = PhysicsMoveDoneTime;
+		PhysicsMoveDoneTime += MoveReboundDuration;
+		if (Kind == EMoveKind::Linear) MoveReboundVelocity = -MoveReboundAmount * Velocity;
+		else MoveReboundAngularVelocity = -MoveReboundAmount * AngularVelocity;
+	}
+}
+
+void FElysiumMoverBase::LinearMove(const FVector& DestRelLoc, float SpeedSourceUnitsPerSec)
+{
+	auto SourceWords = [](const FVector& Cm)
+	{ return FVector(static_cast<float>(Cm.X / 2.54), static_cast<float>(Cm.Y / 2.54), static_cast<float>(Cm.Z / 2.54)); };
+	const FVector Destination = SourceWords(DestRelLoc);
+	const FVector Start = SourceWords(GetOrigin());
+	CurrentMove = EMoveKind::Linear; MoveDestLoc = Destination * 2.54;
+	if (Start == Destination) { MoveDone(); return; } //101c1520 equality completes synchronously
+	const FVector Difference = Destination - Start;
+	const FVector Delta(static_cast<float>(Difference.X), static_cast<float>(Difference.Y), static_cast<float>(Difference.Z));
+	//159c..15d1: float X/Y deltas, Z retained through FST, then float squared argument.
+	const float Squared = static_cast<float>(Difference.Z * Delta.Z + Delta.Y * Delta.Y + Delta.X * Delta.X);
+	const double Seconds = FMath::Sqrt(static_cast<double>(Squared)) / SpeedSourceUnitsPerSec;
+	BeginMove(EMoveKind::Linear, MoveDestLoc, FRotator::ZeroRotator, Seconds);
+	const double Reciprocal = 1. / Seconds;
+	SetLocalVelocity(FVector(static_cast<float>(Delta.X * Reciprocal), static_cast<float>(Delta.Y * Reciprocal), static_cast<float>(Delta.Z * Reciprocal)) * 2.54);
+	BeginRebound(EMoveKind::Linear);
 }
 
 void FElysiumMoverBase::AngularMove(const FRotator& DestRelRot, float SpeedDegPerSec)
 {
-	const FRotator Start = Body ? Body->GetRelativeRotation() : FRotator::ZeroRotator;
-	// Constant angular velocity: travel = the shortest arc between the two orientations, in degrees.
-	const double TravelDeg = FMath::RadiansToDegrees(Start.Quaternion().AngularDistance(DestRelRot.Quaternion()));
-	const double Secs = SpeedDegPerSec > KINDA_SMALL_NUMBER ? TravelDeg / SpeedDegPerSec : 0.0;
-	BeginMove(EMoveKind::Angular, Body ? Body->GetRelativeLocation() : FVector::ZeroVector, DestRelRot, Secs);
+	const FVector Destination(static_cast<float>(DestRelRot.Pitch), static_cast<float>(DestRelRot.Yaw), static_cast<float>(DestRelRot.Roll));
+	const FVector Current = GetAngles();
+	const FVector Start(static_cast<float>(Current.X), static_cast<float>(Current.Y), static_cast<float>(Current.Z));
+	CurrentMove = EMoveKind::Angular; MoveDestRot = FRotator(Destination.X, Destination.Y, Destination.Z);
+	if (Destination == Start) { MoveDone(); return; }
+	const FVector Difference = Destination - Start; //101c17e0 raw Euler delta, no shortest arc
+	const FVector Delta(static_cast<float>(Difference.X), static_cast<float>(Difference.Y), static_cast<float>(Difference.Z));
+	const float Squared = static_cast<float>(Difference.Z * Delta.Z + Delta.Y * Delta.Y + Delta.X * Delta.X);
+	const double Seconds = FMath::Sqrt(static_cast<double>(Squared)) / SpeedDegPerSec;
+	BeginMove(EMoveKind::Angular, FVector::ZeroVector, MoveDestRot, Seconds);
+	const double Reciprocal = 1. / Seconds;
+	SetLocalAngularVelocity(FVector(static_cast<float>(Delta.X * Reciprocal), static_cast<float>(Delta.Y * Reciprocal), static_cast<float>(Delta.Z * Reciprocal)));
+	BeginRebound(EMoveKind::Angular);
 }
 
 void FElysiumMoverBase::TickMove(double Now)
 {
-	if (CurrentMove == EMoveKind::None || !Body)
-	{
-		return;
-	}
+	(void)Now;
+	PhysicsPusher(World ? static_cast<float>(World->FrameSeconds()) : 0.f);
+}
 
-	const double Denom = MoveDoneTime - MoveStartTime;
-	const bool bArrived = (Denom <= KINDA_SMALL_NUMBER) || (Now >= MoveDoneTime);
-	const float Alpha = bArrived ? 1.0f : (float)((Now - MoveStartTime) / Denom);
-
-	// Constant velocity, no easing (B.4): lerp position, slerp orientation.
-	const FVector  Loc = FMath::Lerp(MoveStartLoc, MoveDestLoc, Alpha);
-	const FRotator Rot = FQuat::Slerp(MoveStartRot.Quaternion(), MoveDestRot.Quaternion(), Alpha).Rotator();
-
-	// Swept so a solid kinematic body pushes the pawn and reports a blocker. SetDormant-gated
-	// bodies don't reach here (an inert mover doesn't think).
-	FHitResult Hit;
-	const FTransform PreviousBodyTransform = Body->GetRelativeTransform();
-	struct FHierarchyPose { FElysiumEntityHandle Entity; FVector Origin; };
-	TArray<FHierarchyPose> Hierarchy;
-	if (World)
+void FElysiumMoverBase::MoveDone()
+{
+	//101c1720 ->101c1790/101c19e0: snap, stop, deadline=-1 and helper output;
+	//then movement type clears before the installed arrival receiver. NextThink is untouched.
+	FElysiumEntityWorld* const EntityWorld = World;
+	const FElysiumEntityHandle Self = Handle;
+	if (EntityWorld)
 	{
-		//100379e0 SetupAllInHierarchy: depth-first root/children/peers, capture before mutation.
-		TFunction<void(FElysiumEntity&)> Collect = [&](FElysiumEntity& Entity)
-		{
-			Hierarchy.Add({ Entity.Handle, Entity.GetAbsOrigin() });
-			for (FElysiumEntity* Child = World->Resolve(Entity.MoveChild); Child; Child = World->Resolve(Child->MovePeer)) Collect(*Child);
-		};
-		Collect(*this);
+		EntityWorld->EmitRetailSite(*this, TEXT("toggle_movedone"), TEXT("CBaseToggle::MoveDone"), 0x101c1720u, TEXT("entry"),
+			FString::Printf(TEXT("deadline=%.9g nextthink=%.17g kind=%d"), PhysicsMoveDoneTime, NextThink, static_cast<int32>(CurrentMove)));
+		if (EntityWorld->Resolve(Self) != this) return;
 	}
-	Body->SetRelativeLocationAndRotation(Loc, Rot, /*bSweep*/ true, &Hit);
+	if (CurrentMove == EMoveKind::Linear)
+	{
+		SetOrigin(MoveDestLoc); SetLocalVelocity(FVector::ZeroVector);
+		PhysicsMoveDoneTime = -1.f;
+		FireOutput(FName(TEXT("OnLinearMoveDone")), FElysiumEntityHandle::Invalid());
+	}
+	else if (CurrentMove == EMoveKind::Angular)
+	{
+		SetAngles(MoveDestRot);
+		SetLocalAngularVelocity(FVector::ZeroVector);
+		PhysicsMoveDoneTime = -1.f;
+		FireOutput(FName(TEXT("OnAngularMoveDone")), FElysiumEntityHandle::Invalid());
+	}
+	if (EntityWorld && EntityWorld->Resolve(Self) != this) return;
+	CurrentMove = EMoveKind::None;
+}
 
-	if (Hit.bBlockingHit)
-	{
-		//10036a20 refuses the whole transaction. A clamped native sweep must not leave a
-		// different parent transform behind, nor publish any child target/touch callback.
-		Body->SetRelativeTransform(PreviousBodyTransform, false, nullptr, ETeleportType::TeleportPhysics);
-		const EMoveKind Before = CurrentMove;
-		OnMoveBlocked(Hit);
-		// If the block handler didn't start a fresh move (e.g. reverse), keep retrying this one
-		// next frame — the sweep clamps against the obstruction until it clears.
-		if (CurrentMove == Before && CurrentMove != EMoveKind::None)
-		{
-			NextThink = Now;
-		}
-		return;
-	}
-	// Successful10038180/10038400 root publication uses the absolute logical setters, which
-	// invalidate descendant caches. Shadow objects retain their prior solved native position.
-	FVector AbsoluteOrigin = Body->GetComponentLocation();
-	FRotator NativeAngles = Body->GetComponentRotation();
-	FRotator AbsoluteAngles(-NativeAngles.Pitch, -NativeAngles.Yaw, NativeAngles.Roll);
-	SetAbsOrigin(AbsoluteOrigin);
-	SetAbsAngles(AbsoluteAngles);
-	if (World)
-	{
-		FElysiumEntityWorld* EntityWorld = World;
-		const FElysiumEntityHandle RootHandle = Handle;
-		//10036b10 FinishPushers: reverse hierarchy, synchronous touch before slot232(0).
-		for (int32 PoseIndex = Hierarchy.Num() - 1; PoseIndex >= 0; --PoseIndex)
-		{
-			const FHierarchyPose& Pose = Hierarchy[PoseIndex];
-			FElysiumEntity* Entity = EntityWorld->Resolve(Pose.Entity);
-			if (!Entity) continue;
-			Entity->PhysicsTouchTriggers(&Pose.Origin);
-			if (EntityWorld->Resolve(RootHandle) != this) return;
-			Entity = EntityWorld->Resolve(Pose.Entity);
-			//10036b10 retains its captured entries even if a live child was reparented;
-			//232 reads its current absolute frame. Removed entries fail serial resolution.
-			if (Entity) Entity->UpdatePhysicsShadowToCurrentPosition(0.f);
-		}
-		//10040390 subsequently dispatches the reached movetype0 children to PhysicsNone:
-		// no second target/frame countdown. Generic226's100342c0 relink is a separate path.
-	}
+float FElysiumMoverBase::Slot135(float Interval)
+{
+	//101c10d0, all five gates and the shipped polynomial retained.
+	if (!(Interval > 0.f && PhysicsMoveDoneTime > 0.f && MoveReboundStartTime > 0.f
+		&& MoveReboundStartTime < PhysicsMoveDoneTime && MoveReboundDuration > 0.f)) return Interval;
+	float Elapsed = (Interval + LocalTime) - MoveReboundStartTime;
+	if (Elapsed <= 0.f) return Interval;
+	Elapsed = FMath::Min(Elapsed, MoveReboundDuration);
+	const float Factor = (Elapsed * Elapsed + 1.f) * Elapsed
+		- (Elapsed / MoveReboundDuration) * (MoveReboundDuration * MoveReboundDuration + 1.f) * Elapsed;
+	if (MoveReboundVelocity != FVector::ZeroVector) SetLocalVelocity((MoveDestLoc + Factor * MoveReboundVelocity - GetOrigin()) / Interval);
+	if (MoveReboundAngularVelocity != FVector::ZeroVector)
+		SetLocalAngularVelocity((FVector(MoveDestRot.Pitch, MoveDestRot.Yaw, MoveDestRot.Roll) + Factor * MoveReboundAngularVelocity - GetAngles()) / Interval);
+	return Interval;
+}
 
-	if (bArrived)
+void FElysiumMoverBase::Serialize(FElysiumSaveArchive& Ar)
+{
+	uint8 Kind = static_cast<uint8>(CurrentMove); Ar << Kind;
+	Ar << MoveDestLoc << MoveDestRot;
+	Ar << MoveReboundDuration << MoveReboundAmount << MoveReboundStartTime << MoveReboundVelocity << MoveReboundAngularVelocity;
+	if (Ar.IsLoading())
 	{
-		// Snap to the exact target (float drift over the arc) and settle.
-		Body->SetRelativeLocationAndRotation(MoveDestLoc, MoveDestRot, /*bSweep*/ false);
-		CurrentMove = EMoveKind::None;
-		MoveDone();
-	}
-	else
-	{
-		NextThink = Now;   // keep thinking every frame while moving
+		if (Kind > static_cast<uint8>(EMoveKind::Angular) || MoveDestLoc.ContainsNaN() || MoveDestRot.ContainsNaN()
+			|| !FMath::IsFinite(MoveReboundDuration) || !FMath::IsFinite(MoveReboundAmount) || !FMath::IsFinite(MoveReboundStartTime)
+			|| MoveReboundVelocity.ContainsNaN() || MoveReboundAngularVelocity.ContainsNaN()) { Ar.SetError(); return; }
+		CurrentMove = static_cast<EMoveKind>(Kind);
 	}
 }
 
+void FElysiumMoverBase::OnPostRestore(FElysiumEntityWorld& InWorld)
+{
+	(void)InWorld;
+	// Non-physics-saving mover classes reconstruct at their restored logical pose.
+	if (!ShouldSavePhysics() && Body)
+	{
+		const FVector RestoredOrigin = GetAbsOrigin(); const FVector RestoredAngles = GetAbsAngles();
+		VPhysicsDestroyObject();
+		Body->SetWorldLocationAndRotation(RestoredOrigin, ElysiumModelPhysics::SourceRotation(RestoredAngles), false, nullptr, ETeleportType::TeleportPhysics);
+		InitBrushPhysicsShadow();
+	}
+}
 // Mover sounds — per-mover playback (the `soundgroup` resolver lives in ElysiumMoverSounds.cpp).
 //
 // Reference: `docs/vtmb/audio_pipeline.md` + the decompiled CBaseDoor::Spawn (FUN_100ef060, reads the
@@ -389,8 +409,9 @@ void FElysiumDoorBase::Spawn()
 {
 	// Cache the two rest poses. Closed is the spawn pose (brush authored at origin; body already
 	// seated there by BuildBrushBody). Open is leaf-computed from the keyvalues + spawnflags.
-	ClosedLoc = Body ? Body->GetRelativeLocation() : (Def ? Def->Origin : FVector::ZeroVector);
-	ClosedRot = Body ? Body->GetRelativeRotation() : FRotator::ZeroRotator;
+	ClosedLoc = GetOrigin();
+	const FVector AuthoredAngles = GetAngles();
+	ClosedRot = FRotator(AuthoredAngles.X, AuthoredAngles.Y, AuthoredAngles.Z);
 	// `CBaseDoor::vfunc103` 0x100ef260 (Spawn): slot 104 Precache (empty), then slot 171 `SetMovedir`
 	// (`[EAX+0x2ac]`, 0x100ad550: `m_vecMoveDir` from the angles, then `SetAngles(0)`, L0-r021) on the
 	// sliding leaf, then `SetModel(STRING(GetModelName()) or "")` (slot 105 -> `CBaseEntity::SetModel`
@@ -402,9 +423,15 @@ void FElysiumDoorBase::Spawn()
 	{
 		SetMovedir();                                                          // 0x100ef260 [vtbl+0x2ac]
 	}
+	else
+	{
+		//100f1c60 computes rotating endpoints before MoveType8 and SetModel.
+		ComputeOpenTransform(OpenLoc, OpenRot);
+		SetMoveType(8, 0);
+	}
 	FString ModelArg = Model;
 	SetModel(ModelArg.GetCharArray().GetData() != nullptr ? ModelArg.GetCharArray().GetData() : const_cast<TCHAR*>(TEXT("")));
-	ComputeOpenTransform(OpenLoc, OpenRot);
+	if (SpawnRunsSetMovedir()) ComputeOpenTransform(OpenLoc, OpenRot);
 
 	// Mover sounds: open/close/swing/locked from usable/openable/<soundgroup>/. SF_DOOR_SILENT
 	// (0x1000) mutes them (RE: FUN_100ee4e0 gates on `m_spawnflags & 0x1000`).
@@ -414,20 +441,35 @@ void FElysiumDoorBase::Spawn()
 
 	if (SpawnFlags & SF_DOOR_START_OPEN)
 	{
-		// Placed open, at rest. The body doesn't exist yet (built after Spawn), so seat the open
-		// pose on the first think.
-		ToggleState = EToggleState::AtTop;
-		bStartOpenSeatPending = true;
-		NextThink = 0.0f;
+		if (SpawnRunsSetMovedir())
+		{
+			//100ef260: the sliding leaf keeps its endpoints and starts at position2/state0.
+			SetOrigin(OpenLoc);
+			ToggleState = EToggleState::AtTop;
+		}
+		else
+		{
+			//100f1c60: rotate to angle2, swap angle1/2 and negate movedir; state remains1.
+			SetAngles(OpenRot);
+			Swap(ClosedRot, OpenRot);
+			MoveDir *= -1.;
+			ToggleState = EToggleState::AtBottom;
+		}
 	}
 	else
 	{
 		ToggleState = EToggleState::AtBottom;
 	}
+	//100ef260 sets MoveType8 after sliding endpoints/START_OPEN. Both leaf Spawns
+	//set Solid1/passable flags after the pose work, before the post-Spawn brush223.
+	if (SpawnRunsSetMovedir()) SetMoveType(8, 0);
+	SetSolid(1);
+	if (SpawnFlags & SF_DOOR_PASSABLE) SetSolidFlags(GetSolidFlags() | 4);
 }
 
 void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 {
+	FElysiumMoverBase::Serialize(Ar);
 	uint8 State = static_cast<uint8>(ToggleState);
 	Ar << State;
 	Ar << bLocked;
@@ -435,24 +477,26 @@ void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 	// words are not: `CAI_Link` has no datamap.
 	Ar << NpcFailedTimer;
 	Ar << NpcFailedFlags;
+	Ar << LastActivator;
 
 	if (Ar.IsLoading())
 	{
-		// A door caught mid-swing resolves to the end it was travelling toward. VtMB saves the move
-		// itself and resumes it; one frame of tween is animation, not game state, and resolving it
-		// keeps the restored world's collision honest from the first frame.
+		if (State > static_cast<uint8>(EToggleState::GoingDown)) { Ar.SetError(); return; }
+		// Preserve the actual in-flight clock, destination and arrival receiver. Physical
+		// reconstruction occurs after all saved logical words have been applied.
 		const EToggleState Saved = static_cast<EToggleState>(State);
-		ToggleState =
-			(Saved == EToggleState::GoingUp)   ? EToggleState::AtTop :
-			(Saved == EToggleState::GoingDown) ? EToggleState::AtBottom : Saved;
+		ToggleState = Saved;
 
-		// Force one think now and hand the saved one back from the seat pass; a `wait -1` door's
-		// think is NEVER, and it still has to be re-seated.
-		RestoreResumeThink = NextThink;
-		bRestoreSeatPending = true;
-		bStartOpenSeatPending = false;
-		NextThink = 0.0f;
+		// OnPostRestore reconstructs native geometry at the saved logical pose. The saved
+		// scheduled think remains due at its original time; restoration emits no arrival.
 	}
+}
+
+void FElysiumDoorBase::OnPostRestore(FElysiumEntityWorld& InWorld)
+{
+	LastActivator = InWorld.RestoreHandle(LastActivator);
+	bBlockedReopenAllowed = bCharacterBlockedSwing = false; //654/655 are not SAVE fields
+	FElysiumMoverBase::OnPostRestore(InWorld);
 }
 
 // Lock/Unlock write the door's own byte only. Retail's InputLock/InputUnlock (FUN_100f0120 /
@@ -626,28 +670,8 @@ void FElysiumDoorBase::Think()
 {
 	const double Now = World ? World->NowSeconds() : 0.0;
 
-	if (IsMoving())
+	if (MoveKind() != EMoveKind::None)
 	{
-		TickMove(Now);
-		return;
-	}
-
-	if (bRestoreSeatPending)
-	{
-		// The pose a restored door rests in. Same reason START_OPEN seats on the first think:
-		// the brush body is built after Spawn, and the snapshot is applied after that.
-		bRestoreSeatPending = false;
-		const bool bOpen = (ToggleState == EToggleState::AtTop);
-		SnapBody(bOpen ? OpenLoc : ClosedLoc, bOpen ? OpenRot : ClosedRot);
-		NextThink = RestoreResumeThink;   // the saved think, e.g. a pending autoclose
-		return;
-	}
-
-	if (bStartOpenSeatPending)
-	{
-		bStartOpenSeatPending = false;
-		SnapBody(OpenLoc, OpenRot);
-		NextThink = ELYSIUM_NEVER_THINK;   // START_OPEN rests open (no immediate autoclose)
 		return;
 	}
 
@@ -873,32 +897,50 @@ void FElysiumDoorBase::EmitDoorGameSound()
 		/*CBaseDoor inserts SOUND_PLAYER type 4 for two seconds*/ ElysiumGameSounds::Player, 2.0);
 }
 
-void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator, bool bResolveSwing)
+void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator, bool bResolveSwing, bool bPropagateLinked)
 {
 	LastActivator = Activator;
-	ToggleState = EToggleState::GoingUp;
+	if (bPropagateLinked)
+		if (FElysiumDoorBase* Partner = ResolveLinkedDoor())
+		{
+			const FElysiumEntityHandle PartnerHandle = Partner->Handle, PriorActivator = Partner->LastActivator, Self = Handle;
+			FElysiumEntityWorld& EntityWorld = *World;
+			Partner->DoorGoUp(LastActivator, true, false);
+			if (FElysiumEntity* Live = EntityWorld.Resolve(PartnerHandle))
+				if (FElysiumDoorBase* LiveDoor = Live->AsDoorBase()) LiveDoor->LastActivator = EntityWorld.Resolve(PriorActivator) ? PriorActivator : FElysiumEntityHandle::Invalid();
+			if (EntityWorld.Resolve(Self) != this) return;
+		}
 	// Sound on motion start: the `open` one-shot + the looping `swing` moving sound (stopped on
 	// arrival in MoveDone). A group without `swing` just plays `open`; without `open`, silent travel.
 	static const FName Open(TEXT("open")), Swing(TEXT("swing"));
 	PlayMoverSound(Open);
-	StartMoverLoop(Swing);
+	PlayMoverSound(Swing); //100ee4e0 one sound-group event; no explicit loop lifecycle
 	EmitDoorGameSound();
+	ToggleState = EToggleState::GoingUp;
 	static const FName OnOpen(TEXT("OnOpen"));
-	FireOutput(OnOpen, Activator);
 	IssueMoveToOpen(bResolveSwing);
+	FireOutput(OnOpen, Activator); //100f3030: issue AngularMove before output dispatch
 }
 
-void FElysiumDoorBase::DoorGoDown(const FElysiumEntityHandle& Activator)
+void FElysiumDoorBase::DoorGoDown(const FElysiumEntityHandle& Activator, bool bPropagateLinked)
 {
 	LastActivator = Activator;
+	if (bPropagateLinked)
+		if (FElysiumDoorBase* Partner = ResolveLinkedDoor())
+		{
+			const FElysiumEntityHandle PartnerHandle = Partner->Handle, PriorActivator = Partner->LastActivator, Self = Handle;
+			FElysiumEntityWorld& EntityWorld = *World;
+			Partner->DoorGoDown(LastActivator, false);
+			if (FElysiumEntity* Live = EntityWorld.Resolve(PartnerHandle))
+				if (FElysiumDoorBase* LiveDoor = Live->AsDoorBase()) LiveDoor->LastActivator = EntityWorld.Resolve(PriorActivator) ? PriorActivator : FElysiumEntityHandle::Invalid();
+			if (EntityWorld.Resolve(Self) != this) return;
+		}
 	ToggleState = EToggleState::GoingDown;
-	static const FName Close(TEXT("close")), Swing(TEXT("swing"));
-	PlayMoverSound(Close);
-	StartMoverLoop(Swing);
-	EmitDoorGameSound();
+	static const FName Swing(TEXT("swing"));
+	PlayMoverSound(Swing);
 	static const FName OnClose(TEXT("OnClose"));
-	FireOutput(OnClose, Activator);
 	IssueMoveToClosed();
+	FireOutput(OnClose, Activator);
 }
 
 bool FElysiumDoorBase::StaysOpen() const
@@ -909,9 +951,13 @@ bool FElysiumDoorBase::StaysOpen() const
 
 void FElysiumDoorBase::MoveDone()
 {
-	StopMoverLoop();   // the leaf arrived: end the looping `swing` moving sound
+	FElysiumEntityWorld* const EntityWorld = World;
+	const FElysiumEntityHandle Self = Handle;
+	FElysiumMoverBase::MoveDone();
+	if (EntityWorld && EntityWorld->Resolve(Self) != this) return;
 	if (ToggleState == EToggleState::GoingUp)
 	{
+		bCharacterBlockedSwing = false; //100f0860 head write
 		// HitTop, `CBaseDoor::DoorHitTop` `0x100f0860`, in its order: the state; the autoclose think
 		// unless the door stays open (`wait -1` or NO_AUTO_RETURN); the activator's NPC told
 		// (`OnDoorFullyOpen 0x1027dd10`); `+0x640 = 0`; then `OnFullyOpen` (`0x100cd660`).
@@ -925,66 +971,71 @@ void FElysiumDoorBase::MoveDone()
 			NextThink = ELYSIUM_NEVER_THINK;
 		}
 		NotifyActivatorFullyOpen();
+		if (EntityWorld && EntityWorld->Resolve(Self) != this) return;
 		NpcFailedTimer = 0.0;                                                 // param_1[400] = 0
 
-		static const FName OnFullyOpen(TEXT("OnFullyOpen"));
-		FireOutput(OnFullyOpen, LastActivator);
-		// Named, not reproduced here (0018/7 review):
-		//  * `+0x655 = 0` at the head and the tail call of slot 249 (`+0x3e4`, `CRotDoor 0x100f1990`:
-		//    `m_iBlockedCount = m_iBlockedForcedState = 0`) -- the blocked-tracking words, which this
-		//    runtime does not carry (see `ChooseOpenTarget`'s held latch).
-		//  * START_OPEN (`SF & 1`) fires `m_OnFullyClosed` (`+0x5c4`) with the DOOR as activator
-		//    instead of `m_OnFullyOpen` (`+0x5dc`): retail swaps `m_vecPosition1/2` for a START_OPEN
-		//    door, so its "top" is the closed pose. The port seats START_OPEN at the open pose AtTop
-		//    without the swap (`Spawn`), so its HitTop is physically "fully open" -- the inversion
-		//    belongs with that swap, not here.
-		//  * USE_CLOSES (`SF & 0x2000`) installs think `LAB_1000f222`, not `0x100f09d0`; the port runs
-		//    the one auto-close think for both (that think's body is unread).
+		FireOutput(FName((SpawnFlags & SF_DOOR_START_OPEN) ? TEXT("OnFullyClosed") : TEXT("OnFullyOpen")),
+			(SpawnFlags & SF_DOOR_START_OPEN) ? Handle : LastActivator);
+		if (EntityWorld && EntityWorld->Resolve(Self) != this) return;
+		ResetBlockedTracking(); //100f0975 tail249
+		// USE_CLOSES installs a separate retail think; that independent body remains open.
 	}
 	else if (ToggleState == EToggleState::GoingDown)
 	{
-		// HitBottom: fully closed, at rest (no autoclose from closed).
+		PlayMoverSound(FName(TEXT("close"))); //100f11b0 before state, touch rearm and output
 		ToggleState = EToggleState::AtBottom;
-		static const FName OnFullyClosed(TEXT("OnFullyClosed"));
-		FireOutput(OnFullyClosed, LastActivator);
+		FireOutput(FName((SpawnFlags & SF_DOOR_START_OPEN) ? TEXT("OnFullyOpen") : TEXT("OnFullyClosed")), LastActivator);
+		if (EntityWorld && EntityWorld->Resolve(Self) != this) return;
 		NextThink = ELYSIUM_NEVER_THINK;
+		ResetBlockedTracking();
+	}
+}
+
+void FElysiumDoorBase::Blocked(FElysiumEntity* Other)
+{
+	//CBaseDoor100f14a0. Null native GameData is a valid selected contact, but the receiver returns.
+	if (!Other || !World) return;
+	FElysiumEntityWorld& EntityWorld = *World;
+	const FElysiumEntityHandle Self = Handle;
+	//100a1250 TakeDamage(DMG_CRUSH, this inflictor/attacker, Dmg) is the named L2 hook
+	//in hooks.tsv. Its character damage-info consumer is not recovered in this L0 packet.
+	if (Wait >= 0.f && bBlockedReopenAllowed && ToggleState != EToggleState::GoingUp)
+		DoorGoUp(LastActivator, true);
+	if (EntityWorld.Resolve(Self) != this || TargetName.IsEmpty()) return;
+	TArray<FElysiumEntityHandle> Group;
+	EntityWorld.ForEachNamed(TargetName, [&](FElysiumEntity& Entity)
+	{
+		if (&Entity != this && Entity.AsDoorBase() && Group.Num() < 64) Group.Add(Entity.Handle);
+	}); //100f12a0 retains FindEntityByName order, excluding self
+	for (const FElysiumEntityHandle& PeerHandle : Group)
+	{
+		FElysiumDoorBase* Peer = nullptr;
+		if (FElysiumEntity* Entity = EntityWorld.Resolve(PeerHandle)) Peer = Entity->AsDoorBase();
+		if (!Peer || !(Peer->Wait >= 0.f)) continue;
+		if (MoveDir == Peer->MoveDir && GetPusherAbsoluteVelocity() == Peer->GetPusherAbsoluteVelocity()
+			&& AngularVelocity == Peer->AngularVelocity)
+		{
+			Peer->SimulationTick = SimulationTick;
+			if (!Peer->ResolvesEndpointFromRotation())
+			{ Peer->SetOrigin(GetOrigin()); Peer->SetAbsoluteVelocity(FVector::ZeroVector); }
+			else
+			{ const FVector PeerSnapAngles = GetAngles(); Peer->SetAngles(FRotator(PeerSnapAngles.X, PeerSnapAngles.Y, PeerSnapAngles.Z)); Peer->SetLocalAngularVelocity(FVector::ZeroVector); }
+		}
+		if (ToggleState == EToggleState::GoingUp && Peer->ToggleState != EToggleState::GoingUp)
+			Peer->DoorGoUp(Peer->LastActivator, true);
+		else if (ToggleState == EToggleState::GoingDown && Peer->ToggleState != EToggleState::GoingDown)
+			Peer->DoorGoDown(Peer->LastActivator);
+		if (EntityWorld.Resolve(Self) != this) return; //outputs can delete/reparent either leaf
 	}
 }
 
 void FElysiumDoorBase::OnMoveBlocked(const FHitResult& Hit)
 {
-	// Only a pawn (the player; NPCs are a later subsystem) counts as a door blocker — world/prop
-	// contacts are ignored so the door doesn't reverse off its own frame.
-	APawn* BlockedPawn = Cast<APawn>(Hit.GetActor());
-	if (!BlockedPawn)
-	{
-		return;
-	}
-
-	// Blocked-while-closing: deal `dmg`, reverse to opening, fire OnBlockedClosing (B.4). Opening
-	// into a blocker just clamps (handled by TickMove's retry) — Source waits it out.
-	if (ToggleState == EToggleState::GoingDown)
-	{
-		if (Dmg > 0)
-		{
-			// The same two halves trigger_hurt uses: the entity owns the health, the body
-			// gets the engine damage event.
-			if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
-			{
-				Player->TakeDamage((float)Dmg);
-			}
-			if (IElysiumEmbodiment* PlayerBody = World ? World->Embodiment() : nullptr)
-			{
-				PlayerBody->DamagePlayer((float)Dmg);
-			}
-		}
-		static const FName OnBlockedClosing(TEXT("OnBlockedClosing"));
-		FireOutput(OnBlockedClosing, LastActivator);
-		// Reverse to re-open. Retail CRotDoor::Blocked pre-issues its own AngularMove and calls
-		// DoorGoUp with bResolveSwing == 0 (T1.4): the block-reverse open is always fixed-forward, never
-		// activator-relative — the (possibly stale) block-path LastActivator must not steer the swing.
-		DoorGoUp(LastActivator, /*bResolveSwing*/ false);
-	}
+	//Compatibility entry for the old sweep caller; selection itself belongs to the native contact.
+	FElysiumEntity* Other = nullptr;
+	if (World) for (const auto& Entity : World->Entities())
+		if (Entity && !Entity->IsDead() && Entity->GetAttachBody() == Hit.GetComponent()) Other = Entity.Get();
+	Blocked(Other);
 }
 
 // --- +use doorknob path + linked_door ---
@@ -1028,25 +1079,24 @@ void FElysiumDoorBase::ResolveToggleStateFromTransform()
 	if (ResolvesEndpointFromRotation())
 	{
 		// Rotating leaf (retail CRotDoor): compare the live body ANGLES to the two endpoints.
-		const FRotator Live = Body->GetRelativeRotation();
+		const FVector LiveWords = GetAngles(); //100f2520 reads slot221, not native solved Euler
+		const FRotator Live(LiveWords.X, LiveWords.Y, LiveWords.Z);
 		if (RotatorComponentsWithin(Live, ClosedRot, DoorResyncTolerance))
 		{
 			ToggleState = EToggleState::AtBottom;
-			// Retail CRotDoor also calls ResetBlockedTracking here; this runtime carries no
-			// swing-inversion latch. The base swing direction IS activator-relative (the rotating leaf's
-			// ChooseOpenTarget), but the block-armed inversion that the latch gates is held — its retail
-			// field identity is unrecovered — so there is still nothing to reset here.
+			ResetBlockedTracking();
 		}
 		else if (RotatorComponentsWithin(Live, OpenRot, DoorResyncTolerance))
 		{
 			ToggleState = EToggleState::AtTop;
+			ResetBlockedTracking();
 		}
 		// else: genuinely mid-travel — leave the GoingUp/GoingDown state as-is.
 	}
 	else
 	{
 		// Sliding leaf (retail CBaseDoor): compare the live body ORIGIN to the two endpoints.
-		const FVector Live = Body->GetRelativeLocation();
+		const FVector Live = GetOrigin(); //100eff90 reads retained local origin
 		if (VectorComponentsWithin(Live, ClosedLoc, DoorResyncTolerance))
 		{
 			ToggleState = EToggleState::AtBottom;
@@ -1109,20 +1159,14 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 		}
 	}
 
-	// Step 4 — the mid-motion self-heal. Retail re-issues the move the door is already making, so a
-	// leaf whose move was interrupted re-bases it from the current pose (disassembled at
-	// 0x100efdc0 / 0x100efddf). Retail gates this on `m_movementType == 0`; the field ledger shows
-	// that member (+0x558) is READ in CBaseDoor::Use and written nowhere in the image, so it is
-	// permanently zero and the gate is always taken.
-	//
-	// DIVERGENCE: retail's reissue also propagates to the `linked_door` partner (the first argument
-	// of DoorGoUp/DoorGoDown is that flag). This runtime carries partner propagation in
-	// DoorActivate instead, so the self-heal does not reach the partner.
-	if (ToggleState == EToggleState::GoingDown)
+	// 100efc90 step 4: +558 must be zero before reissuing an interrupted move.
+	// LinearMove writes 1 and AngularMove (101c17e0) writes 2; slot153's linear
+	// velocity predicate is a different observer and cannot stand for this gate.
+	if (MoveKind() == EMoveKind::None && ToggleState == EToggleState::GoingDown)
 	{
 		DoorGoDown(LastActivator);
 	}
-	else if (ToggleState == EToggleState::GoingUp)
+	else if (MoveKind() == EMoveKind::None && ToggleState == EToggleState::GoingUp)
 	{
 		DoorGoUp(LastActivator, /*bResolveSwing*/ true);
 	}
@@ -1147,11 +1191,6 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 
 	// Step 7 — admission. Only a resting door, or one flagged NO_AUTO_RETURN, is admitted; a
 	// GOING_* leaf without that flag drops out here.
-	//
-	// It is not a *silent* no-op: step 4 has already re-issued the move, replayed the motion-start
-	// sound and re-fired OnOpen/OnClose. That is retail's own behaviour, not an artefact — a +use
-	// on a moving door is audible and observable on the wire even though the door does not change
-	// what it is doing.
 	if (ToggleState != EToggleState::AtTop && ToggleState != EToggleState::AtBottom
 		&& (SpawnFlags & SF_DOOR_NO_AUTO_RETURN) == 0)
 	{
@@ -1250,22 +1289,8 @@ void FElysiumDoorBase::DoorActivate(const FElysiumEntityHandle& Activator)
 		}
 	}
 
-	// The linked partner (the double-door swing) receives `Toggle` — NOT `Use` — so it never
-	// mirrors back (no recursion), and each leaf still runs its own locked check.
-	//
-	// DIVERGENCE: retail's partner transport is not a Toggle. CBaseDoor::DoorGoUp/DoorGoDown each
-	// stamp their own activator onto the partner, call the partner's SAME-direction helper with the
-	// propagate flag cleared, then restore its activator — so two leaves that are out of sync are
-	// driven the same way rather than opposite ways, the partner gets no lock test, and the
-	// propagation happens at every motion start rather than only on the +use path. Reproducing that
-	// belongs with the DoorGoUp/DoorGoDown work; this call preserves the current timing and keeps
-	// the second leaf visible on the wire (chokepoint 1, synchronous because this is already inside
-	// an executing handler — §2.5.1's seam).
-	if (FElysiumDoorBase* Partner = ResolveLinkedDoor())
-	{
-		World->AcceptInput(Partner->Handle, FName(TEXT("Toggle")), FElysiumVariant::Void(),
-			Activator, Handle);
-	}
+	// Linked same-direction transport occurs in DoorGoUp / DoorGoDown.
+
 }
 
 void FElysiumDoorBase::GetDebugState(TArray<TPair<FString, FString>>& Out) const
@@ -1312,37 +1337,70 @@ void FElysiumDoorBase::OnParentAttached(const FTransform& ParentWorldTransform)
 	ClosedLoc = ParentWorldTransform.InverseTransformPosition(ClosedLoc);
 	OpenLoc = ParentWorldTransform.InverseTransformPosition(OpenLoc);
 	const FQuat ParentInverse = ParentWorldTransform.GetRotation().Inverse();
-	ClosedRot = (ParentInverse * ClosedRot.Quaternion()).Rotator();
-	OpenRot = (ParentInverse * OpenRot.Quaternion()).Rotator();
+	const FRotator ClosedNative = (ParentInverse * ElysiumModelPhysics::SourceRotation(FVector(ClosedRot.Pitch, ClosedRot.Yaw, ClosedRot.Roll))).Rotator();
+	const FRotator OpenNative = (ParentInverse * ElysiumModelPhysics::SourceRotation(FVector(OpenRot.Pitch, OpenRot.Yaw, OpenRot.Roll))).Rotator();
+	ClosedRot = FRotator(-ClosedNative.Pitch, -ClosedNative.Yaw, ClosedNative.Roll);
+	OpenRot = FRotator(-OpenNative.Pitch, -OpenNative.Yaw, OpenNative.Roll);
 }
 
 // func_door_rotating — the prototype swinging door (the workhorse: 1236 uses / 22 on the tutorial).
 
 class FElysiumFuncDoorRotating final : public FElysiumDoorBase
 {
+public:
+	void Spawn() override
+	{
+		//101c1a70: the flags choose a Source QAngle component, independently of authored angles.
+		MoveDir = (SpawnFlags & 0x40) ? FVector(0, 0, 1) : (SpawnFlags & 0x80) ? FVector(1, 0, 0) : FVector(0, 1, 0);
+		if (SpawnFlags & SF_DOOR_REVERSE) MoveDir *= -1.;
+		FElysiumDoorBase::Spawn();
+		//100f2290 ->100f3f20: immutable collision bounds produce the blocker angle frame.
+		const FBox Local = HullLocalBounds(Def);
+		if (Local.IsValid)
+		{
+			const FVector Min = FVector(Local.Min.X, -Local.Max.Y, Local.Min.Z) / MoverInchToCm;
+			const FVector Max = FVector(Local.Max.X, -Local.Min.Y, Local.Max.Z) / MoverInchToCm;
+			const int32 FirstAxis = (SpawnFlags & 0x40) ? 1 : (SpawnFlags & 0x80) ? 2 : 0;
+			const int32 SecondAxis = (SpawnFlags & 0x40) ? 2 : (SpawnFlags & 0x80) ? 0 : 1;
+			const float First = DoorFartherFromZero(static_cast<float>(Min[FirstAxis]), static_cast<float>(Max[FirstAxis]));
+			const float Second = DoorFartherFromZero(static_cast<float>(Min[SecondAxis]), static_cast<float>(Max[SecondAxis]));
+			const double Rest = FMath::Atan2(static_cast<double>(Second), static_cast<double>(First)) * 57.295780181884766;
+			DoorAngleAtRest = static_cast<float>(Rest);
+			DoorAngleForward = static_cast<float>(Rest + 90.);
+			DoorAngleBackward = static_cast<float>(Rest - 90.);
+		}
+		LastBlockedAngle = 0.f;
+		ResetBlockedTracking();
+	}
+	void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		FElysiumDoorBase::Serialize(Ar);
+		Ar << DoorAngleAtRest; Ar << DoorAngleForward; Ar << DoorAngleBackward;
+		Ar << LastBlockedAngle; Ar << BlockedCount; Ar << BlockedForcedState;
+		if (Ar.IsLoading() && (!FMath::IsFinite(DoorAngleAtRest) || !FMath::IsFinite(DoorAngleForward)
+			|| !FMath::IsFinite(DoorAngleBackward) || !FMath::IsFinite(LastBlockedAngle)
+			|| BlockedCount < 0 || BlockedForcedState < 0 || BlockedForcedState > 3)) Ar.SetError();
+	}
+	void Blocked(FElysiumEntity* Other) override;
 protected:
 	virtual void ComputeOpenTransform(FVector& OutOpenLoc, FRotator& OutOpenRot) const override
 	{
-		// Rotate `Distance` degrees about the hinge. The hinge is the def origin, which is the body's
-		// own pivot (BuildBrushBody seats entity-local hulls there), so a relative rotation swings the
-		// leaf about it — no location change. Default axis is yaw/Z (B.2: `angles` default yaw/Z; every
-		// tutorial door is `angles 0 0 0`). Retail adds the signed distance to Source yaw; the
-		// Source->Unreal Y reflection reverses that turn, just as it does for func_rotating below.
-		// REVERSE (0x2) negates the Source swing before that reflection. Non-default swing axes from
-		// `angles` are a later refinement (no exported rotating door uses one).
-		const float SourceSign = (SpawnFlags & SF_DOOR_REVERSE) ? -1.0f : 1.0f;
+		//100f1c60: m_vecAngle2 = m_vecAngle1 + distance * movedir, in Source QAngle words.
 		OutOpenLoc = ClosedLoc;
-		OutOpenRot = ClosedRot + FRotator(0.0f, -SourceSign * Distance, 0.0f);   // (Pitch, Yaw, Roll)
+		OutOpenRot = ClosedRot + FRotator(MoveDir.X * Distance, MoveDir.Y * Distance, MoveDir.Z * Distance);
 	}
 
 	// Retail CRotDoor::DoorGoUp -> OpenAwayFromEntity (FUN_100f3390, ComputeSwingData FUN_100f19b0):
 	// the leaf opens AWAY from the activator. Only the swing SIGN/axis is activator-relative here; the
 	// swing MAGNITUDE is the door's configured open pose (`distance` degrees about the hinge, already in
 	// OpenRot), never re-applied. Speed = deg/s.
-	// bResolveSwing == false (the block-reverse reissue) forces the fixed-forward OpenRot with no
-	// activator resolution and no warning; true resolves the activator-relative swing (retail T1.4).
+	// A live activator and resolve=false retain Blocked's pre-issued move. Null activator or
+	// ONEWAY issues OpenRot; resolve=true runs the actual activator-relative swing branch.
 	virtual void IssueMoveToOpen(bool bResolveSwing) override
 	{
+		//100f3030: a valid activator with resolve=false preserves the AngularMove pre-issued
+		//by Blocked. Null activator or ONEWAY instead issues the fixed endpoint.
+		if (!bResolveSwing && !(SpawnFlags & SF_DOOR_ONEWAY) && World && World->Resolve(LastActivator)) return;
 		AngularMove(bResolveSwing ? ChooseOpenTarget() : OpenRot, Speed);
 	}
 	virtual void IssueMoveToClosed() override { AngularMove(ClosedRot, Speed); }
@@ -1351,6 +1409,7 @@ protected:
 	virtual bool ResolvesEndpointFromRotation() const override { return true; }
 	// `CRotDoor::Spawn` 0x100f1c60 never dispatches slot 171.
 	virtual bool SpawnRunsSetMovedir() const override { return false; }
+	void ResetBlockedTracking() override { BlockedCount = BlockedForcedState = 0; } //100f1990
 
 	virtual FElysiumDoorNpcOpenData GetNPCOpenData(const FElysiumEntity* Npc, bool bOpening) const override;
 	virtual FBox ComputeCloseBounds() const override;
@@ -1361,7 +1420,69 @@ private:
 	// centres and swinging toward the farther one. Falls back to the deterministic forward pose when
 	// there is no activator (the ordinary logic-driven open) or one that no longer resolves.
 	FRotator ChooseOpenTarget();
+	float DoorAngleAtRest = 0.f, DoorAngleForward = 0.f, DoorAngleBackward = 0.f, LastBlockedAngle = 0.f;
+	int32 BlockedCount = 0, BlockedForcedState = 0; //6f8..70c, SAVE
 };
+
+void FElysiumFuncDoorRotating::Blocked(FElysiumEntity* Other)
+{
+	//100f3900: both opening and closing enter the geometric arbitration.
+	if (!Other || !World) return;
+	FElysiumEntityWorld& EntityWorld = *World;
+	const FElysiumEntityHandle Self = Handle, BlockerHandle = Other->Handle;
+	bBlockedReopenAllowed = true;
+	if (Other->AsCombatCharacter()) bCharacterBlockedSwing = true; //+9c identity, L2 owns its classification
+	const FVector ActualAngles = GetAbsAngles();
+	const float Current = static_cast<float>(((SpawnFlags & 0x40) ? ActualAngles.Z : (SpawnFlags & 0x80) ? ActualAngles.X : ActualAngles.Y) + DoorAngleAtRest);
+	const FVector RootOrigin = GetAbsOrigin(), BlockerOrigin = Other->GetAbsOrigin();
+	FVector Direction(static_cast<float>(BlockerOrigin.X / MoverInchToCm) - static_cast<float>(RootOrigin.X / MoverInchToCm),
+		static_cast<float>(-BlockerOrigin.Y / MoverInchToCm) - static_cast<float>(-RootOrigin.Y / MoverInchToCm),
+		static_cast<float>(BlockerOrigin.Z / MoverInchToCm) - static_cast<float>(RootOrigin.Z / MoverInchToCm));
+	if (SpawnFlags & 0x40) Direction.X = 0.; else if (SpawnFlags & 0x80) Direction.Y = 0.; else Direction.Z = 0.;
+	float Pitch = 0.f, Yaw = 0.f;
+	if (Direction.X == 0. && Direction.Y == 0.) Pitch = Direction.Z > 0. ? 270.f : 90.f;
+	else
+	{
+		Yaw = static_cast<float>(FMath::Atan2(Direction.Y, Direction.X) * 57.29577951308232);
+		if (Yaw < 0.f) Yaw += 360.f;
+		const float HorizontalSquared = static_cast<float>(Direction.X * Direction.X + Direction.Y * Direction.Y);
+		Pitch = static_cast<float>(FMath::Atan2(-Direction.Z, FMath::Sqrt(static_cast<double>(HorizontalSquared))) * 57.29577951308232);
+		if (Pitch < 0.f) Pitch += 360.f;
+	}
+	//100f3e60 selects pitch for SF40, roll (literal zero) for SF80, yaw otherwise.
+	const float Bearing = (SpawnFlags & 0x40) ? Pitch : (SpawnFlags & 0x80) ? 0.f : Yaw;
+	const float ForwardDiff = DoorAngleDifference(Current, DoorAngleForward), BackwardDiff = DoorAngleDifference(Current, DoorAngleBackward);
+	if (BlockedCount < 1) BlockedCount = 1;
+	else if (!(FMath::Abs(DoorAngleDifference(Current, LastBlockedAngle)) <= 1.f)) ResetBlockedTracking();
+	else if (++BlockedCount > 14)
+	{ ResetBlockedTracking(); BlockedForcedState = ToggleState == EToggleState::GoingUp ? 3 : 2; }
+	LastBlockedAngle = Current;
+	if (ToggleState == EToggleState::GoingUp)
+	{
+		bBlockedReopenAllowed = false;
+		if (BlockedForcedState == 3) DoorGoDown(LastActivator);
+		else if (BlockedForcedState != 2)
+		{
+			const float ChosenAngle = FMath::Abs(ForwardDiff) < FMath::Abs(BackwardDiff) ? DoorAngleForward : DoorAngleBackward;
+			if (FMath::Abs(DoorAngleDifference(Bearing, ChosenAngle)) < FMath::Abs(DoorAngleDifference(Current, ChosenAngle))) DoorGoDown(LastActivator);
+		}
+	}
+	else if (ToggleState == EToggleState::GoingDown)
+	{
+		bBlockedReopenAllowed = false;
+		if (BlockedForcedState == 2) DoorGoUp(LastActivator, true);
+		else if (BlockedForcedState != 3
+			&& FMath::Abs(DoorAngleDifference(Bearing, DoorAngleAtRest)) < FMath::Abs(DoorAngleDifference(Current, DoorAngleAtRest))
+			&& ToggleState != EToggleState::GoingUp)
+		{
+			AngularMove(FMath::Abs(ForwardDiff) < FMath::Abs(BackwardDiff) ? OpenRot : OpenRot * -1., Speed);
+			DoorGoUp(LastActivator, false);
+		}
+	}
+	if (EntityWorld.Resolve(Self) != this) return;
+	FElysiumDoorBase::Blocked(EntityWorld.Resolve(BlockerHandle));
+	if (EntityWorld.Resolve(Self) == this) bBlockedReopenAllowed = true;
+}
 
 // Reference: research/event-surface/swing-centres-findings.md ITEM 1 + door-largeitems-spec.md
 // TARGET 1 (both 100%-CONFIRMED). Retail caches two swing reference centres and, at open time, swings
@@ -1380,10 +1501,7 @@ FRotator FElysiumFuncDoorRotating::ChooseOpenTarget()
 	// about the closed pose is the back swing (-m_vecAngle2). Deriving the back target from OpenRot's
 	// OWN closed->open delta reuses the existing open magnitude (`distance` degrees) exactly — only the
 	// sign is negated, so the swing arc is never double-applied.
-	const FQuat ClosedQ = ClosedRot.Quaternion();
-	const FQuat OpenQ   = OpenRot.Quaternion();
-	const FQuat DeltaQ  = ClosedQ.Inverse() * OpenQ;                 // closed -> forward open
-	const FRotator BackRot = (ClosedQ * DeltaQ.Inverse()).Rotator(); // closed -> back open (negated arc)
+	const FRotator BackRot = OpenRot * -1.; //100f3390 negates all three m_vecAngle2 words
 
 	// No activator: the retail m_hActivator==INVALID branch (a relay/autoclose-driven open). Swing the
 	// deterministic forward pose. Not a failure — an ordinary absence, so no warning.
@@ -1416,8 +1534,9 @@ FRotator FElysiumFuncDoorRotating::ChooseOpenTarget()
 	}
 	auto SwingCentre = [&](const FRotator& R)
 	{
-		const FVector A = R.RotateVector(Local.Min);
-		const FVector B = R.RotateVector(Local.Max);
+		const FQuat Rotation = ElysiumModelPhysics::SourceRotation(FVector(R.Pitch, R.Yaw, R.Roll));
+		const FVector A = Rotation.RotateVector(Local.Min);
+		const FVector B = Rotation.RotateVector(Local.Max);
 		const FVector Lo(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y), FMath::Min(A.Z, B.Z));
 		const FVector Hi(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y), FMath::Max(A.Z, B.Z));
 		return ClosedLoc + (Lo + Hi) * 0.5f;
@@ -1428,14 +1547,16 @@ FRotator FElysiumFuncDoorRotating::ChooseOpenTarget()
 	// Swing toward the farther centre: b = (d1 < d2) picks the negated (back) target when the activator
 	// is nearer the forward centre. DistSquared preserves the same ordering as retail's Euclidean sqrt
 	// compare (both non-negative, monotonic), so the chosen side is identical.
-	const FVector P = Activator->Origin;   // retail activator WorldSpaceCenter (vtable +0x300)
-	const double D1 = FVector::DistSquared(P, ForwardCentre);
-	const double D2 = FVector::DistSquared(P, BackCentre);
-	const bool bSwingBack = D1 < D2;
-
-	// HELD — the blocked-latch inversion. Retail flips this choice when a prior block armed CRotDoor's
-	// 0x655 latch, set when the blocker's CBaseEntity +0x98 dword is non-zero. That field's identity is
-	// NOT-STATICALLY-RECOVERABLE (swing-centres-findings.md ITEM 3), so the inversion stays unmodelled.
+	auto DistanceWord = [](const FVector& First, const FVector& Second)
+	{
+		const FVector Delta(static_cast<float>(First.X / MoverInchToCm) - static_cast<float>(Second.X / MoverInchToCm),
+			static_cast<float>(First.Y / MoverInchToCm) - static_cast<float>(Second.Y / MoverInchToCm),
+			static_cast<float>(First.Z / MoverInchToCm) - static_cast<float>(Second.Z / MoverInchToCm));
+		return static_cast<float>(FMath::Sqrt(static_cast<double>(static_cast<float>(Delta.SizeSquared()))));
+	};
+	const float D1 = DistanceWord(Activator->WorldSpaceCenter(), ForwardCentre);
+	const float D2 = DistanceWord(Activator->WorldSpaceCenter(), BackCentre);
+	const bool bSwingBack = bCharacterBlockedSwing ? D2 <= D1 : D1 < D2;
 	return bSwingBack ? BackRot : OpenRot;
 }
 
@@ -1572,8 +1693,8 @@ protected:
 
 	// A sliding door has no activator-relative swing, so bResolveSwing is ignored — the slide is
 	// always the same fixed open pose. (Retail CBaseDoor::DoorGoUp carries no swing resolution.)
-	virtual void IssueMoveToOpen(bool /*bResolveSwing*/) override { LinearMove(OpenLoc, Speed * MoverInchToCm); }   // Speed = in/s
-	virtual void IssueMoveToClosed() override { LinearMove(ClosedLoc, Speed * MoverInchToCm); }
+	virtual void IssueMoveToOpen(bool /*bResolveSwing*/) override { LinearMove(OpenLoc, Speed); } // authored in/s
+	virtual void IssueMoveToClosed() override { LinearMove(ClosedLoc, Speed); }
 
 	// A sliding door resolves its endpoint from body origin (retail CBaseDoor::ResolveToggleStateFromTransform).
 	virtual bool ResolvesEndpointFromRotation() const override { return false; }

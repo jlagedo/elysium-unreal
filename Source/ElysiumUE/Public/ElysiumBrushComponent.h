@@ -60,6 +60,11 @@ public:
 
 	const FElysiumEntityHandle& GetOwningEntity() const { return OwningEntity; }
 	EElysiumBrushSolidity GetSolidity() const { return BuiltSolidity; }
+	uint8 GetContentsSignature() const { return BuiltSignature; }
+	virtual void OnDestroyPhysicsState() override;
+	virtual void OnUpdateTransform(EUpdateTransformFlags Flags, ETeleportType Teleport) override;
+	UFUNCTION() void NativeWake(UPrimitiveComponent* Component, FName BoneName);
+	UFUNCTION() void NativeSleep(UPrimitiveComponent* Component, FName BoneName);
 
 	// UPrimitiveComponent — collision-only: hand out our convex setup, bound the body from it.
 	virtual UBodySetup* GetBodySetup() override { return BrushBodySetup; }

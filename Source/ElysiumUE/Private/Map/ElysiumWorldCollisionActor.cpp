@@ -2,6 +2,8 @@
 
 #include "ElysiumMapCollisionPayload.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "Map/ElysiumRetailMaskRecipe.h"
+#include "Substrate/ElysiumModelPhysics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWorldCollision, Log, All);
 
@@ -20,6 +22,7 @@ void UElysiumWorldCollisionComponent::ApplySignature()
 	const EElysiumContentsSignature Kind = static_cast<EElysiumContentsSignature>(Signature);
 	// A NAME, not a set of responses: only the name survives the `.umap` save/load round trip.
 	SetCollisionProfileName(ElysiumContents::ProfileName(Kind));
+	SetMaskFilterOnBodyInstance(bCommonSolid ? 0 : ElysiumRetailMask::NonCommonSolidMaskBit);
 	// Navigation follows the profile rather than being set beside it -- Unreal calls a body
 	// navigation-relevant exactly when it blocks ECC_Pawn, which the profile decides.
 	SetCanEverAffectNavigation(ElysiumContents::AffectsNavigation(Kind));
@@ -40,6 +43,18 @@ void UElysiumWorldCollisionComponent::PostLoad()
 	// Re-applied on every load: the profile name round-trips, but the navigation flag and the
 	// responses the name implies are re-derived here rather than trusted from the package.
 	ApplySignature();
+}
+
+void UElysiumWorldCollisionComponent::OnCreatePhysicsState()
+{
+	Super::OnCreatePhysicsState();
+	ElysiumModelPhysics::RebindWorldActor(this);
+}
+
+void UElysiumWorldCollisionComponent::OnDestroyPhysicsState()
+{
+	ElysiumModelPhysics::RetireWorldActor(this); //retire44 before native release or observer callbacks
+	Super::OnDestroyPhysicsState();
 }
 
 AElysiumWorldCollisionActor::AElysiumWorldCollisionActor()
@@ -84,8 +99,9 @@ int32 AElysiumWorldCollisionActor::AuthorFromPayload(UElysiumMapCollisionPayload
 		const FString Spelling =
 			ElysiumContents::Spell(static_cast<EElysiumContentsSignature>(Row.Signature));
 		UElysiumWorldCollisionComponent* Component = NewObject<UElysiumWorldCollisionComponent>(
-			this, FName(*FString::Printf(TEXT("World_%s"), *Spelling)));
+			this, FName(*FString::Printf(TEXT("World_%s_%s"), *Spelling, Row.bCommonSolid ? TEXT("solid") : TEXT("clip"))));
 		Component->Signature = Row.Signature;
+		Component->bCommonSolid = Row.bCommonSolid;
 		Component->Body = Row.Body;
 		Component->LocalCollisionBounds = Row.Bounds;
 		Component->ApplySignature();
@@ -111,6 +127,7 @@ int32 AElysiumWorldCollisionActor::AuthorFromPayload(UElysiumMapCollisionPayload
 		Displacement->Signature = static_cast<uint8>(
 			EElysiumContentsSignature::Player | EElysiumContentsSignature::Npc
 				| EElysiumContentsSignature::Sight);
+		Displacement->bCommonSolid = true;
 		Displacement->Body = DisplacementBody;
 		Displacement->LocalCollisionBounds = InPayload->DisplacementBounds();
 		Displacement->ApplySignature();

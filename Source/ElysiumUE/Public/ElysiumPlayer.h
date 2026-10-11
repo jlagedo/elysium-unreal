@@ -1648,6 +1648,10 @@ public:
 	FRotator PendingEyeAngles = FRotator::ZeroRotator;
 	FVector PendingEyeLookPoint = FVector::ZeroVector;
 	bool bPendingEyeAngleSnap = false;
+	//10036bd0 producer-only L0->L3 hook. Mode2 yaw accumulation has a separate consumer
+	// from mode1 snap; ProcessUsercmds/RunCommand consumption remains unrecovered.
+	int32 PendingPusherViewMode = 0;
+	float PendingPusherYaw = 0.f;
 
 	// `FUN_10178590` — turn this character's eyes toward a world point.
 	void LookAtWorldPoint(const FVector& WorldPoint);

@@ -862,3 +862,14 @@ Spawn body through225 and skips reconstruction. Omitting this row would resurrec
 destroyed body because prop bSimulating is runtime-only. Actual Spawn ->VPhysicsDestroyObject
 ->Freeze ->archive ->ApplySnapshot checks null field/no native actor after final reconnect. Prop225
 sets bSimulating=false, preventing GateBody recreation. Null-row recipe/state words are unused.
+
+Fresh-world host preparation also matters for an eligible `func_elevator`: `Load` builds its authored
+brush native before any saved blocks apply. At Physics restore entry the adapter retires all eligible
+saved owners' baseline incarnations before reconstructing any field. This preserves the actual
+100443e0 null-destination requirement and the retained per-field duplicate guard; later baseline
+cleanup cannot destroy an earlier reconstructed alias. False eligibility and saved count0 retain
+their owner225 path. The elevator witness captures in-flight logical/local clocks and independent
+solved state, checks baseline retirement and real brush rebuild, then the first native target and
+once-only arrival. `+0x160 m_flStartFrameLocalTime` and `+0x3fc m_flMoveDoneTime` are unnamed FLOAT
+SAVE rows in `CBaseEntity`; generated save-field registration preserves raw words, with no TIME
+rebasing or addition to the external-key count.

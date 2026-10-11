@@ -26,6 +26,7 @@ public:
 	// activation, ActivateMultiTrigger nulls the touch handler and schedules SUB_Remove at
 	// curtime + 0.1. This latches that "touch handler nulled, removal pending" state.
 	bool   bTouchSuppressed = false;
+	void InitTrigger(); //101c5080; invoked by the actual leaf Spawn, not base103
 
 	// CBaseTrigger::PassesTriggerFilters (RE1, entity_io.md) reads the ALLOW_* spawnflag bits
 	// against the toucher's flags. This leaf currently implements the ALLOW_CLIENTS consumer: the
@@ -69,6 +70,7 @@ public:
 			return;
 		}
 		bDisabled = bInDisabled;
+		SetSolidFlags(static_cast<uint16>(bDisabled ? RetailSolidFlags & ~8u : RetailSolidFlags | 8u));
 		// SetDormant(false) explicitly refreshes overlaps, so enabling beneath an already-contained
 		// player produces the same late StartTouch that retail's FSOLID_TRIGGER re-add does.
 		RefreshBrushBodyState();
@@ -82,7 +84,7 @@ public:
 		// or removal test of its own, and for the ~0.1 s before SUB_Remove runs the volume is still
 		// solid with a clean deletion flag. A genuine re-entry inside that window therefore still
 		// produces OnStartTouch and still produces no OnTrigger, which is why bTouchSuppressed gates
-		// the activation block below and not this admission test.
+		// the installed175 activation handler and not this174 admission test.
 		//
 		// The disabled/inert half of that test is retail's solidity, not an extra rule: a disabled
 		// trigger has no FSOLID_TRIGGER to link against, which here is the dormant brush body that
@@ -92,12 +94,27 @@ public:
 			return;
 		}
 		static const FName OnStartTouch(TEXT("OnStartTouch"));
-		static const FName OnTrigger(TEXT("OnTrigger"));
 
-		// OnStartTouch fires on every touch begin; OnTrigger is rate-limited by `wait` (Source's
-		// multi-manager gate). FireOutput no-ops on outputs the entity did not wire, so firing both
-		// is safe regardless of which rows this instance carries.
+		//101c5590 owns only this begin output;101c68b0 independently owns OnTrigger in175.
 		FireOutput(OnStartTouch, Activator);
+	}
+	virtual void StartTouch(FElysiumEntity* Other) override
+	{
+		if (Other) OnTouchStart(Other->Handle); //101c5590, including existing specialized StartTouch leaves
+	}
+	void InstallMultiTouch()
+	{
+		TouchCallback = bTouchSuppressed ? nullptr : &MultiTouchCallback;
+	}
+	static void MultiTouchCallback(FElysiumEntity& Entity, FElysiumEntity* Other)
+	{
+		if (Other) static_cast<FElysiumTriggerBase&>(Entity).MultiTouch(Other->Handle);
+	}
+	void MultiTouch(const FElysiumEntityHandle& Activator)
+	{
+		//101c68b0 repeats the filter independently; this is the actual +1ec handler.
+		if (bTouchSuppressed || bDisabled || IsInert() || !BasePassesTriggerFilters(Activator)) return;
+		static const FName OnTrigger(TEXT("OnTrigger"));
 
 		const double Now = World ? World->NowSeconds() : 0.0;
 		if (!bTouchSuppressed && Now - LastTriggerTime >= Wait)
@@ -113,6 +130,7 @@ public:
 				// delayed output rows the OnTrigger fire above just enqueued stay valid queue
 				// entries — Kill() (called from Think(), below) never touches the event queue.
 				bTouchSuppressed = true;
+				TouchCallback = nullptr;
 				NextThink = Now + 0.1;
 			}
 		}
@@ -132,7 +150,7 @@ public:
 	virtual void Think() override
 	{
 		// The self-removal scheduled by the wait == -1 route above. A subclass with its own Think()
-		// (trigger_hurt, trigger_look) never reaches this OnTouchStart, so it never arms this.
+		// (trigger_hurt, trigger_look) has no installed MultiTouch handler and never arms this.
 		if (bTouchSuppressed)
 		{
 			Kill();
@@ -147,6 +165,7 @@ public:
 		// reasoning that lets NextThink itself ride the generic entity record unconverted.
 		Ar << LastTriggerTime;
 		Ar << bTouchSuppressed;
+		if (Ar.IsLoading() && bTouchSuppressed) TouchCallback = nullptr;
 	}
 
 	// The enable latch every trigger leaf shares, readable by the map-slice tests through the one

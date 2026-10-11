@@ -372,3 +372,63 @@ Final native27/generator45 were reused unchanged after inspection. Exact23-path 
 commit includes this checkpoint; no content/goldens/audit closure/push. Original23/88 and full
 L0 remain open. Next actual dependency is moves1/8 pusher feedback with necessary producers;
 other unfinished contracts remain listed above, and broader deferred r022 scope stays deferred.
+
+### Reached pusher feedback — 2026-10-11 (same packet after e798fe5b)
+
+Sole fresh Sol High worker recovered the complete reached generic226 moves1/8 feedback
+and required scoped door/button/elevator producers, with no additional worker, commit or
+push. Retained Source formulas/float stores, authored clocks/deadlines, logical/submitted/
+native47 poses, reverse push transaction rules, actual174/175/178 receiver/parent order,
+brush/default recipe reconstruction, creation-owned world GameData/lifetime and live contents
+filters now have native and map/save observers. Common-solid v3 partitions keep each hull
+once and preserve existing profiles, PN query and navigation consumers. Chaos continues to
+own geometry/contact generation/mechanics; no IVP topology, allocator or scheduler clone.
+Recovery and each branch contract preceded affected edits in `walks/L0-pusher-feedback.md`.
+
+Final runtime fixes required by gates preserved the original observers: raw FLOAT SAVE-only
+clocks moved through the generator, restoring external binding count30; actual PhysicsRestore
+retired newly spawned baselines before saved reconstruction without weakening duplicate/alias
+guards; native elevator restore used admitted frames and original-scene teardown, preserving
+raw moving clocks/first target/once arrival; Genesis full-angle destination used real info_target
+while firetrans retained its trigger angle-clear/travel contract. Bounded arena diagnosis
+proved premature Spawn MoveType/Solid writes, rather than an obsolete scenario expectation.
+Sliding100ef260, rotating100f1c60 and button100c8d60 writes now occur at their confirmed
+171/model/endpoint/START_OPEN boundaries. The original angle-motion scenario was unchanged.
+
+Final coherent --arm build095635 passes exit0 in28.6s; affected51 run095713 passes
+38 clean/13 warned/0 failed/notRun/inProcess, all9 native ModelPhysics and15 Mover clean.
+Coordinator default095812 passes188 (109 clean/79 warned), zero failed/notRun/inProcess.
+Original bounded19 arena095907 passes19/19 across18 arena and1 sm_hub_1 scenarios,
+both process exit0; wrapper passes exit0 in63.672s. Startup27 errors/535 warnings are
+reported separately from passing scenarios (previous run534 warnings); the extra normalized
+content-animation warning is female_citizen_2 adopted-stand vocabulary/scripted-sequence
+fallback, with asynchronous audio completion differences. Pipeline54 final
+JUnit and actual v3 maps2 clean receipts are reused unchanged. Exact authoritative JSON/XML
+paths are in progress.md; complete generated diff preservation includes128 true,225/233/232
+hand bodies and current90/102/174/175/178/239 bool/226 routing. No ledger regeneration,
+kernel --check, tracked shipped data/golden or full arm/full arena gate was introduced.
+
+The matched public arrival0 final receiver is First in baseline/mirror/swizzle, matching
+actual native178. Earlier arrivalDt Second receipts are distinct invalid comparator inputs.
+Native qualifying birth/retirement/skin reentry/noadvance/world-owner behavior is witnessed;
+one bounded final target match does not establish general simultaneous-contact priority or
+full solved geometry/shadow trajectory parity. Ordinary firstphase226 exits on interval0,
+so its no178 result is idle boundary proof, not moving early-contact closure. Controlled40cm
+full rewind proves downstream44→178 only. The concrete native .6167/public .6333 first44
+publication difference remains OPEN for actual moving observer input/gate/receiver proof.
+Native-retail full candidate encounter equivalence remains OPEN; relative append/reverse and
+rollback/callback sequencing are verified. Do not sort/reverse/suppress native input to infer
+universal parity, or make retail feature topology a prerequisite without a named observer.
+
+Higher player repeated-touch/pending-yaw consumption, specialized trigger receivers, continuous
+FuncRotating, solid6 undefined initial displacement, broader creator/constraint/ragdoll/controller/
+multiobject/fluid/child-removal and deferred r022 frontiers remain outside the verified scope.
+Original23/88 and the five-point full L0 closing gate remain OPEN. Runtime/tests stayed frozen
+through the final coordinator gates. Only progress/runs bookkeeping and exact manifest refresh
+followed; the coordinator owns exact-path commit/review, with no push.
+Functional runtime/test/pipeline hashes are unchanged by final bookkeeping. The required
+hooks.tsv L3 owner entry precisely names10036bd0's +207c=2/+2080+=deltaYaw writes
+before the executable L0 angular write; higher consumption/persistence remain unrecovered.
+Stale226 mapping description now names verified pusher routing and open timing/encounter
+limits, with no generated executable change. Final pipeline annotation gate reran54/54
+passing in1.65s at `E:/elysium-work/codex/l0-pusher-freeze-20261011/pipeline54-final-annotation.xml`.

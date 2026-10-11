@@ -95,6 +95,7 @@ public:
 	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context) override;
 	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override;
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override;
+	virtual void StartTouch(FElysiumEntity* Other) override { if (Other) OnTouchStart(Other->Handle); }
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 	virtual UPrimitiveComponent* GetAttachBody() const override;
 

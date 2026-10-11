@@ -21,6 +21,8 @@ struct FElysiumRetailMaskRecipe
 	bool bProps = false;
 	// Mask 0: the trace asks nothing, so it is clear without being traced.
 	bool bNothing = false;
+	// Base2370x200400b asks common world solid bits, excluding both clip-only kinds.
+	bool bCommonSolidOnly = false;
 };
 
 namespace ElysiumRetailMask
@@ -48,6 +50,7 @@ namespace ElysiumRetailMask
 	inline constexpr uint8 MoverMaskBit = 2;
 	inline constexpr uint8 PropMaskBit = 4;
 	inline constexpr uint8 NpcTransparentMaskBit = 8;
+	inline constexpr uint8 NonCommonSolidMaskBit = 16; //version3 baked world partition answer
 
 	// The mask bits one entity prop's body wears, from its two authored keyfields, chosen at spawn.
 	//   `blocks_traces` (`m_bBlocksTraces +0xfd`): `StandardFilterRules 0x101d3080` admits the entity
@@ -143,6 +146,7 @@ namespace ElysiumRetailMask
 		return static_cast<uint8>(CharacterMaskBit
 			| (Recipe.bMovers ? 0 : MoverMaskBit)
 			| (Recipe.bProps ? 0 : PropMaskBit)
+			| (Recipe.bCommonSolidOnly ? NonCommonSolidMaskBit : 0)
 			| (bFVisibleFilter ? NpcTransparentMaskBit : 0));
 	}
 

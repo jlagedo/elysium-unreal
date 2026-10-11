@@ -39,7 +39,7 @@ MANIFEST_SCHEMA = "2.0.0"
 MANIFEST_NAME = "manifest.json"
 
 #: Bumped whenever this lane's mapping changes in a way that must re-author every asset.
-RECIPE_VERSION = 2
+RECIPE_VERSION = 3
 
 #: The mount every per-map asset lands under. The C++ twin is
 #: `FElysiumContentPaths::BakedMapDir` / `BakedMapCollision`.
@@ -135,6 +135,28 @@ def read_hull_partitions(path: Path) -> list[tuple[int, list[list[float]]]]:
                 continue
             groups.setdefault(signature, []).append([float(token) for token in tokens[1:]])
     return list(groups.items())
+
+
+def read_common_solid_partitions(path: Path) -> list[dict[str, Any]]:
+    """Cooked world bodies retain the base237 0x400b answer beside the four old answers.
+
+    Dual-clip-only 0x30000 and window 0x2 both answer PN; only window answers this query.
+    Geometry remains unchanged and each native body carries one unambiguous answer.
+    """
+    groups: dict[tuple[int, bool], list[list[float]]] = {}
+    if not Path(path).is_file():
+        return []
+    with Path(path).open("r", encoding="utf-8") as handle:
+        for line in handle:
+            tokens = line.split()
+            if len(tokens) < MIN_HULL_VERTICES * 3 + 1 or len(tokens) % 3 != 1 or not tokens[0].startswith("0x"):
+                continue
+            contents = int(tokens[0], 16)
+            signature = contents_signature.signature_of(contents)
+            if signature:
+                groups.setdefault((signature, bool(contents & 0x400b)), []).append([float(token) for token in tokens[1:]])
+    return [{"signature": signature, "commonSolid": common, "hulls": hulls}
+            for (signature, common), hulls in groups.items()]
 
 
 def read_displacement_rows(path: Path) -> list[list[float]]:
@@ -383,12 +405,10 @@ def stage_map(
         "assetPath": asset_path(map_name),
         "recipeVersion": RECIPE_VERSION,
         "skyScale": sky_scale,
-        # One entry per contents signature the map carries, each `{signature, hulls}`. The flat
+        # One entry per (contents signature, common-solid answer), each hull exactly once. The flat
         # `worldHulls` stays beside it as the parity subject and as what a reader that predates
         # the partition still understands.
-        "worldBodies": [
-            {"signature": signature, "hulls": hulls} for signature, hulls in partitions
-        ],
+        "worldBodies": read_common_solid_partitions(hulls_path),
         "worldHulls": hull_rows,
         "displacementVertices": vertices,
         "displacementIndices": indices,

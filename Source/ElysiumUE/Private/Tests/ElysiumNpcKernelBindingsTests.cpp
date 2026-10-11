@@ -429,8 +429,8 @@ bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// `m_lifeState` (`CBaseEntity` +0x200, datamap flags `SAVE`) is in the walk: the chain's one
-	// generated save row, the word slot 158 `IsAlive` reads, so a loaded corpse answers dead.
+	// `m_lifeState` (`CBaseEntity` +0x200, datamap flags `SAVE`) is in the generated save walk:
+	// it is the word slot 158 `IsAlive` reads, so a loaded corpse answers dead.
 	TestTrue(TEXT("CBaseEntity m_lifeState (+0x200, SAVE) is a generated save row the walk carries"),
 		Written.Contains(FName(TEXT("m_lifeState"))));
 

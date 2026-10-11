@@ -40,7 +40,10 @@ FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) c
 	// still the raw Source-space string, and Construct applies every key that has a field, so a
 	// registered `origin` would overwrite the converted placement at every spawn. It rides here
 	// instead — `point_teleport` and `Entity.SetOrigin` move entities for real.
-	S.Origin = E.Origin;
+	// Native bodies retain a separate local word (+0x41c) even without a parent.
+	// POSITION SAVE carries that input, not the solved/absolute compatibility cache.
+	// Move-parent graph reconstruction and the solved body are independent inputs.
+	S.Origin = E.bNativeLocalPose ? E.LocalOriginWord() : E.Origin;
 
 	// The field walk, in the registry's sorted order so two captures of one state agree byte
 	// for byte (§8).
@@ -54,6 +57,8 @@ FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) c
 				if (Acc->Get)
 				{
 					FElysiumVariant Value = Acc->Get(E); // 0x101a0a80, same type-aware path for every carried row
+					if (FieldName == FName(TEXT("angles")) && E.bNativeLocalPose)
+						Value = FElysiumVariant::Vector(E.LocalAnglesWord()); // datamap +0x428, full Source Euler
 					if (Acc->PersistenceType == EElysiumPersistenceType::Time)
 					{
 						Value = FElysiumVariant::Float(static_cast<float>(FElysiumSaveArchive::EncodeTime(Value.ToFloat(), NowSeconds(), Acc->TimePolicy))); // TIME SAVE
@@ -444,6 +449,8 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 				? FElysiumVariant::Float(static_cast<float>(FElysiumSaveArchive::DecodeTime(F.Value.ToFloat(), RestoreBase, Acc->TimePolicy)))
 				: F.Value; // 0x101a2a30; FLOAT stays raw
 			Acc->Set(*E, Value);
+			if (F.Key == FName(TEXT("angles")) && E->bNativeLocalPose)
+				E->LocalAngles = Value.ToVector(); // raw restored local word, no live slot64 callbacks
 		}
 	}
 
@@ -457,6 +464,11 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 	if (!E->Origin.Equals(S.Origin, 0.0f))
 	{
 		E->Origin = S.Origin; // POSITION SAVE, 0x100aa140; physical reconnect follows post-restore
+	}
+	if (E->bNativeLocalPose)
+	{
+		E->LocalOrigin = S.Origin; // +0x41c; native solved pose restores independently in Physics
+		E->InvalidateTransform(0x10800u, 0u); // lazy absolute cache must use the restored local inputs
 	}
 
 	E->bSpawnCalled = S.bSpawnCalled;

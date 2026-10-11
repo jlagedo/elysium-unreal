@@ -252,7 +252,7 @@ bool FElysiumProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FS
 	{ OutError = TEXT("dynamic prop Physics restore requires its supported bbox or shadow recipe"); return false; }
 	if (BoxCollisionProxy) { BoxCollisionProxy->DestroyComponent(); BoxCollisionProxy = nullptr; }
 	if (!FElysiumEntity::RestoreSavedPhysics(State, OutError)) return false;
-	BoxCollisionProxy = ReconstructedPhysics.Get();
+	BoxCollisionProxy = Cast<UElysiumPhysicsPropComponent>(ReconstructedPhysics.Get());
 	bBboxRetired = false;
 	bRestoredBbox = true;
 	return true;

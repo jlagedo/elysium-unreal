@@ -2476,7 +2476,7 @@ void AElysiumMapActor::GameplayTick(float DeltaSeconds)
 				{
 					ReconcilePlayerBrushTouches(ResolvePlayerPawn());
 				}
-				EntityWorld->BeginNativePhysicsFrame(GameState->GameClock().GetNow());
+				EntityWorld->BeginNativePhysicsFrame(GameState->GameClock().GetNow(), DeltaSeconds);
 				if (UWorld* NativeWorld = GetWorld())
 					ElysiumModelPhysics::PreparePhysicsFrame(*NativeWorld,
 						DeltaSeconds, FCString::Atof(*ElysiumCommandBus::Console().GetCvar(TEXT("phys_timescale"))),

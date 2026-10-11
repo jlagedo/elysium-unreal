@@ -193,6 +193,13 @@ bool UElysiumMapCollision::AdoptLevelCollisionActor(const FString& InMapName,
 				*InMapName, *InMapName);
 			return false;
 		}
+		const FElysiumSignatureCollisionBody* Expected = Asset.GetWorldBodies().FindByPredicate(
+			[Component](const FElysiumSignatureCollisionBody& Row) { return Row.Body == Component->Body; });
+		if (!Expected || Expected->Signature != Component->Signature || Expected->bCommonSolid != Component->bCommonSolid)
+		{
+			UE_LOG(LogElysiumCollision, Error, TEXT("%s: level world body query metadata differs from its payload; re-run bake map"), *InMapName);
+			return false;
+		}
 		UE_LOG(LogElysiumCollision, Log, TEXT("adopted world body %s on '%s'%s"),
 			*ElysiumContents::Spell(
 				static_cast<EElysiumContentsSignature>(Component->Signature)),
@@ -242,7 +249,8 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 			*AssetPath, *MapName);
 		return false;
 	}
-	// One body per signature is the only shape this build adopts. A version-1 payload carried a
+	// One body per (signature, commonSolid) is the shape this build adopts. Version2 lacks the
+	// common-solid answer; a version-1 payload carried a
 	// single BLOCK_MASK-filtered body that could answer nothing about sight or the pedestrian
 	// volume; it is not readable as a world any more, and re-baking is the fix.
 	if (Asset->PayloadVersion != ElysiumCollisionPayload::SupportedVersion

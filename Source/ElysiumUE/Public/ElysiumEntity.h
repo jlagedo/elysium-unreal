@@ -155,7 +155,7 @@ public:
 	virtual void OnPhysicsActorRetired() {} // native release invalidates producer gameplay state
 	virtual bool RestoreSavedPhysics(const struct FElysiumSavedPhysicsBody& State, FString& OutError);
 	void RetireReconstructedPhysics(); // finite saved-field producer, not generic shadow225
-	TWeakObjectPtr<class UElysiumPhysicsPropComponent> ReconstructedPhysics;
+	TWeakObjectPtr<class UPrimitiveComponent> ReconstructedPhysics;
 	void* VPhysicsGetObject() const { return PhysicsObject; }
 private:
 	void* PhysicsObject = nullptr;
@@ -205,6 +205,22 @@ public:
 	// its readers are the physics movetypes (L0 physics), carried here as the constructor's word.
 	float   Elasticity = 1.0f;
 	float   LocalTime = 0.0f;                        // ltime
+	float StartFrameLocalTime = 0.f; // +0x160, float;10038cb0/100a55b0
+	float PhysicsMoveDoneTime = 0.f; // +0x3fc, local clock deadline, not curtime
+	using FBlockedCallback = void (*)(FElysiumEntity&, FElysiumEntity*);
+	FBlockedCallback BlockedCallback = nullptr; // +0x1f4; installed leaf callback before live parent
+	using FTouchCallback = void (*)(FElysiumEntity&, FElysiumEntity*);
+	FTouchCallback TouchCallback = nullptr; // +0x1ec; known leaf Spawn reconstructs this callback
+	void VPhysicsUpdatePusher(void* Object); //100a55b0, argument object independent of current alias
+	void PhysicsPusher(float FrameInterval); //10038cb0
+	void PhysicsParent(float FrameInterval); //10039ac0
+	bool RunPusherThink(); //10033f60/10033de0
+	bool PhysicsPushMove(float Interval); //10038710: captured blockage truth, independent of receiver lifetime
+	FVector GetPusherAbsoluteVelocity(); //100b1d10; parent raw coordinate frame
+	void SetLocalVelocity(const FVector& Value); //100b2e30
+	void SetAbsoluteVelocity(const FVector& Value); //100b2770, parent raw inverse rotation
+	void SetLocalAngularVelocity(const FVector& Value); //100b2f50
+	bool InitBrushPhysicsShadow(); //100a6150 -> source brush collision producer
 	int32   WaterLevel = 0;
 	int32   WaterType = 0;
 	FString SoundGroup;                              // soundgroup -- `m_iszVSoundGroup` (+0xc0), the voice-table group name

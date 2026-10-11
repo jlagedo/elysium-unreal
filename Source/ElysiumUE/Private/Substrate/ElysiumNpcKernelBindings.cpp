@@ -168,6 +168,10 @@ namespace ElysiumNpcKernelBindings
 		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are
 		// `m_`-prefixed for exactly that reason: they are not a namespace a map can author,
 		// and they cannot collide with the externals above.
+		ElysiumAddClassField(D, TEXT("m_flMoveDoneTime"), &FElysiumEntity::PhysicsMoveDoneTime,
+			EElysiumField::Save);  // +0x3fc float
+		ElysiumAddClassField(D, TEXT("m_flStartFrameLocalTime"),
+			&FElysiumEntity::StartFrameLocalTime, EElysiumField::Save);  // +0x160 float
 		ElysiumAddClassField(D, TEXT("m_lifeState"), &FElysiumEntity::LifeState,
 			EElysiumField::Save);  // +0x200 int
 	}
@@ -3302,7 +3306,7 @@ namespace ElysiumNpcKernelBindings
 		switch (Class)
 		{
 			case EClass::BaseEntity:
-				return {30, 8, 2, 10, 1};
+				return {30, 8, 2, 10, 3};
 			case EClass::Toggle:
 				return {0, 9, 2, 4, 0};
 			case EClass::Animating:

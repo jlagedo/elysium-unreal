@@ -344,6 +344,16 @@ namespace ElysiumSaveRestore
 			void Restore(FRestore& R, int32, int32) override
 			{
 				if (!ReadRows(R) || !Context->World) return;
+				// The host loads authored entities before applying a save. Their Spawn-created natives
+				// are baseline incarnations, not destination fields reconstructed by Physics. Retire all
+				// of them before any saved field is allocated (100440c0 -> 100443e0 requires null).
+				// This also keeps source aliases independent: no later baseline retirement can destroy
+				// a native body already reconstructed for an earlier saved owner.
+				for (const FElysiumSavedPhysicsBody& State : Context->Decoded->PhysicsBodies)
+				{
+					FElysiumEntity* Baseline = Context->World->Resolve(FElysiumEntityHandle(State.EntityIndex, Context->World->GetEpoch()));
+					if (Baseline && Baseline->ShouldSavePhysics() && State.bHasObject) Baseline->VPhysicsDestroyObject();
+				}
 				TArray<FElysiumEntity*> Reconstructed;
 				for (const FElysiumSavedPhysicsBody& State : Context->Decoded->PhysicsBodies)
 				{

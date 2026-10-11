@@ -139,7 +139,7 @@ def author_payload(entry, force=False):
     world_bodies = entry.get("worldBodies")
     if world_bodies:
         for row in world_bodies:
-            asset.author_world_body(int(row["signature"]), make_hulls(row["hulls"]))
+            asset.author_world_body(int(row["signature"]), make_hulls(row["hulls"]), bool(row["commonSolid"]))
     else:
         asset.author_world_hulls(make_hulls(entry["worldHulls"]))
 

@@ -104,6 +104,19 @@ def test_the_world_partitions_into_one_body_per_contents_signature(tmp_path):
     assert len(map_collision.read_hull_rows(path)) == 5
 
 
+def test_common_solid_query_does_not_confuse_dual_clip_with_solid(tmp_path):
+    path = _write(tmp_path / "probe.hulls", "\n".join([
+        _hull_line(_cube(), 0x30000),
+        _hull_line(_cube(2.0), 0x2), # WINDOW is PN without sight, like dual-clip-only
+        _hull_line(_cube(3.0), 0x30000),
+    ]) + "\n")
+    rows = map_collision.read_common_solid_partitions(path)
+    assert [(row["signature"], row["commonSolid"]) for row in rows] == [(3, False), (3, True)]
+    assert len(rows[0]["hulls"]) == 2
+    assert len(rows[1]["hulls"]) == 1
+    assert len(map_collision.read_hull_rows(path)) == sum(len(row["hulls"]) for row in rows)
+
+
 def test_brush_entity_rows_key_by_lump_ordinal_and_skip_point_entities(tmp_path):
     directory = _write_map(tmp_path, "sp_probe", entities=[
         {"classname": "worldspawn"},

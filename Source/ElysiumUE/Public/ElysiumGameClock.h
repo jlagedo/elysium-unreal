@@ -21,9 +21,16 @@ namespace ElysiumFrame
 	inline constexpr double MinFrameSeconds = 0.001;
 	inline constexpr double MaxFrameSeconds = 0.1;
 
-	// A non-positive delta is passed through untouched rather than raised to the minimum: the
-	// engine's own filter never calls the game with one (it returns early instead), so inventing
-	// a millisecond here would fabricate time the original never advances.
+	// Host_FilterTime2008ba30 has already admitted this frame: its lower bound
+	// applies even to measured zero. Raw no-frame/pause inputs use the helper below.
+	inline double ClampAdmittedFrameDelta(double DilatedDeltaSeconds, double Scale = 1.0)
+	{
+		const double Bound = FMath::Max(0.0, Scale);
+		return FMath::Clamp(DilatedDeltaSeconds, MinFrameSeconds * Bound, MaxFrameSeconds * Bound);
+	}
+
+	// Raw non-positive no-frame/pause input passes through. This is distinct from
+	// Host_FilterTime's already-admitted ordinary path, which applies its floor.
 	//
 	// `Scale` is the frame's time dilation, and the bound scales with it exactly as retail's does
 	// (`timescale * 0.1`) and as `AWorldSettings::FixupDeltaSeconds` does (`Max * Dilation`). The
@@ -38,8 +45,7 @@ namespace ElysiumFrame
 		}
 		// A held world scales the bound to [0, 0], which is the right answer for a frame that
 		// advances nothing — but it has to be reached deliberately, not through a negative scale.
-		const double Bound = FMath::Max(0.0, Scale);
-		return FMath::Clamp(DeltaSeconds, MinFrameSeconds * Bound, MaxFrameSeconds * Bound);
+		return ClampAdmittedFrameDelta(DeltaSeconds, Scale);
 	}
 }
 
@@ -52,7 +58,7 @@ namespace ElysiumFrame
 // The facade lives on the session; curtime belongs to the selected map (engine 0x200975f0).
 //
 // Advanced in exactly one place. `Advance` is private and reachable only through
-// FElysiumTimeControl, which the map actor's gameplay tick calls as its first statement.
+// FElysiumTimeControl, which the map actor's PreMoveTick calls before movement.
 // Pause and scale are recorded
 // here and mirrored onto the engine by that same facade; nothing else writes them.
 struct FElysiumGameClock

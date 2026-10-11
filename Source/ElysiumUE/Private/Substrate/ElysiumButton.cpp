@@ -14,6 +14,7 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumClassFields.h"
 
 class FElysiumButton final : public FElysiumMoverBase
@@ -49,6 +50,23 @@ public:
 
 	enum class EState : uint8 { Rest, Pressing, Pressed, Returning };
 	EState State() const { return ButtonState; }
+	void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		FElysiumMoverBase::Serialize(Ar);
+		uint8 SavedState = static_cast<uint8>(ButtonState);
+		Ar << SavedState; Ar << bLocked; Ar << LastActivator;
+		Ar << RestLoc; Ar << PressedLoc; Ar << bPositionsCached;
+		if (Ar.IsLoading())
+		{
+			if (SavedState > static_cast<uint8>(EState::Returning) || RestLoc.ContainsNaN() || PressedLoc.ContainsNaN()) { Ar.SetError(); return; }
+			ButtonState = static_cast<EState>(SavedState);
+		}
+	}
+	void OnPostRestore(FElysiumEntityWorld& InWorld) override
+	{
+		LastActivator = InWorld.RestoreHandle(LastActivator);
+		FElysiumMoverBase::OnPostRestore(InWorld);
+	}
 
 	// --- Inputs (registered on func_button) --------------------------------------------
 	void InputLock()   { bLocked = true; }
@@ -103,6 +121,7 @@ public:
 		// defaults (`_DAT_104454c4` = 0.0f): `m_flSpeed` 0 -> 40.0 (`0x42200000`), `m_flWait` 0 -> 1.0
 		// (`0x3f800000`), `m_flLip` 0 -> 4.0 (`0x40800000`) (`walks/L0-r016.md`).
 		SetMovedir();                                                            // 0x100c8d60 [vtbl+0x2ac]
+		SetMoveType(8, 0); SetSolid(1); //100c8d60: after171, before SetModel105
 		FString ModelArg = Model;
 		SetModel(ModelArg.GetCharArray().GetData() != nullptr ? ModelArg.GetCharArray().GetData() : const_cast<TCHAR*>(TEXT("")));
 		if (Speed == 0.0f) { Speed = 40.0f; }
@@ -122,9 +141,8 @@ public:
 	virtual void Think() override
 	{
 		const double Now = World ? World->NowSeconds() : 0.0;
-		if (IsMoving())
+		if (MoveKind() != EMoveKind::None)
 		{
-			TickMove(Now);
 			return;
 		}
 		// The only resting think a button schedules is the pressed-state autoclose.
@@ -137,6 +155,10 @@ public:
 protected:
 	virtual void MoveDone() override
 	{
+		FElysiumEntityWorld* const EntityWorld = World;
+		const FElysiumEntityHandle Self = Handle;
+		FElysiumMoverBase::MoveDone();
+		if (EntityWorld && EntityWorld->Resolve(Self) != this) return;
 		if (ButtonState == EState::Pressing)
 		{
 			ButtonState = EState::Pressed;
@@ -200,7 +222,7 @@ private:
 		else
 		{
 			ButtonState = EState::Pressing;
-			LinearMove(PressedLoc, Speed * MoverInchToCm);   // MoveDone -> TriggerAndWait
+			LinearMove(PressedLoc, Speed); // authored inches/s; MoveDone -> TriggerAndWait
 		}
 	}
 
@@ -233,7 +255,7 @@ private:
 		else
 		{
 			ButtonState = EState::Returning;
-			LinearMove(RestLoc, Speed * MoverInchToCm);   // MoveDone -> ButtonBackHome
+			LinearMove(RestLoc, Speed); // authored inches/s; MoveDone -> ButtonBackHome
 		}
 	}
 

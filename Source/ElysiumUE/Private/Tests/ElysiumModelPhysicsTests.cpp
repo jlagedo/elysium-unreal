@@ -28,6 +28,8 @@
 #include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumTriggerBase.h"
 #include "ElysiumBrushComponent.h"
+#include "ElysiumMapCollisionPayload.h"
+#include "ElysiumWorldCollisionActor.h"
 #include "Misc/ScopeExit.h"
 #include "Components/BoxComponent.h"
 #include <limits>
@@ -388,7 +390,7 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestTrue(TEXT("base alias native pose persists"), AliasState.Pose.Equals(NativeState.Pose, .001));
 	TestTrue(TEXT("base alias native velocity persists"), AliasState.LinearVelocity.Equals(NativeState.LinearVelocity, .001));
 	TestEqual(TEXT("base alias native collision profile persists"), AliasState.CollisionProfile, NativeState.CollisionProfile);
-	UStaticMeshComponent* AliasComponent = ElysiumModelPhysics::ComponentFor(RestoredAlias->VPhysicsGetObject());
+	UPrimitiveComponent* AliasComponent = ElysiumModelPhysics::ComponentFor(RestoredAlias->VPhysicsGetObject());
 	TestFalse(TEXT("reconstructed alias service duplicates no rendered art"), AliasComponent->IsVisible());
 	TestFalse(TEXT("nonnull restored base field rejects a second reconstruction"), RestoredAlias->RestoreSavedPhysics(AliasState, Error));
 	TestTrue(TEXT("rejected restore retains current actor"), ElysiumModelPhysics::Identity(AliasComponent) != nullptr);
@@ -399,7 +401,7 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestFalse(TEXT("actual base Kill retires reconstructed native body"), AliasComponent->GetBodyInstance()->IsValidBodyInstance());
 	FElysiumEntity* RestoredTeardownAlias = Destination.Resolve(FElysiumEntityHandle(TeardownAliasIndex, Destination.GetEpoch()));
 	if (!RestoredTeardownAlias) return false;
-	TWeakObjectPtr<UStaticMeshComponent> TeardownComponent = ElysiumModelPhysics::ComponentFor(RestoredTeardownAlias->VPhysicsGetObject());
+	TWeakObjectPtr<UPrimitiveComponent> TeardownComponent = ElysiumModelPhysics::ComponentFor(RestoredTeardownAlias->VPhysicsGetObject());
 	Restored->Kill();
 	FElysiumMapSnapshot AfterKill; Destination.Freeze(AfterKill);
 	TestEqual(TEXT("actual Kill recipe retirement plus retained absent field observed by save"), AfterKill.PhysicsBodies.Num(), 3);
@@ -700,6 +702,7 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  if (!TestTrue(TEXT("production activation barrier admits initial stage"), Map->IsRuntimeActive()))
  { AddError(Map->GetMissingRuntimePrerequisites()); return false; }
  FElysiumEntityDefs Defs; Defs.MapName = TEXT("parent_shadow_native");
+ FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); WorldDef.TargetName = TEXT("impact_world"); Defs.Defs.Add(WorldDef);
  FElysiumEntityDef Parent; Parent.Classname = TEXT("func_door"); Parent.TargetName = TEXT("parent");
  Parent.Model = 1; Parent.Origin = FVector(3000,4000,3000);
  Parent.Keys.Add(TEXT("model"), TEXT("*1")); Parent.Keys.Add(TEXT("speed"), TEXT("100"));
@@ -770,27 +773,136 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  // Finish the actual parent transaction, then submit a positive-arrival target through232.
  for (int32 Frame = 0; Frame < 90; ++Frame) Tick();
  TestFalse(TEXT("lost native candidate expires physical pair in deferred untouch"), ShadowChild->IsCurrentlyTouching());
- // A real static scene obstacle refuses the next closing transaction before publication.
- AActor* Obstacle = Fixture.World->SpawnActor<AActor>();
- UBoxComponent* ObstacleShape = NewObject<UBoxComponent>(Obstacle);
- Obstacle->SetRootComponent(ObstacleShape); Obstacle->AddInstanceComponent(ObstacleShape);
- const FBox ParentBounds = MovingParent->Body->Bounds.GetBox();
- ObstacleShape->SetBoxExtent(FVector(1,100,100));
- ObstacleShape->SetWorldLocation(FVector(ParentBounds.Min.X - 2., ParentBounds.GetCenter().Y, ParentBounds.GetCenter().Z));
- ObstacleShape->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
- ObstacleShape->SetCollisionObjectType(ECC_WorldStatic); ObstacleShape->SetCollisionResponseToAllChannels(ECR_Block);
- ObstacleShape->RegisterComponent();
- const FVector BeforeBlockedParent = MovingParent->GetAbsOrigin();
- const FTransform BeforeBlockedTarget = ElysiumModelPhysics::ShadowFor(Object)->Target;
- int32 BlockedTargets = 0;
+ // Two real cooked entities supply explicit eligible step service inputs. Preserve native
+ // encounter order as input, then assert the recovered append/reverse/finish rules.
+ TArray<FElysiumEntityHandle> OrderCandidates;
+ const FBox OrderBounds = MovingParent->Body->Bounds.GetBox();
+ for (int32 Index = 0; Index < 2; ++Index)
+ {
+  auto OrderDef = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), *FString::Printf(TEXT("order_candidate_%d"),Index));
+  OrderDef.Classname=TEXT("prop_dynamic"); OrderDef.Keys.Add(TEXT("solid"),TEXT("2")); OrderDef.Keys.Add(TEXT("spawnflags"),TEXT("0"));
+  OrderDef.Origin=OrderBounds.GetCenter();
+  auto* OrderEntity=World->Resolve(World->SpawnRuntimeEntity(MoveTemp(OrderDef)));
+  if (!TestNotNull(TEXT("actual model creation supplies each order candidate"),OrderEntity)) return false;
+  OrderEntity->SetMoveType(3,0);
+  FVector OrderOrigin(OrderBounds.Min.X+30.+Index*60.,OrderBounds.GetCenter().Y,
+   OrderBounds.GetCenter().Z-(OrderEntity->CollMins.Z+OrderEntity->CollMaxs.Z)*1.27);
+  OrderEntity->SetAbsOrigin(OrderOrigin); OrderEntity->UpdatePhysicsShadowToCurrentPosition(0.f);
+  OrderCandidates.Add(OrderEntity->Handle);
+ }
+ TArray<FElysiumEntityHandle> Appended,Checked,OrderSubmitted;
+ TArray<FVector> OrderStarts;
+ for (const auto& Handle : OrderCandidates) OrderStarts.Add(World->Resolve(Handle)->GetAbsOrigin());
  World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
- { if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_target"))) ++BlockedTargets; });
+ {
+  if (Event.Kind!=TEXT("retail_site")) return;
+  if (OrderCandidates.Contains(Event.Entity))
+  {
+   if (Event.Text.Contains(TEXT("tag=pusher_append"))) Appended.Add(Event.Entity);
+   if (Event.Text.Contains(TEXT("tag=pusher_check"))) Checked.Add(Event.Entity);
+  }
+  if (Event.Text.Contains(TEXT("tag=shadow_target"))) OrderSubmitted.Add(Event.Entity);
+ });
+ const FVector OrderRootStart=MovingParent->GetOrigin();
+ MovingParent->Velocity=FVector(100,0,0);
+ TestFalse(TEXT("two actual eligible candidates permit the production transaction"),MovingParent->PhysicsPushMove(.02f));
+ MovingParent->Velocity=FVector::ZeroVector; World->SetAiTraceSink({});
+ if (!TestEqual(TEXT("native geometry actually appends both candidates once"),Appended.Num(),2)) return false;
+ TestEqual(TEXT("both captured candidates are checked once"),Checked.Num(),2);
+ if (Checked.Num()==2) { TestTrue(TEXT("last appended candidate checked first"),Checked[0]==Appended[1]); TestTrue(TEXT("first appended candidate checked last"),Checked[1]==Appended[0]); }
+ TestEqual(TEXT("whole hierarchy and both candidates each submit232"),OrderSubmitted.Num(),4);
+ if (OrderSubmitted.Num()==4)
+ {
+  TestTrue(TEXT("reverse hierarchy submits child then root before candidates"),OrderSubmitted[0]==ShadowChild->Handle && OrderSubmitted[1]==MovingParent->Handle);
+  TestTrue(TEXT("candidate submissions retain reverse append order"),OrderSubmitted[2]==Appended[1] && OrderSubmitted[3]==Appended[0]);
+ }
+ for (int32 Index=0;Index<OrderCandidates.Num();++Index)
+ {
+  auto* OrderEntity=World->Resolve(OrderCandidates[Index]);
+  TestTrue(TEXT("actual candidate logical displacement is velocity times interval"),OrderEntity->GetAbsOrigin().Equals(OrderStarts[Index]+FVector(2,0,0),.001));
+  OrderEntity->Kill();
+ }
+ MovingParent->SetOrigin(OrderRootStart); MovingParent->UpdatePhysicsShadowToCurrentPosition(0.f); ShadowChild->UpdatePhysicsShadowToCurrentPosition(0.f);
+ // Complete the actual feedback phase of the direct successful transaction before changing
+ // velocity to Close. Otherwise its pending .02 interval is rewound a second time by226.
+ Tick();
+ TestEqual(TEXT("completed success feedback consumes its local-clock interval"),MovingParent->LocalTime,MovingParent->StartFrameLocalTime);
+ TestEqual(TEXT("actual prior arrival remains open before wall Close"),MovingParent->AsDoorBase()->State(),FElysiumDoorBase::EToggleState::AtTop);
+ FVector CompletedRootPose; ElysiumModelPhysics::GetShadowPosition(MovingParent->VPhysicsGetObject(),&CompletedRootPose,nullptr);
+ TestTrue(TEXT("wall initial logical and solved open poses agree"),MovingParent->GetAbsOrigin().Equals(CompletedRootPose,.001));
+ TestTrue(TEXT("wall initial submitted and logical open poses agree"),ElysiumModelPhysics::ShadowFor(MovingParent->VPhysicsGetObject())->Target.GetLocation().Equals(MovingParent->GetAbsOrigin(),.001));
+ //10038180 does not sweep the pusher itself. A genuine spawned eligible entity pinned by
+ // static world geometry refuses the candidate transaction, rolling back the whole hierarchy.
+ auto PushCandidateDef = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("push_candidate"));
+ PushCandidateDef.Classname = TEXT("prop_dynamic"); PushCandidateDef.Keys.Add(TEXT("solid"), TEXT("2"));
+ PushCandidateDef.Keys.Add(TEXT("spawnflags"), TEXT("0"));
+ const FBox ParentBounds = MovingParent->Body->Bounds.GetBox();
+ PushCandidateDef.Origin = ParentBounds.GetCenter();
+ FElysiumEntity* PushCandidate = World->Resolve(World->SpawnRuntimeEntity(MoveTemp(PushCandidateDef)));
+ if (!TestNotNull(TEXT("actual runtime model producer creates push candidate"), PushCandidate)) return false;
+ PushCandidate->SetMoveType(3, 0); // actual94/93 seam on genuine entity/cooked bbox, not an injected query result
+ FVector CandidateStart(ParentBounds.Min.X-PushCandidate->CollMaxs.X*2.54+.25,
+  ParentBounds.GetCenter().Y, ParentBounds.GetCenter().Z-(PushCandidate->CollMins.Z+PushCandidate->CollMaxs.Z)*1.27);
+ PushCandidate->SetAbsOrigin(CandidateStart); PushCandidate->UpdatePhysicsShadowToCurrentPosition(0.f);
+ auto* ObstaclePayload = NewObject<UElysiumMapCollisionPayload>();
+ ObstaclePayload->MapName = TEXT("parent_shadow_wall");
+ FElysiumCollisionHull WallHull;
+ const FVector WallCenter(CandidateStart.X+PushCandidate->CollMins.X*2.54-1., ParentBounds.GetCenter().Y, ParentBounds.GetCenter().Z);
+ for (float X : { -1.f,1.f }) for (float Y : { -100.f,100.f }) for (float Z : { -100.f,100.f }) WallHull.Vertices.Add(WallCenter+FVector(X,Y,Z));
+ ObstaclePayload->AuthorWorldBody(7, {WallHull}, true);
+ if (!TestTrue(TEXT("actual common-world wall cooks"), ObstaclePayload->CreatePhysicsMeshes())) return false;
+ auto* Obstacle = Fixture.World->SpawnActor<AElysiumWorldCollisionActor>();
+ if (!Obstacle || !TestEqual(TEXT("actual world wall producer installs one native body"), Obstacle->AuthorFromPayload(ObstaclePayload),1)) return false;
+ ElysiumModelPhysics::BindWorldCreationOwners(*World);
+ auto* ImpactWorld = World->FindByName(TEXT("impact_world"));
+ if (!TestTrue(TEXT("native sweep wall has actual creation-owned worldspawn"), ImpactWorld && ElysiumModelPhysics::GameDataForObject(ElysiumModelPhysics::ActorIdentity(Obstacle->Bodies[0])) == ImpactWorld)) return false;
+ TestEqual(TEXT("actual world constructor supplies solid1"),ImpactWorld->GetSolid(),1);
+ TestEqual(TEXT("actual world constructor supplies move8"),ImpactWorld->GetMoveType(),8);
+ TestEqual(TEXT("ordinary world lacks permissive first-touch flags"),ImpactWorld->GetSolidFlags() & (4u|8u|0x20u),0u);
+ TestNull(TEXT("world creation owner does not acquire mutable native current field"),ImpactWorld->VPhysicsGetObject());
+ TestTrue(TEXT("candidate is an ordinary solid before Impact"),PushCandidate->GetSolid()!=0 && (PushCandidate->GetSolidFlags() & (4u|8u|0x20u))==0);
+ ImpactWorld->TouchCallback = [](FElysiumEntity& Receiver, FElysiumEntity* Other)
+ {
+  Receiver.World->EmitRetailSite(Receiver, TEXT("world_impact_touch"), TEXT("CBaseEntity::Touch"), 0x100a4af0u, TEXT("callback"), Other ? Other->TargetName : TEXT("null"));
+ };
+ const FVector BeforeBlockedParent = MovingParent->GetAbsOrigin();
+ auto RootWords=[&](const TCHAR* Phase)
+ {
+  FVector RootSolved; ElysiumModelPhysics::GetShadowPosition(MovingParent->VPhysicsGetObject(),&RootSolved,nullptr);
+  const auto* RootShadow=ElysiumModelPhysics::ShadowFor(MovingParent->VPhysicsGetObject());
+  AddInfo(FString::Printf(TEXT("%s localX=%.17g absX=%.17g solvedX=%.17g targetX=%.17g localTime=%.9g start=%.9g deadline=%.9g velocityX=%.17g state=%d"),
+   Phase,MovingParent->GetOrigin().X,MovingParent->GetAbsOrigin().X,RootSolved.X,RootShadow?RootShadow->Target.GetLocation().X:0.,
+   MovingParent->LocalTime,MovingParent->StartFrameLocalTime,MovingParent->PhysicsMoveDoneTime,MovingParent->Velocity.X,static_cast<int32>(MovingParent->AsDoorBase()->State())));
+ };
+ RootWords(TEXT("pre_wall_close"));
+ const FTransform BeforeBlockedTarget = ElysiumModelPhysics::ShadowFor(Object)->Target;
+ int32 BlockedTargets = 0, WorldImpactTouches = 0;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ {
+  if (Event.Kind == TEXT("retail_site") && (Event.Text.Contains(TEXT("tag=pusher_candidates")) || Event.Text.Contains(TEXT("tag=pusher_check")))) AddInfo(Event.Text);
+  if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_target"))) ++BlockedTargets;
+  if (Event.Entity == ImpactWorld->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=world_impact_touch")))
+  {
+   ++WorldImpactTouches;
+   RootWords(TEXT("impact175"));
+   TestTrue(TEXT("native world Impact175 receives original candidate"), Event.Text.Contains(TEXT("push_candidate")));
+   TestFalse(TEXT("actual175 observes speculative root before rollback"),MovingParent->GetAbsOrigin().Equals(BeforeBlockedParent,.001));
+  }
+ });
  World->AcceptInput(MovingParent->Handle, FName(TEXT("Close")), FElysiumVariant::Void(), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+ Tick();
+ RootWords(TEXT("wall_frame1"));
+ TestTrue(TEXT("actual first wall Impact creates both physical links"),ImpactWorld->IsCurrentlyTouching() && PushCandidate->IsCurrentlyTouching());
+ TestEqual(TEXT("ordinary solid first Impact has no175"),WorldImpactTouches,0);
  Tick(); World->SetAiTraceSink({});
+ RootWords(TEXT("wall_frame2"));
  TestTrue(TEXT("native blocker refuses whole logical parent transaction"), MovingParent->GetAbsOrigin().Equals(BeforeBlockedParent, .001));
+ TestTrue(TEXT("refused candidate rolls back its logical pose"), PushCandidate->GetAbsOrigin().Equals(CandidateStart,.001));
  TestTrue(TEXT("blocked transaction leaves submitted child target unchanged"), ElysiumModelPhysics::ShadowFor(Object)->Target.Equals(BeforeBlockedTarget, .001));
  TestEqual(TEXT("blocked transaction emits no232 submission"), BlockedTargets, 0);
+ TestEqual(TEXT("actual repeated world sweep dispatches worldspawn175 once before rollback"), WorldImpactTouches,1);
  Obstacle->Destroy();
+ PushCandidate->Kill();
  for (int32 Frame = 0; Frame < 90; ++Frame) Tick();
  const FVector BeforeArrival = ElysiumModelPhysics::Identity(Component)->GetUnrealWorldTransform().GetLocation();
  FVector ArrivalTarget = ShadowChild->GetAbsOrigin() + FVector(100,0,0);
@@ -963,6 +1075,125 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  TestEqual(TEXT("deleted shadow47 fails and returns0"), ElysiumModelPhysics::GetShadowPosition(Object, nullptr, nullptr), 0);
  return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMovingBrushRestoreFrameTest, "Elysium.Substrate.ModelPhysics.MovingBrushRestoreFrame",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumMovingBrushRestoreFrameTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture;
+ if (!Fixture.CreateWorld(*this)) return false;
+ Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+ auto* Map = Fixture.SpawnMapActorDeferred(); Map->bStageOnly = true; Map->bStageWithoutCatalogue = true;
+ Map->FinishSpawning(FTransform::Identity);
+ auto Tick = [&]() { return Fixture.TestWorld.TickTestWorld(.02f); };
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("production initial activation"), Map->IsRuntimeActive())) return false;
+ FElysiumEntityDefs Defs; Defs.MapName = TEXT("moving_brush_restore_native");
+ FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+ FElysiumConvexHull Hull;
+ for (float X : {0.f,120.f}) for (float Y : {-10.f,10.f}) for (float Z : {-10.f,10.f}) Hull.Vertices.Add(FVector(X,Y,Z));
+ FElysiumEntityDef PoseParent; PoseParent.Classname = TEXT("func_door"); PoseParent.TargetName = TEXT("pose_parent");
+ PoseParent.Model = 5; PoseParent.Contents = 1; PoseParent.Hulls.Add(Hull); PoseParent.Keys.Add(TEXT("model"),TEXT("*5"));
+ PoseParent.Origin = FVector(5000,7000,3000); PoseParent.Keys.Add(TEXT("angles"),TEXT("10 370 20")); Defs.Defs.Add(PoseParent);
+ for (int32 Index = 0; Index < 4; ++Index)
+ {
+  FElysiumEntityDef Door; Door.Classname = Index == 1 ? TEXT("func_door_rotating") : TEXT("func_door");
+  Door.TargetName = Index == 0 ? TEXT("moving_slide") : Index == 1 ? TEXT("moving_rotation") : Index == 2 ? TEXT("resting_slide") : TEXT("parented_slide");
+  Door.Model = Index+1; Door.Origin = FVector(3000,4000+Index*1000,3000); Door.Hulls.Add(Hull); Door.Contents = 1;
+  Door.Keys.Add(TEXT("model"), FString::Printf(TEXT("*%d"), Door.Model));
+  Door.Keys.Add(TEXT("speed"), Index == 1 ? TEXT("30") : TEXT("20")); Door.Keys.Add(TEXT("distance"),TEXT("90"));
+  Door.Keys.Add(TEXT("wait"),TEXT("2")); Door.Keys.Add(TEXT("spawnflags"),Index == 1 ? TEXT("1") : TEXT("0"));
+  if (Index == 3) { Door.Keys.Add(TEXT("parentname"),TEXT("pose_parent")); Door.Keys.Add(TEXT("angles"),TEXT("15 725 35")); }
+  Defs.Defs.Add(Door);
+ }
+ FElysiumEntityDefs RestoreDefs = Defs; FElysiumStageSeat Seat; Seat.FeetCm = FVector(-1000,0,1000); FString Error;
+ if (!Map->RebuildStageWorld(MoveTemp(Defs),{},Seat,Error)) { AddError(Error); return false; }
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("production authored brush map active"),Map->IsRuntimeActive())) return false;
+ FElysiumEntityWorld* World = Map->GetEntityWorld();
+ FElysiumEntity* Slide = World->FindByName(TEXT("moving_slide")); FElysiumEntity* Rotation = World->FindByName(TEXT("moving_rotation"));
+ FElysiumEntity* Rest = World->FindByName(TEXT("resting_slide"));
+ FElysiumEntity* Parented = World->FindByName(TEXT("parented_slide"));
+ if (!Slide || !Rotation || !Rest || !Parented) return false;
+ FElysiumEntity* NativeParent = World->FindByName(TEXT("pose_parent"));
+ if (!TestTrue(TEXT("authored parent has real native brush and attachment body"), NativeParent && NativeParent->Body && NativeParent->GetAttachBody() == NativeParent->Body && NativeParent->VPhysicsGetObject())) return false;
+ TestEqual(TEXT("child has actual logical brush parent before capture"),Parented->MoveParent,NativeParent->Handle);
+ TestNull(TEXT("independent solved child is never welded into scene parent"),Parented->GetAttachChild());
+ World->AcceptInput(Slide->Handle,FName(TEXT("Open")),FElysiumVariant::Void(),{},{});
+ World->AcceptInput(Rotation->Handle,FName(TEXT("Open")),FElysiumVariant::Void(),{},{});
+ World->AcceptInput(Parented->Handle,FName(TEXT("Open")),FElysiumVariant::Void(),{},{});
+ for (int32 Frame = 0; Frame < 5; ++Frame) Tick();
+ TestTrue(TEXT("both authored movers remain in flight"), Slide->AsDoorBase()->MoveKind() == FElysiumMoverBase::EMoveKind::Linear && Rotation->AsDoorBase()->MoveKind() == FElysiumMoverBase::EMoveKind::Angular);
+ TestTrue(TEXT("parented authored mover in flight before capture"),Parented->AsDoorBase()->MoveKind() == FElysiumMoverBase::EMoveKind::Linear && Parented->VPhysicsGetObject());
+ const FVector SlidePose = Slide->GetOrigin(), RotationPose = Rotation->GetAngles();
+ const FVector ParentLocal = Parented->GetOrigin(), ParentAngles = Parented->GetAngles();
+ const FVector ParentAbsolute = Parented->GetAbsOrigin(), ParentAbsAngles = Parented->GetAbsAngles();
+ const float ParentClock = Parented->LocalTime, ParentDeadline = Parented->PhysicsMoveDoneTime;
+ TestTrue(TEXT("authored parented native mover reaches local/absolute separation"),Parented->bParentLocalPose && Parented->bNativeLocalPose && !ParentLocal.Equals(ParentAbsolute,.001));
+ const float SlideClock = Slide->LocalTime, RotationClock = Rotation->LocalTime;
+ const float SlideDeadline = Slide->PhysicsMoveDoneTime, RotationDeadline = Rotation->PhysicsMoveDoneTime;
+ const FVector SlideVelocity = Slide->Velocity, RotationVelocity = Rotation->AngularVelocity;
+ // Resting authored think is a future real auto-close receiver, not a restoration seating task.
+ Rest->NextThink = static_cast<float>(World->NowSeconds()+1.25);
+ const float RestThink = Rest->NextThink;
+ const int32 SlideIndex = Slide->Handle.Index, RotationIndex = Rotation->Handle.Index, RestIndex = Rest->Handle.Index;
+ const int32 ParentIndex = Parented->Handle.Index;
+ FElysiumMapSnapshot Snapshot; World->Freeze(Snapshot);
+ TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Save(Writer,FElysiumSaveVersion::Latest); Save << Snapshot;
+ FElysiumMapSnapshot Decoded; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Load(Reader,FElysiumSaveVersion::Latest); Load << Decoded;
+ if (!TestFalse(TEXT("moving brush archive is valid"),Writer.IsError() || Reader.IsError())) return false;
+ bool bRestored = false; int32 ArrivalOutputs = 0;
+ if (!Map->RebuildStageWorld(MoveTemp(RestoreDefs),{},Seat,Error)) { AddError(Error); return false; }
+ Map->RestoreBeforeActivation = [&]()
+ {
+  World = Map->GetEntityWorld(); bRestored = World && World->ApplySnapshot(Decoded,Snapshot.SaveBase)>=0;
+  if (!bRestored) return false;
+  Slide = World->Resolve(FElysiumEntityHandle(SlideIndex,World->GetEpoch()));
+  Rotation = World->Resolve(FElysiumEntityHandle(RotationIndex,World->GetEpoch()));
+  Rest = World->Resolve(FElysiumEntityHandle(RestIndex,World->GetEpoch()));
+  Parented = World->Resolve(FElysiumEntityHandle(ParentIndex,World->GetEpoch()));
+  if (!Slide || !Rotation || !Rest || !Parented) return false;
+  TestEqual(TEXT("restore preserves sliding local clock"),Slide->LocalTime,SlideClock);
+  TestEqual(TEXT("restore preserves angular local clock"),Rotation->LocalTime,RotationClock);
+  TestEqual(TEXT("restore preserves sliding deadline"),Slide->PhysicsMoveDoneTime,SlideDeadline);
+  TestEqual(TEXT("restore preserves angular deadline"),Rotation->PhysicsMoveDoneTime,RotationDeadline);
+  TestEqual(TEXT("resting restore preserves authored future think"),Rest->NextThink,RestThink);
+  TestTrue(TEXT("restore preserves local velocity and full angular velocity words"),Slide->Velocity.Equals(SlideVelocity,.001) && Rotation->AngularVelocity.Equals(RotationVelocity,.001));
+  TestTrue(TEXT("restore retains saved in-flight logical poses"),Slide->GetOrigin().Equals(SlidePose,.001) && Rotation->GetAngles().Equals(RotationPose,.001));
+  TestTrue(TEXT("parented restore retains local and absolute poses and full Euler words"),Parented->GetOrigin().Equals(ParentLocal,.001) && Parented->GetAngles().Equals(ParentAngles,.001) && Parented->GetAbsOrigin().Equals(ParentAbsolute,.002) && Parented->GetAbsAngles().Equals(ParentAbsAngles,.001));
+  TestEqual(TEXT("parented restore retains local clock"),Parented->LocalTime,ParentClock);
+  TestEqual(TEXT("parented restore retains deadline"),Parented->PhysicsMoveDoneTime,ParentDeadline);
+  AddInfo(FString::Printf(TEXT("saved logical slide=%s restored=%s; saved rotation=%s restored=%s"),*SlidePose.ToString(),*Slide->GetOrigin().ToString(),*RotationPose.ToString(),*Rotation->GetAngles().ToString()));
+  for (FElysiumEntity* Entity : {Slide,Rotation,Rest,Parented})
+  {
+   const auto* Recipe = ElysiumModelPhysics::RecipeFor(Entity->VPhysicsGetObject());
+   const auto* Shadow = ElysiumModelPhysics::ShadowFor(Entity->VPhysicsGetObject());
+   TestTrue(TEXT("false ShouldSavePhysics recreates authored brush recipe and controller"), Recipe && Recipe->Kind == EElysiumPhysicsRecipeKind::Brush && Recipe->BrushHulls.Num()==1 && Shadow && Shadow->SavedMassKg==1.f);
+   TestTrue(TEXT("restored native producer is the entity query body"),Entity->Body && ElysiumModelPhysics::OwnedComponent(*Entity)==Entity->Body);
+   const auto* Native = ElysiumModelPhysics::Identity(Entity->Body);
+   TestTrue(TEXT("restored brush native geometry is seated at saved logical pose"),Native && Native->GetUnrealWorldTransform().GetLocation().Equals(Entity->GetAbsOrigin(),.001));
+  }
+  World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+  { if (Event.Kind == TEXT("output") && (Event.Entity.Index==SlideIndex || Event.Entity.Index==RotationIndex) && Event.Text.StartsWith(TEXT("OnFully"))) ++ArrivalOutputs; });
+  return true;
+ };
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("production restoration barrier becomes active"),bRestored && Map->IsRuntimeActive())) return false;
+ TestEqual(TEXT("restore emits no invented arrivals"),ArrivalOutputs,0);
+ const float ReentryClock = Slide->LocalTime;
+ Tick();
+ TestTrue(TEXT("first actual restored frame advances native mover clock"),Slide->LocalTime > ReentryClock);
+ TestEqual(TEXT("first native frame retains resting authored think"),Rest->NextThink,RestThink);
+ const auto* ParentTarget = ElysiumModelPhysics::ShadowFor(Parented->VPhysicsGetObject());
+ TestTrue(TEXT("first restored frame submits inherited parented target"),ParentTarget && ParentTarget->Target.GetLocation().Equals(Parented->GetAbsOrigin(),.002));
+ TestEqual(TEXT("first native frame does not invent arrival"),ArrivalOutputs,0);
+ for (int32 Frame = 0; Frame < 220 && ArrivalOutputs<2; ++Frame) Tick();
+ TestEqual(TEXT("both restored native feedback receivers arrive once"),ArrivalOutputs,2);
+ TestTrue(TEXT("START_OPEN restored angular move reaches the once-swapped authored endpoint"),Rotation->GetAngles().Equals(FVector::ZeroVector,.001));
+ TestTrue(TEXT("native arrival snap helpers write minus-one deadline and clear move kind"),Slide->PhysicsMoveDoneTime==-1.f && Rotation->PhysicsMoveDoneTime==-1.f && Slide->AsDoorBase()->MoveKind()==FElysiumMoverBase::EMoveKind::None && Rotation->AsDoorBase()->MoveKind()==FElysiumMoverBase::EMoveKind::None);
+ World->SetAiTraceSink({});
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDynamicPublicationFrameTest, "Elysium.Substrate.ModelPhysics.DynamicPublicationFrame",
  EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumDynamicPublicationFrameTest::RunTest(const FString&)
@@ -1146,6 +1377,16 @@ bool FElysiumDynamicPublicationFrameTest::RunTest(const FString&)
  SecondComponent->SetEnableGravity(false); ThirdComponent->SetEnableGravity(false);
  ElysiumModelPhysics::Identity(SecondComponent)->SetLinearVelocity(FVector(10,0,0), false, false);
  ElysiumModelPhysics::Identity(ThirdComponent)->SetLinearVelocity(FVector(10,0,0), false, false);
+ //2600fbb0 retains existing active positions. Establish real sleep/removal before
+ // claiming append order; the earlier native history can leave either partner awake.
+ ElysiumModelPhysics::Identity(SecondComponent)->PutInstanceToSleep();
+ ElysiumModelPhysics::Identity(ThirdComponent)->PutInstanceToSleep();
+ TestFalse(TEXT("second native body asleep before fresh wake order"), ElysiumModelPhysics::IsActive(SecondComponent));
+ TestFalse(TEXT("third native body asleep before fresh wake order"), ElysiumModelPhysics::IsActive(ThirdComponent));
+ ElysiumModelPhysics::PreparePhysicsFrame(*Fixture.World, 0.f, 1.f, true);
+ const auto BeforeOrderedWake = ElysiumModelPhysics::ActiveOutputs(*World);
+ TestFalse(TEXT("pending second sleep removed before append"), BeforeOrderedWake.ContainsByPredicate([&](const ElysiumModelPhysics::FNativeOutput& Output) { return ElysiumModelPhysics::GameDataFor(Output,*World) == Second; }));
+ TestFalse(TEXT("pending third sleep removed before append"), BeforeOrderedWake.ContainsByPredicate([&](const ElysiumModelPhysics::FNativeOutput& Output) { return ElysiumModelPhysics::GameDataFor(Output,*World) == Third; }));
  ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 1"));
  ElysiumModelPhysics::Wake(SecondComponent); ElysiumModelPhysics::Wake(Component); ElysiumModelPhysics::Wake(ThirdComponent);
  TArray<FString> OrderedOwners; bool bRecreated = false;
@@ -1180,7 +1421,7 @@ bool FElysiumDynamicPublicationFrameTest::RunTest(const FString&)
  if (!OtherFixture.CreateTestWorld(EWorldType::EditorPreview)) { OtherFixture.ForwardErrorMessages(this); return false; }
  auto* OtherOwner = OtherFixture.GetTestWorld()->SpawnActor<AActor>();
  auto* OtherBody = NewObject<UElysiumPhysicsPropComponent>(OtherOwner);
- OtherBody->SetStaticMesh(Component->GetStaticMesh()); OtherBody->RegisterComponent(); OtherOwner->AddInstanceComponent(OtherBody);
+ OtherBody->SetStaticMesh(CastChecked<UStaticMeshComponent>(Component)->GetStaticMesh()); OtherBody->RegisterComponent(); OtherOwner->AddInstanceComponent(OtherBody);
  FElysiumPhysicsSurfaceProps OtherSurfaces;
  OtherSurfaces.ParseSurfaceData(TEXT("other-native-world"), TEXT("default { friction 0.8 elasticity 0.2 density 1000 } metal { friction 0.4 elasticity 0.7 density 7800 }"));
  if (!TestTrue(TEXT("second environment has real awake native producer"), ElysiumModelPhysics::Create(OtherBody,OtherSurfaces,0.f,0.f,false,Error))) return false;
@@ -1222,6 +1463,94 @@ bool FElysiumDynamicPublicationFrameTest::RunTest(const FString&)
  Dynamic->VPhysicsDestroyObject();
  Alias->VPhysicsDestroyObject();
  TestNull(TEXT("alias225 retires native actor"), ElysiumModelPhysics::ComponentFor(Object));
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeTouchDispatchTest, "Elysium.Substrate.ModelPhysics.NativeTouchDispatch",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumNativeTouchDispatchTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture;
+ if (!Fixture.CreateWorld(*this)) return false;
+ Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+ auto* Map = Fixture.SpawnMapActorDeferred(); Map->bStageOnly = true; Map->bStageWithoutCatalogue = true;
+ Map->FinishSpawning(FTransform::Identity);
+ auto Tick = [&]() { return Fixture.TestWorld.TickTestWorld(.02f); };
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("production activation barrier is reached"), Map->IsRuntimeActive())) return false;
+ FElysiumEntityDefs Defs; Defs.MapName = TEXT("native_touch_dispatch");
+ FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+ auto DynamicDef = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("touch_body"));
+ DynamicDef.Origin = FVector(3000,4000,3000); Defs.Defs.Add(DynamicDef);
+ for (const TCHAR* Name : {TEXT("old_parent"),TEXT("new_parent")})
+ { FElysiumEntityDef Point; Point.Classname = TEXT("info_target"); Point.TargetName = Name; Defs.Defs.Add(Point); }
+ FElysiumEntityDef Trigger; Trigger.Classname = TEXT("trigger_multiple"); Trigger.TargetName = TEXT("touch_trigger");
+ Trigger.Model = 1; Trigger.Origin = DynamicDef.Origin; Trigger.Keys.Add(TEXT("model"),TEXT("*1"));
+ Trigger.Keys.Add(TEXT("spawnflags"),TEXT("8")); Trigger.Keys.Add(TEXT("wait"),TEXT("0.05"));
+ FElysiumConvexHull Hull;
+ for (float X : {-150.f,150.f}) for (float Y : {-150.f,150.f}) for (float Z : {-150.f,150.f}) Hull.Vertices.Add(FVector(X,Y,Z));
+ Trigger.Hulls.Add(Hull); Defs.Defs.Add(Trigger);
+ FElysiumStageSeat Seat; Seat.FeetCm = FVector(-1000,0,1000); FString Error;
+ if (!Map->RebuildStageWorld(MoveTemp(Defs), {}, Seat, Error)) { AddError(Error); return false; }
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("actual prop/trigger stage becomes active"), Map->IsRuntimeActive())) return false;
+ auto* World = Map->GetEntityWorld(); auto* Dynamic = World->FindByName(TEXT("touch_body"));
+ auto* PhysicalTrigger = static_cast<FElysiumTriggerBase*>(World->FindByName(TEXT("touch_trigger")));
+ auto* OldParent = World->FindByName(TEXT("old_parent")); auto* NewParent = World->FindByName(TEXT("new_parent"));
+ if (!Dynamic || !PhysicalTrigger || !OldParent || !NewParent) return false;
+ auto* Component = ElysiumModelPhysics::ComponentFor(Dynamic->VPhysicsGetObject());
+ if (!TestNotNull(TEXT("actual prop_physics creation produces native body"),Component)) return false;
+ TestEqual(TEXT("actual prop producer supplies move7"),Dynamic->GetMoveType(),7);
+ TestTrue(TEXT("actual trigger Spawn installs +1ec MultiTouch"),PhysicalTrigger->TouchCallback != nullptr);
+ TestEqual(TEXT("actual InitTrigger supplies BSP solid1"),PhysicalTrigger->GetSolid(),1);
+ TestEqual(TEXT("actual InitTrigger supplies NOT_SOLID and TRIGGER flags"),PhysicalTrigger->GetSolidFlags() & 0xcu,0xcu);
+ Component->SetEnableGravity(false);
+ ElysiumModelPhysics::Wake(Component); Tick();
+ if (!TestTrue(TEXT("real native geometry creates the physical links"), Dynamic->IsCurrentlyTouching() && PhysicalTrigger->IsCurrentlyTouching())) return false;
+ if (!TestTrue(TEXT("real move7 native touch reaches installed MultiTouch"),PhysicalTrigger->LastTriggerTime > -1.e15)) return false;
+ const float PriorFire = static_cast<float>(PhysicalTrigger->LastTriggerTime);
+ for (int32 Frame = 0; Frame < 4; ++Frame) { ElysiumModelPhysics::Wake(Component); Tick(); }
+ TestTrue(TEXT("repeated native175 re-arms the literal wait gate"),PhysicalTrigger->LastTriggerTime > PriorFire);
+ World->AcceptInput(PhysicalTrigger->Handle,FName(TEXT("Disable")),FElysiumVariant::Void(),{},{});
+ TestEqual(TEXT("live Disable removes only TRIGGER8 from initialized flags"),PhysicalTrigger->GetSolidFlags() & 0xcu,4u);
+ TestFalse(TEXT("live Disable retires the physical trigger pair"),PhysicalTrigger->IsCurrentlyTouching());
+ World->AcceptInput(PhysicalTrigger->Handle,FName(TEXT("Enable")),FElysiumVariant::Void(),{},{});
+ TestEqual(TEXT("live Enable restores TRIGGER8 alongside NOT_SOLID4"),PhysicalTrigger->GetSolidFlags() & 0xcu,0xcu);
+ ElysiumModelPhysics::Wake(Component); Tick();
+ if (!TestTrue(TEXT("enabled actual native geometry recreates the pair"),Dynamic->IsCurrentlyTouching() && PhysicalTrigger->IsCurrentlyTouching())) return false;
+ const int32 BeginsBeforeReciprocal = World->TouchBegins();
+ World->RouteEntityTouch(Dynamic->Handle,PhysicalTrigger->Handle,true,true);
+ TestEqual(TEXT("reciprocal physical encounter shares original pair key"),World->TouchBegins(),BeginsBeforeReciprocal);
+ const int32 EndsBefore = World->TouchEnds();
+ World->RouteEntityTouch(Dynamic->Handle,PhysicalTrigger->Handle,false,true);
+ World->RouteEntityTouch(PhysicalTrigger->Handle,Dynamic->Handle,false,true);
+ TestEqual(TEXT("reciprocal pair retires with one end"),World->TouchEnds(),EndsBefore+1);
+ TestFalse(TEXT("retirement removes both physical link lists"),Dynamic->IsCurrentlyTouching() || PhysicalTrigger->IsCurrentlyTouching());
+ ElysiumModelPhysics::Wake(Component); Tick();
+ if (!TestTrue(TEXT("fresh real native reentry creates both links"),Dynamic->IsCurrentlyTouching() && PhysicalTrigger->IsCurrentlyTouching())) return false;
+ Dynamic->SetParent(OldParent,0);
+ auto Observe = [](FElysiumEntity& Receiver,FElysiumEntity* Other)
+ { Receiver.World->EmitRetailSite(Receiver,TEXT("touch_contract"),TEXT("CBaseEntity::Touch"),0x100a4af0u,TEXT("callback"),Other?Other->TargetName:TEXT("null")); };
+ OldParent->TouchCallback = Observe; NewParent->TouchCallback = Observe;
+ Dynamic->TouchCallback = [](FElysiumEntity& Receiver,FElysiumEntity* Other)
+ {
+  Receiver.World->EmitRetailSite(Receiver,TEXT("touch_contract"),TEXT("CBaseEntity::Touch"),0x100a4af0u,TEXT("callback"),Other?Other->TargetName:TEXT("null"));
+  Receiver.SetParent(Receiver.World->FindByName(TEXT("new_parent")),0);
+  Receiver.UnlinkFromMoveParent(); // actual producer leaves authored+254 distinct from live+25c
+  Receiver.TouchCallback = nullptr;
+ };
+ TArray<FString> CallbackOrder;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ { if (Event.Kind==TEXT("retail_site") && Event.Text.Contains(TEXT("tag=touch_contract"))) { CallbackOrder.Add(Event.Name); TestTrue(TEXT("native175 forwards original trigger receiver"),Event.Text.Contains(TEXT("touch_trigger"))); } });
+ ElysiumModelPhysics::Wake(Component); Tick(); World->SetAiTraceSink({});
+ TestEqual(TEXT("native175 invokes installed callback then live parent exactly once"),CallbackOrder.Num(),2);
+ if (CallbackOrder.Num()==2) { TestEqual(TEXT("installed callback first"),CallbackOrder[0],FString(TEXT("touch_body"))); TestEqual(TEXT("new authored parent follows, not old or absent move parent"),CallbackOrder[1],FString(TEXT("new_parent"))); }
+ TestTrue(TEXT("callback's actual unlink preserves authored parent while clearing move parent"),Dynamic->ParentHandle==NewParent->Handle && !Dynamic->MoveParent.IsSet());
+ Dynamic->SetParent(nullptr,0);
+ const FElysiumEntityHandle TriggerHandle = PhysicalTrigger->Handle;
+ Dynamic->TouchCallback = [](FElysiumEntity& Receiver,FElysiumEntity* Other) { if (Other) Other->Kill(); Receiver.TouchCallback=nullptr; };
+ ElysiumModelPhysics::Wake(Component); Tick();
+ TestNull(TEXT("actual native175 callback retires the original other handle"),World->Resolve(TriggerHandle));
+ TestFalse(TEXT("retirement releases the surviving native receiver's pair"),Dynamic->IsCurrentlyTouching());
  return true;
 }
 #endif

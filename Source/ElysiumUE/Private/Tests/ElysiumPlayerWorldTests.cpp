@@ -1045,6 +1045,15 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 	}
 	Defs.Defs.Add(MoveTemp(Fire));
 
+	// InitTrigger consumes a trigger's authored angles as its movedir. A point destination
+	// retains the full Source angle words that named teleport actually reads.
+	FElysiumEntityDef Facing;
+	Facing.Classname = TEXT("info_target");
+	Facing.TargetName = TEXT("full_facing");
+	Facing.Origin = FVector(400.f, 500.f, 60.f);
+	Facing.Keys.Add(TEXT("angles"), TEXT("12 34 5"));
+	Defs.Defs.Add(MoveTemp(Facing));
+
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
 	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
@@ -1079,8 +1088,9 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 	}
 
 	Services.Calls.Reset();
+	TestTrue(TEXT("InitTrigger consumes firetrans angles into movedir"), Firetrans->GetAngles().Equals(FVector::ZeroVector));
 	TestTrue(TEXT("the named form is a declared command"),
-		Commands.Execute(TEXT("teleport_player firetrans")));
+		Commands.Execute(TEXT("teleport_player full_facing")));
 	TestTrue(TEXT("the named form moves through the embodiment seam"),
 		Services.PlayerLocation.Equals(Firetrans->Origin));
 	TestTrue(TEXT("the named form takes the target's full Source facing"),

@@ -19,43 +19,15 @@ bool FElysiumActivityTrigger::CanBeginTouch(const FElysiumEntityHandle& Activato
 	return World != nullptr && Activator == World->PlayerHandle();
 }
 
-void FElysiumActivityTrigger::OnTouchStart(const FElysiumEntityHandle& Activator)
+void FElysiumActivityTrigger::Touch(FElysiumEntity* Other)
 {
-	// The base callback runs FIRST and owns its own admission — `OnStartTouch`, the `wait`-gated
-	// `OnTrigger` and the spawnflag/filter tests. The two authored `OnTrigger` rows in `sm_diner_1`
-	// are invalid in retail (the class declares no such output) and are the reason the base's fire
-	// is harmless here: `FireOutput` matches authored rows, and those two resolve against the base's
-	// own `OnTrigger`, which this class does inherit. That is a faithfulness gap the corpus survey
-	// already records; it is not introduced here.
-	FElysiumTriggerBase::OnTouchStart(Activator);
-
-	if (!CanBeginTouch(Activator))
+	//102108e0 is175, independently of the inherited filtered174 output.
+	if (!Other || !CanBeginTouch(Other->Handle))
 	{
 		return;
 	}
 	bPlayerInside = true;
-	// Retail's `Touch` runs on the collision tick that follows the link, so the first assertion
-	// happens immediately rather than one refresh interval later.
 	RefreshLevels();
-	NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + RefreshIntervalSeconds);
-}
-
-void FElysiumActivityTrigger::Think()
-{
-	if (bTouchSuppressed)
-	{
-		// The base's `wait == -1` self-removal. This class inherits the base's `OnStartTouch` path,
-		// so it can also inherit that latch; the refresh below must not swallow the removal.
-		FElysiumTriggerBase::Think();
-		return;
-	}
-	if (!bPlayerInside || bDisabled || IsInert())
-	{
-		NextThink = ELYSIUM_NEVER_THINK;
-		return;
-	}
-	RefreshLevels();
-	NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + RefreshIntervalSeconds);
 }
 
 void FElysiumActivityTrigger::RefreshLevels()
@@ -91,7 +63,6 @@ void FElysiumActivityTrigger::OnTouchEnd(const FElysiumEntityHandle& Activator)
 		return;
 	}
 	bPlayerInside = false;
-	NextThink = ELYSIUM_NEVER_THINK;
 
 	FElysiumPlayer* Player = World->FindPlayer();
 	if (Player == nullptr)
@@ -119,9 +90,8 @@ void FElysiumActivityTrigger::OnTouchEnd(const FElysiumEntityHandle& Activator)
 void FElysiumActivityTrigger::Serialize(FElysiumSaveArchive& Ar)
 {
 	FElysiumTriggerBase::Serialize(Ar);
-	// Occupancy is real simulation state here, unlike on an enter-only trigger: it is what re-arms
-	// the refresh think, and a save taken standing inside a `restricted_section` has to resume
-	// re-asserting its level rather than waiting for an exit the player never makes.
+	// Inspector occupancy/count are retained; the actual collision175 producer supplies refresh
+	// after restore, with no substitute leaf think or deadline.
 	Ar << bPlayerInside;
 	Ar << Refreshes;
 }

@@ -426,6 +426,12 @@ SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
 # port return type where the lowering would lose it, the reason). A reference return the generator
 # lowers to `void*` is restored here, because the port has the value it refers to.
 CHAIN_HAND: dict[int, tuple[str, str]] = {
+    174: ("", "`CBaseEntity::StartTouch` 0x100a49d0: live ParentHandle relay; ElysiumPusher.cpp"),
+    175: ("", "`CBaseEntity::Touch` 0x100a4af0: installed callback then live ParentHandle relay; ElysiumPusher.cpp"),
+    90: ("", "`CBaseEntity::IsTransparent` 0x100aa840: RenderMode !=0; all497 vampire.dll classes share this body"),
+    102: ("", "`CBaseEntity::Physics_TraceEntity` 0x100ab450 ->101cd110: actual cooked native entity sweep; ElysiumPusher.cpp"),
+    239: ("bool", "`CBaseEntity::PhysicsPushRotate` 0x100389e0 returns AL blockage, not the SDK pointer; ElysiumPusher.cpp"),
+    178: ("", "`CBaseEntity::Blocked` 0x100a4d40: installed callback then live authored parent +254; ElysiumPusher.cpp"),
     62: ("", "`CBaseEntity::SetOrigin` 0x100b2be0: the changed-only write of the LOCAL origin word, the "
              "EFL 0x10800 invalidation of this entity and its move children (0x100b5340) and the "
              "change-tracker byte `+0x1b1` (L0-r010)"),
@@ -533,7 +539,7 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
               "0x10139610 into `m_vecMoveDir`, then slot 64 `SetAngles(vec3_angle)` (L0-r021; "
               "`ElysiumEntityVisualState.cpp`)"),
     225: ("", "`CBaseEntity::VPhysicsDestroyObject` 0x100b5040: current object null exits; unregister, retire native producer and aliases, then clear field (L0-physics-producer; `ElysiumEntitySlotBodies.cpp`)"),
-    226: ("", "`CBaseEntity::VPhysicsUpdate` 0x100b4f30: move7 native object37 ->216/218 ->physical touch ->child232; move0 empty, moves1/8 unfinished diagnostics (`ElysiumEntitySlotBodies.cpp`)"),
+    226: ("", "`CBaseEntity::VPhysicsUpdate` 0x100b4f30: move7 native object37 ->216/218 ->physical touch ->child232; move0 empty; moves1/8 use reached100a55b0 pusher feedback, with moving first44 timing and full candidate encounter equivalence open (`ElysiumEntitySlotBodies.cpp`, `ElysiumPusher.cpp`)"),
     232: ("", "`CBaseEntity::UpdatePhysicsShadowToCurrentPosition` 0x100a69e0: move7/null return; abs angles then origin, object46 target submission (`ElysiumEntitySlotBodies.cpp`)"),
     233: ("", "`CBaseEntity::VPhysicsGetObjectList` 0x100a6ad0: nonnull current object and signed positive capacity write only element zero and return one, otherwise zero (`ElysiumEntitySlotBodies.cpp`)"),
     237: ("", "`CBaseEntity::PhysicsSolidMaskForEntity` 0x1003e7a0: FL_NPC first, then the real "

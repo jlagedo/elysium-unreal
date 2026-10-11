@@ -9,9 +9,9 @@ class UBodySetup;
 
 namespace ElysiumCollisionPayload
 {
-	/** The newest payload shape this build can read. 1 is a single player-solid world body; 2 is
-	 *  one body per contents signature. A payload newer than this is refused, never half-read. */
-	inline constexpr int32 SupportedVersion = 2;
+	/** Version3 partitions by contents signature and common-solid answer. Other versions are
+	 *  refused rather than interpreting geometry with missing query/solve metadata. */
+	inline constexpr int32 SupportedVersion = 3;
 }
 
 // One map's collision as cooked content.
@@ -56,8 +56,8 @@ struct FElysiumBrushCollisionBody
 
 // One cooked world body and the contents signature every brush in it answers with.
 //
-// The world is one body per signature, not one body: a brush answers four retail masks and the
-// answers differ, so a single set cannot say that an NPC-clip stops an NPC and not the player, or
+// The world is partitioned by signature and common-solid answer. The answers differ, so a
+// single set cannot say that an NPC-clip stops an NPC and not the player, or
 // that an unsolid OPAQUE brush stops sight and neither pawn. Navigation follows from the same
 // fact, since Unreal calls a body navigation-relevant exactly when it blocks ECC_Pawn.
 USTRUCT()
@@ -66,6 +66,9 @@ struct FElysiumSignatureCollisionBody
 	GENERATED_BODY()
 
 	UPROPERTY(VisibleAnywhere, Category = "World") uint8 Signature = 0;
+	// Base237 asks0x400b brush bits without either clip bit; the four old answers cannot
+	// distinguish solid from dual-clip-only geometry. Partition by this fifth answer too.
+	UPROPERTY(VisibleAnywhere, Category = "World") bool bCommonSolid = false;
 	UPROPERTY(VisibleAnywhere, Category = "World") TObjectPtr<UBodySetup> Body;
 	// Local-space bounds of this body's convexes. A collision-only component has no render section
 	// to bound it and would register with navigation as empty without them.
@@ -160,10 +163,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Import")
 	void AuthorWorldHulls(const TArray<FElysiumCollisionHull>& Hulls);
 
-	// One world body for the brushes carrying `Signature`. Marks the payload version 2: a payload
-	// with any signature body is read by signature and never through `WorldHulls`.
+	// One world body for brushes carrying (Signature, commonSolid). Version3 records the fifth
+	// query answer; legacy WorldHulls cannot stand in for the partition.
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Import")
-	void AuthorWorldBody(uint8 Signature, const TArray<FElysiumCollisionHull>& Hulls);
+	void AuthorWorldBody(uint8 Signature, const TArray<FElysiumCollisionHull>& Hulls, bool bCommonSolid);
 
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Import")
 	void AuthorDisplacement(const TArray<FVector>& Vertices, const TArray<int32>& Indices);

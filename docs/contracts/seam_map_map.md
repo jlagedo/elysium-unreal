@@ -551,11 +551,17 @@ authored once, offline, with a stable `BodySetupGuid` saved in the package: the 
 into the DDC on the first load after an import and never again, and a cooked build carries the
 cooked buffers in the package. That is the "no runtime cook" the roadmap line asks for.
 
-**Payload version 2 (0018 story 3, 2026-09-20): one cooked world body per CONTENTS SIGNATURE.**
+**Payload version 3 (L0 pusher input, 2026-10-11): one cooked world body per (CONTENTS SIGNATURE, commonSolid).**
 Version 1 cooked a single body from the player-solid brushes, which is all `.hulls` carried then.
 It now carries every brush answering any retail mask, led by its contents word, and both
-transports partition the world the same way: one body per signature, each wearing the generated
-profile that signature names. A version-1 payload is REFUSED (0018 story 21): its single body could answer nothing about sight
+transports partition the world the same way. The four existing P/N/S/p answers and their profiles
+and navigation rules remain unchanged. Version 3 adds `(contents & 0x400b) != 0`, needed
+by base slot237's `0x200400b` query. Window `0x2` and dual-clip-only `0x30000` share
+signature PN, but only the window answers this common-solid mask. Each hull appears once,
+with unchanged vertices. Noncommon bodies carry native filter bit16; only the recovered
+common-solid queries exclude that bit. Native solver eligibility is a separate physics
+input, not inferred from a query's IgnoreMask. Version 2 lacks this answer and is refused;
+rebake both payload and level. A version-1 payload is REFUSED (0018 story 21): its single body could answer nothing about sight
 or the pedestrian volume, so reading it as a world would stand a map whose NPC clips and sight
 brushes had silently vanished. Any `PayloadVersion` other than the one this build authors is
 refused for the same reason -- half-reading a world looks like success. There is no sidecar to
@@ -567,19 +573,20 @@ arm wears `ElysiumSigDyn_*`, the `WorldDynamic` twin that keeps `Block` on the `
 debug pick so a door's own knob stays addressable. `Trigger`, `Passable` and `None` keep their
 class-derived profiles — those say what the entity IS, not what its brushes are made of.
 
-The manifest is `2.0.0` and the recipe version 2; the fingerprint covers the partition as well as
+The manifest is `2.0.0` and the recipe version 3; the fingerprint covers the partition as well as
 the geometry, since the same vertices under a different signature are different bodies wearing
 different profiles.
 
 **The lane also stands the collision in the map's own level.** `AElysiumWorldCollisionActor`
-carries one static component per signature, each referencing the payload's cooked body and wearing
+carries one static component per (signature, commonSolid), each referencing the payload's cooked body and wearing
 that signature's profile, so the level holds navigation-relevant geometry before the game runs --
 which is what a baked navigation mesh can be cut from, and cut from the right solids, since a
 component is navigation-relevant exactly when its profile blocks `ECC_Pawn`. The world bodies are
 authored `RF_Public` for it: a level may not name another package's private sub-object, and the
 save refuses with "Illegal reference to private object". It is placed here rather than by
 `bake map` because this lane authors the bodies it points at, so the actor and the asset are
-written together. The runtime adopts it after checking map name, payload identity and body count,
+written together. The runtime adopts it after checking map name, payload identity, body count
+and each body's identity/signature/commonSolid answer,
 spawns nothing, and refuses a level carrying two actors rather than picking one.
 
 **The lane also bakes the map's navigation meshes**, in the same pass and from those same bodies,

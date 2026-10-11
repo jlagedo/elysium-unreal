@@ -44,6 +44,7 @@
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumSessionSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "ElysiumGymSpec.h"
 #include "Visual/ElysiumPoseDeviation.h"
 #include "ElysiumHUD.h"
@@ -1096,13 +1097,52 @@ bool FElysiumWorldFrameSecondsTest::RunTest(const FString&)
 	// stamp written exactly at `Now` not due on the tick that wrote it.
 	World.Tick(1.0 / 60.0);
 	TestEqual(TEXT("a zero-length step is floored"),
-		World.FrameSeconds(), ElysiumWorldClock::MinFrameSeconds, 1e-9);
+		World.FrameSeconds(), 0.001, 1e-9); //admitted host, unlike the raw no-frame helper
+	World.Tick(1.0 / 60.0 + .0005);
+	TestEqual(TEXT("admitted sub-millisecond positive step uses literal retail floor"), World.FrameSeconds(), .001, 1e-9);
+	World.Tick(1.0 / 60.0 + .0015);
+	TestEqual(TEXT("literal one millisecond boundary survives"), World.FrameSeconds(), .001, 1e-9);
+	World.Tick(1.0 / 60.0 + .003);
+	TestEqual(TEXT("above-floor admitted step remains measured"), World.FrameSeconds(), .0015, 1e-9);
 
 	// A headless case stepping the clock by whole seconds. Without the ceiling every stamp within
 	// ten seconds of the clock would answer due.
 	World.Tick(10.0);
 	TestEqual(TEXT("a ten-second step is capped"),
-		World.FrameSeconds(), ElysiumWorldClock::MaxFrameSeconds, 1e-9);
+		World.FrameSeconds(), .1, 1e-9);
+
+	FElysiumEntityWorld NativeIngress(nullptr,nullptr);
+	FElysiumEntityDefs NativeDefs; NativeDefs.MapName=TEXT("__native_frame_input__");
+	NativeIngress.Load(MoveTemp(NativeDefs)); NativeIngress.Activate(0.);
+	NativeIngress.BeginNativePhysicsFrame(.002,.002);
+	TestEqual(TEXT("first native ingress uses actual admitted delta rather than legacy seed"),NativeIngress.FrameSeconds(),.002,1e-9);
+	NativeIngress.FinishNativePhysicsFrame();
+	NativeIngress.BeginNativePhysicsFrame(.002,0.);
+	TestEqual(TEXT("explicit admitted native zero reaches literal host floor"),NativeIngress.FrameSeconds(),.001,1e-9);
+	NativeIngress.FinishNativePhysicsFrame();
+
+	UGameInstance* FrameGI=NewObject<UGameInstance>();
+	UElysiumSessionSubsystem* FrameState=NewObject<UElysiumSessionSubsystem>(FrameGI);
+	FrameState->TimeControl().ResetClock(0.);
+	FrameState->TimeControl().SetScale(.25);
+	FElysiumEntityWorld ScaledIngress(nullptr,FrameState);
+	FElysiumEntityDefs ScaledDefs; ScaledDefs.MapName=TEXT("__scaled_frame_input__");
+	ScaledIngress.Load(MoveTemp(ScaledDefs)); ScaledIngress.Activate(0.);
+	ScaledIngress.BeginNativePhysicsFrame(.0001,.0001);
+	TestEqual(TEXT("already-dilated native delta uses scaled literal floor only once"),ScaledIngress.FrameSeconds(),.00025,1e-9);
+	ScaledIngress.FinishNativePhysicsFrame();
+	ScaledIngress.BeginNativePhysicsFrame(.05,.05);
+	TestEqual(TEXT("scaled native ceiling is literal .025"),ScaledIngress.FrameSeconds(),.025,1e-9);
+	ScaledIngress.FinishNativePhysicsFrame();
+	FrameState->TimeControl().SetPaused(true);
+	ScaledIngress.BeginNativePhysicsFrame(.05,0.);
+	TestEqual(TEXT("paused native ingress never fabricates floor advancement"),ScaledIngress.FrameSeconds(),0.);
+	ScaledIngress.FinishNativePhysicsFrame();
+	FrameState->TimeControl().SetPaused(false); FrameState->TimeControl().SetScale(0.);
+	TestEqual(TEXT("worldless facade records actual zero scale without UE dilation clamping"),FrameState->GameClock().GetScale(),0.);
+	ScaledIngress.BeginNativePhysicsFrame(.05,.02);
+	TestEqual(TEXT("scale zero native ingress stays zero"),ScaledIngress.FrameSeconds(),0.);
+	ScaledIngress.FinishNativePhysicsFrame();
 
 	return true;
 }

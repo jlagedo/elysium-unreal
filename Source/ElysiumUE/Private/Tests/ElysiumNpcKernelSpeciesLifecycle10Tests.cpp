@@ -531,11 +531,11 @@ bool FElysiumNpcKernelSpeciesLifecycle10GhoulStartTouchTest::RunTest(const FStri
 	N.BaseEntityStartTouch(Prop);
 	TestEqual(TEXT("the base StartTouch with no m_pParent forwards nothing"),
 		N.ParentTouchPropagations, 0);
-	N.MoveParent = OtherNpc->Handle;
+	N.SetParent(OtherNpc, 0);
 	N.BaseEntityStartTouch(Prop);
 	TestEqual(TEXT("with a parent it forwards the toucher to the parent's slot 174"),
 		N.ParentTouchPropagations, 1);
-	N.MoveParent = FElysiumEntityHandle();
+	N.SetParent(nullptr, 0);
 
 	// Step 2's gate: `+0xa8` is `m_pPlayer` (the toucher IS the player) and `+0x94` is the cached
 	// `CAI_BaseNPC*` (the toucher IS an NPC). The walk leaves both offsets unnamed. `OnDisturbed`

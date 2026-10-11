@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 76 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 72 are defined by hand in the substrate,
-// and 55 are still stubs — 54 29c, 1 unassigned. 16 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 78 are defined by hand in the substrate,
+// and 50 are still stubs — 49 29c, 1 unassigned. 15 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -685,12 +685,9 @@ void FElysiumEntity::Slot89()
 
 // slot 90 0x100aa840 (sdk) `bool IsTransparent() const`
 //   layer 0, story 29c
-bool FElysiumEntity::IsTransparent() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::IsTransparent"), TEXT("0x100aa840"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::IsTransparent`, written by hand in the substrate:
+// `CBaseEntity::IsTransparent` 0x100aa840: RenderMode !=0; all497 vampire.dll classes share this
+// body. Declared here, defined there.
 
 // slot 91 0x100b4de0 (walked) `bool ShouldCollide(int, int) const`
 //   layer 0, story 29c
@@ -776,12 +773,8 @@ void FElysiumEntity::ComputeWorldSpaceSurroundingBox(FVector*, FVector*)
 // Vector&, unsigned int, trace_t*)`
 //   takes `trace_t*`
 //   layer 3, story 29c
-void FElysiumEntity::Physics_TraceEntity(FElysiumEntity*, const FVector&, const FVector&, uint32,
-	void*)
-{
-	// verdict `mechanism`, closed at `TraceRetail` (0019/6): nothing observes this body, but the
-	// slot is still reached, so it answers the value-initialised default and tallies nothing.
-}
+// verdict `mechanism`: the body is `FElysiumEntity::Physics_TraceEntity`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 104 0x10026b90 (sdk) `void Precache()`
 //   layer 0, story 29c
@@ -1244,17 +1237,15 @@ void FElysiumEntity::VelocityPunch(const FVector&)
 
 // slot 174 0x100a49d0 (sdk) `void StartTouch(CBaseEntity*)`
 //   layer 0, story 29c
-void FElysiumEntity::StartTouch(FElysiumEntity*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::StartTouch"), TEXT("0x100a49d0"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::StartTouch`, written by hand in the substrate:
+// `CBaseEntity::StartTouch` 0x100a49d0: live ParentHandle relay; ElysiumPusher.cpp. Declared here,
+// defined there.
 
 // slot 175 0x100a4af0 (sdk) `void Touch(CBaseEntity*)`
 //   layer 0, story 29c
-void FElysiumEntity::Touch(FElysiumEntity*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::Touch"), TEXT("0x100a4af0"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::Touch`, written by hand in the substrate: `CBaseEntity::Touch`
+// 0x100a4af0: installed callback then live ParentHandle relay; ElysiumPusher.cpp. Declared here,
+// defined there.
 
 // slot 176 0x100a4c20 (sdk) `void EndTouch(CBaseEntity*)`
 //   layer 0, story 29c
@@ -1265,10 +1256,9 @@ void FElysiumEntity::EndTouch(FElysiumEntity*)
 
 // slot 178 0x100a4d40 (sdk) `void Blocked(CBaseEntity*)`
 //   layer 0, story 29c
-void FElysiumEntity::Blocked(FElysiumEntity*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::Blocked"), TEXT("0x100a4d40"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::Blocked`, written by hand in the substrate: `CBaseEntity::Blocked`
+// 0x100a4d40: installed callback then live authored parent +254; ElysiumPusher.cpp. Declared here,
+// defined there.
 
 // slot 179 0x100270a0 (walked) `void EndBlocked()`
 //   layer 0, story 29c
@@ -1699,12 +1689,9 @@ void FElysiumEntity::PerformCustomPhysics(FVector*, FVector*, FRotator*, FRotato
 
 // slot 239 0x100389e0 (sdk) `CBaseEntity* PhysicsPushRotate(float)`
 //   layer 0, story 29c
-FElysiumEntity* FElysiumEntity::PhysicsPushRotate(float)
-{
-	FireEntitySlot(TEXT("CBaseEntity::PhysicsPushRotate"), TEXT("0x100389e0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::PhysicsPushRotate`, written by hand in the substrate:
+// `CBaseEntity::PhysicsPushRotate` 0x100389e0 returns AL blockage, not the SDK pointer;
+// ElysiumPusher.cpp. Declared here, defined there.
 
 // slot 240 0x10027430 (walked) `PyObject* vfunc240()`
 //   returns `PyObject*`
@@ -2059,7 +2046,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Slot89),
 				nullptr },
 			{ 90, TEXT("0x100aa840"), TEXT("CBaseEntity"), TEXT("IsTransparent"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool() const>::Test(&FElysiumEntity::IsTransparent),
 				nullptr },
 			{ 91, TEXT("0x100b4de0"), TEXT("CBaseEntity"), TEXT("ShouldCollide"),
@@ -2103,7 +2090,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector*, FVector*)>::Test(&FElysiumEntity::ComputeWorldSpaceSurroundingBox),
 				[](FElysiumEntity& Receiver) -> int64 { FVector* Arg0{}; FVector* Arg1{}; Receiver.ComputeWorldSpaceSurroundingBox(Arg0, Arg1); return 0; } },
 			{ 102, TEXT("0x100ab450"), TEXT("CBaseEntity"), TEXT("Physics_TraceEntity"),
-				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*, const FVector&, const FVector&, uint32, void*)>::Test(&FElysiumEntity::Physics_TraceEntity),
 				nullptr },
 			{ 104, TEXT("0x10026b90"), TEXT("CBaseEntity"), TEXT("Precache"),
@@ -2347,11 +2334,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*()>::Test(&FElysiumEntity::GetNextTarget),
 				nullptr },
 			{ 174, TEXT("0x100a49d0"), TEXT("CBaseEntity"), TEXT("StartTouch"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::StartTouch),
 				nullptr },
 			{ 175, TEXT("0x100a4af0"), TEXT("CBaseEntity"), TEXT("Touch"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::Touch),
 				nullptr },
 			{ 176, TEXT("0x100a4c20"), TEXT("CBaseEntity"), TEXT("EndTouch"),
@@ -2359,7 +2346,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::EndTouch),
 				nullptr },
 			{ 178, TEXT("0x100a4d40"), TEXT("CBaseEntity"), TEXT("Blocked"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::Blocked),
 				nullptr },
 			{ 179, TEXT("0x100270a0"), TEXT("CBaseEntity"), TEXT("EndBlocked"),
@@ -2596,8 +2583,8 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector*, FVector*, FRotator*, FRotator*)>::Test(&FElysiumEntity::PerformCustomPhysics),
 				[](FElysiumEntity& Receiver) -> int64 { FVector* Arg0{}; FVector* Arg1{}; FRotator* Arg2{}; FRotator* Arg3{}; Receiver.PerformCustomPhysics(Arg0, Arg1, Arg2, Arg3); return 0; } },
 			{ 239, TEXT("0x100389e0"), TEXT("CBaseEntity"), TEXT("PhysicsPushRotate"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*(float)>::Test(&FElysiumEntity::PhysicsPushRotate),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(float)>::Test(&FElysiumEntity::PhysicsPushRotate),
 				nullptr },
 			{ 240, TEXT("0x10027430"), TEXT("CBaseEntity"), TEXT("Slot240"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,

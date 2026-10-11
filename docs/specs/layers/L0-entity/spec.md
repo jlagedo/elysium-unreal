@@ -36,7 +36,7 @@ A story closes on its records green on the arena and its rows re-read against th
 ## Decisions that touch this layer
 
 - Owner decision: classify/register the 0x1022b590 -> 0x10175360 write to player+0x1e04 as an L3 upward hook, or explicitly reassign its ownership; hooks.tsv has no entry, so the SoundScheme story cannot close as an unlisted hook.
-- Owner decision: retain the existing single-origin and angle transform simplification as a named modernization, or restore retail local/absolute frame state and parent-inverse conversion at 0x100b2150, 0x100b1ac0, 0x100b2300, and 0x100b2510. The current port explicitly collapses these values.
+- Retain the confirmed local/absolute/raw frame and parent-inverse contracts at 0x100b2150, 0x100b1ac0, 0x100b2300, and 0x100b2510. Accepted parent/native publication work has removed the former single-origin simplification; faithful conversion is routine L0 work, not an outstanding owner approval. Current packet feedback/contact encounter-order limits remain explicit in its walk and progress.
 - Owner decision: define the Unreal replacement boundary for Source networking and edict services used by these rows, including ForceTransmit, dirty-state notification, and edict-backed PostConstructor paths; retain their game-visible flags and lifecycle effects either way.
 - Owner decision: choose whether to reproduce 0x101d1960's cyclic multi-client selection and cluster cache or keep the current one-player PVS seam as an explicit single-player scope cut.
 - Owner decision: 0x1023fd00 is marked engine-replaced in the layer audit; decide how Unreal collision queries preserve its strict squared-distance '< radius squared' boundary before accepting that replacement. 

@@ -741,7 +741,7 @@
 	virtual void PerformCustomPhysics(FVector*, FVector*, FRotator*, FRotator*);
 	// slot 239 0x100389e0 (sdk) `CBaseEntity* PhysicsPushRotate(float)`
 	//   layer 0, story 29c
-	virtual FElysiumEntity* PhysicsPushRotate(float);
+	virtual bool PhysicsPushRotate(float);
 	// slot 240 0x10027430 (walked) `PyObject* vfunc240()`
 	//   returns `PyObject*`
 	//   layer 0, story 29c

@@ -237,11 +237,12 @@ CHAIN_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
 # The entity chain's own `SAVE`-only rows the port binds, keyed by retail class then offset, as
 # (port type, member). The chain's other save rows stay the port classes' own business (they persist
 # what they carry by hand), so a row joins the generated walk only when it is listed here -- and the
-# one listed is the word every entity shares and nothing else saved: `m_lifeState` (`CBaseEntity`
-# +0x200, datamap flags `SAVE`), which slot 158 `IsAlive`, `0x1032ef60`'s life-state split and the
-# death arms all read. It registers under its retail member name, as the NPC walk's rows do.
+# listed words include life state and the pusher's raw local frame/deadline clocks. These have no
+# external key name; they register under their retail member names, as the NPC walk's rows do.
 CHAIN_SAVE_MEMBERS: dict[tuple[str, int], tuple[str, str]] = {
+    ("CBaseEntity", 0x0160): ("FElysiumEntity", "StartFrameLocalTime"),
     ("CBaseEntity", 0x0200): ("FElysiumEntity", "LifeState"),
+    ("CBaseEntity", 0x03FC): ("FElysiumEntity", "PhysicsMoveDoneTime"),
 }
 
 # The one reason the nine `CBaseToggle` rows share, expanded from the `TOGGLE` marker below.

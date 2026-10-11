@@ -47,3 +47,13 @@ void FElysiumNpc::OnTouchStart(const FElysiumEntityHandle& Activator)
 	StartTouchSpecies(Other);
 }
 
+void FElysiumNpc::StartTouch(FElysiumEntity* Other)
+{
+	StartTouchSpecies(Other); // existing higher-owned species receiver, exactly once
+}
+
+void FElysiumNpc::Touch(FElysiumEntity* Other)
+{
+	TouchSpecies(Other);
+}
+

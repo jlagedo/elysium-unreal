@@ -200,10 +200,11 @@ void UElysiumMapCollisionPayload::AuthorWorldHulls(const TArray<FElysiumCollisio
 }
 
 void UElysiumMapCollisionPayload::AuthorWorldBody(uint8 Signature,
-	const TArray<FElysiumCollisionHull>& Hulls)
+	const TArray<FElysiumCollisionHull>& Hulls, bool bCommonSolid)
 {
 	FElysiumSignatureCollisionBody Row;
 	Row.Signature = Signature;
+	Row.bCommonSolid = bCommonSolid;
 	// Auto-named for the same reason the brush bodies are: two `UBodySetup`s under one outer may
 	// not share a name, and a re-author would collide with the subobject it is replacing.
 	//
@@ -221,9 +222,9 @@ void UElysiumMapCollisionPayload::AuthorWorldBody(uint8 Signature,
 	Row.HullCount = FillConvexElems(*Row.Body, Hulls);
 	Row.Bounds = ConvexBounds(Row.Body);
 	WorldBodies.Add(MoveTemp(Row));
-	// Any signature body makes this a version-2 payload, read by signature and never through
+	// Any partition body makes this a version-3 payload, read by its metadata and never through
 	// `WorldHulls`.
-	PayloadVersion = 2;
+	PayloadVersion = 3;
 	UE_LOG(LogElysiumCollisionPayload, Log,
 		TEXT("%s: authored world body %s with %d convex hull(s) of %d row(s)"),
 		*MapName, *ElysiumContents::Spell(static_cast<EElysiumContentsSignature>(Signature)),

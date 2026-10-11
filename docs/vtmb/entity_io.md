@@ -1050,6 +1050,18 @@ contacts, and re-enabling while still geometrically contained can create a fresh
 
 ### The touch dispatch path
 
+The current L0 pusher adapter must also preserve a native world sweep's trace
+entity: `PhysicsImpact 0x1003e6c0` has no worldspawn exemption. Creation-owned
+native object6 maps the world component to its stable worldspawn handle; a
+mutable current physics reference or component equality is not that owner.
+New links dispatch174 then175 on the first entity before marking the second;
+existing links dispatch175 after the stamp refresh. Generic174 forwards to
+`m_pParent +0x254`; generic175 invokes `m_pfnTouch +0x1ec` before reading that
+live parent. These receivers are required by the reached pusher Impact and
+trigger-touch caller, independently of native geometry or allocation topology.
+The packet's pre-edit adapter/lifetime contract and bounded remaining witnesses
+are recorded in `L0-pusher-feedback.md`; no full touch closure is claimed yet.
+
 The server-side touch dispatch is fully recovered in `vampire.dll`; only *pair selection* is
 engine-owned. Two entry points hand pairs to the server: `CServerGameEnts::MarkEntitiesAsTouching`
 (`FUN_1011be20`, reached only through the interface vtable slot at `0x1001017c` — it has no ordinary
@@ -1071,9 +1083,16 @@ that boundary.
 - if a touchlink for the pair already exists, it only refreshes the link stamp from `m_touchStamp`
   (`+0x1ac`) and calls `CBaseEntity::PhysicsTouch` (`FUN_1003daa0`) — an existing contact never
   produces a second begin;
-- otherwise it allocates a link (pool ceiling `0x200`, `AllocTouchLink: MAX_TOUCHLINKS limit`) and,
-  when the *toucher* is not itself a trigger, sets link flag bit `0x1` and calls
-  `CBaseEntity::PhysicsStartTouch` (`FUN_1003db80`).
+- otherwise it allocates a link (pool ceiling `0x200`, `AllocTouchLink: MAX_TOUCHLINKS limit`).
+  It dispatches the new begin only when the own raw solid predicate is false,
+  own solid flag `0x20` is set, or own `FSOLID_TRIGGER` (`0x8`) is set, and the
+  other side is not a trigger. The raw predicate is solid type nonzero and no
+  `FSOLID_NOT_SOLID` (`0x4`), independent of the host's historical never-set NPC
+  fallback. On admission it sets link flag `0x1` and calls
+  `CBaseEntity::PhysicsStartTouch` (`FUN_1003db80`). Ordinary solid-to-solid new
+  links can therefore retain physical state without an initial174/175; their
+  later existing-link refresh still dispatches175. The host retains its existing
+  512-link ceiling; no named shipped observer of that ceiling is established here.
 
 `PhysicsStartTouch` is two virtual calls behind one gate:
 
@@ -1090,8 +1109,9 @@ For `CTriggerMultiple` (vftable `0x1047da24`) and `CTriggerOnce` (`0x1047dee4`) 
 `FUN_101c66e0` and `FUN_101c6a30`, write the base vftable `0x1047d08c` first and then the leaf's —
 those slots resolve to `CBaseTrigger::StartTouch` (`FUN_101c5590`), `CBaseEntity::Touch` (`FUN_100a4af0`) and
 `CBaseTrigger::EndTouch` (`FUN_101c55d0`). **`CBaseEntity::Touch` is the only consumer of
-`m_pfnTouch`** (`+0x1ec`): it calls the pointer when non-null, then forwards `Touch` to the move
-parent (`+0x254`). `CTriggerMultiple::Spawn` (`FUN_101c6860`) installs `MultiTouch` there through the
+`m_pfnTouch`** (`+0x1ec`): it calls the pointer when non-null, then rereads and forwards `Touch` to
+the authored parent (`+0x254`), distinct from movement parent `+0x25c`.
+`CTriggerMultiple::Spawn` (`FUN_101c6860`) installs `MultiTouch` there through the
 thunk at `0x10015212` → `FUN_101c68b0`.
 
 Ends run from `CBaseEntity::PhysicsCheckForEntityUntouch` (`FUN_1003d490`), which expires every link

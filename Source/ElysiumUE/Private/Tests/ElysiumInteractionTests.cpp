@@ -73,6 +73,7 @@
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumMover.h"
+#include "Substrate/ElysiumModelPhysics.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
@@ -978,6 +979,17 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
+	auto AdvanceMoverFrames = [&TestWorld](FElysiumEntityWorld& FrameWorld, double Until)
+	{
+		while (FrameWorld.NowSeconds() < Until)
+		{
+			const double FrameNow = FMath::Min(FrameWorld.NowSeconds() + 1. / 60., Until);
+			FrameWorld.BeginNativePhysicsFrame(FrameNow, FrameNow - FrameWorld.NowSeconds());
+			ElysiumModelPhysics::PreparePhysicsFrame(*TestWorld.GetTestWorld(), static_cast<float>(FrameWorld.FrameSeconds()), 1.f, true);
+			TestWorld.TickTestWorld(static_cast<float>(FrameWorld.FrameSeconds()));
+			FrameWorld.FinishNativePhysicsFrame();
+		}
+	};
 
 	FElysiumEntity* LiveButton = World.FindByName(TEXT("elev_button"));
 	FElysiumEntity* LiveElevator = World.FindByName(TEXT("lift"));
@@ -1069,19 +1081,33 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	World.Tick(0.0);
 	TestEqual(TEXT("tutorial SetValue(2) matches Case02 and starts the requested floor"),
 		CounterValue(World.FindByName(TEXT("move_start"))), 1.f);
-	World.Tick(0.5);
+	TestTrue(TEXT("elevator Spawn supplies the actual brush shadow recipe"),
+		LiveElevator->VPhysicsGetObject() && ElysiumModelPhysics::RecipeFor(LiveElevator->VPhysicsGetObject())
+		&& ElysiumModelPhysics::RecipeFor(LiveElevator->VPhysicsGetObject())->Kind == EElysiumPhysicsRecipeKind::Brush
+		&& ElysiumModelPhysics::ShadowFor(LiveElevator->VPhysicsGetObject()));
+	AdvanceMoverFrames(World, 0.5);
 	TestTrue(TEXT("elevator advances at constant speed"),
-		FMath::IsNearlyEqual(LiveElevator->Body->GetRelativeLocation().Z, 127.f, 1.f));
+		FMath::IsNearlyEqual(LiveElevator->GetAbsOrigin().Z, 127.f, 1.f));
+	const FElysiumPhysicsShadowState* HalfTarget = ElysiumModelPhysics::ShadowFor(LiveElevator->VPhysicsGetObject());
+	TestTrue(TEXT("native submission carries the actual logical half-height target"),
+		HalfTarget && HalfTarget->Target.GetLocation().Equals(LiveElevator->GetAbsOrigin(), .01));
 	TestTrue(TEXT("parented door stays aligned while elevator moves"),
-		FMath::IsNearlyEqual(LiveDoor->Body->GetComponentLocation().Z, 127.f, 1.f));
+		FMath::IsNearlyEqual(LiveDoor->GetAbsOrigin().Z, 127.f, 1.f)
+		&& FMath::IsNearlyEqual(LiveDoor->Body->GetComponentLocation().Z, LiveElevator->Body->GetComponentLocation().Z, 1.f));
 	TestTrue(TEXT("parented cabin button stays aligned while elevator moves"),
 		LiveButton->GetAttachBody()
-		&& FMath::IsNearlyEqual(LiveButton->GetAttachBody()->GetComponentLocation().Z, 127.f, 1.f));
+		&& FMath::IsNearlyEqual(LiveButton->GetAttachBody()->GetComponentLocation().Z, LiveElevator->Body->GetComponentLocation().Z, 1.f));
+	const FVector SavedLogical = LiveElevator->GetAbsOrigin();
+	const float SavedLocalTime = LiveElevator->LocalTime;
+	const float SavedDeadline = LiveElevator->PhysicsMoveDoneTime;
+	const double SavedNextThink = LiveElevator->NextThink;
+	FElysiumSavedPhysicsBody SavedNative;
+	TestTrue(TEXT("in-flight elevator has actual native state to save"), ElysiumModelPhysics::Capture(LiveElevator->VPhysicsGetObject(), SavedNative));
 	FElysiumMapSnapshot MovingSnapshot;
 	World.Freeze(MovingSnapshot);
 	World.AcceptInput(TEXT("lift"), FName(TEXT("GotoFloor")), FElysiumVariant::Int(1),
 		LiveButton->Handle, LiveButton->Handle); // ignored while moving
-	World.Tick(1.1);
+	AdvanceMoverFrames(World, 1.1);
 	TestTrue(TEXT("elevator reaches the requested absolute floor"),
 		FMath::IsNearlyEqual(LiveElevator->Body->GetRelativeLocation().Z, 254.f, 0.1f));
 	TestEqual(TEXT("arrival fires generic output once for the completed move"),
@@ -1092,29 +1118,6 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 		CounterValue(World.FindByName(TEXT("case_default"))), 2.f);
 	TestEqual(TEXT("mid-move retarget was ignored"),
 		CounterValue(World.FindByName(TEXT("move_start"))), 1.f);
-
-	// The mover save policy resolves an in-flight request at its destination, resting.
-	AActor* RestoreOwner = EngineWorld->SpawnActor<AActor>();
-	USceneComponent* RestoreRoot = NewObject<USceneComponent>(RestoreOwner, TEXT("RestoreRoot"));
-	RestoreOwner->SetRootComponent(RestoreRoot);
-	RestoreRoot->RegisterComponent();
-	RestoreOwner->AddInstanceComponent(RestoreRoot);
-	FElysiumRecordingServices RestoreServices;
-	FElysiumEntityWorld Restored(RestoreOwner, nullptr, RestoreServices.Bundle());
-	Restored.Load(MoveTemp(RestoreDefs));
-	Restored.ApplySnapshot(MovingSnapshot);
-	Restored.Activate(0.5);
-	Restored.Tick(0.5);
-	FElysiumEntity* RestoredElevator = Restored.FindByName(TEXT("lift"));
-	TestTrue(TEXT("restored in-flight elevator seats at its requested destination"),
-		RestoredElevator && RestoredElevator->Body
-		&& FMath::IsNearlyEqual(RestoredElevator->Body->GetRelativeLocation().Z, 254.f, 0.1f));
-	if (RestoredElevator)
-	{
-		TestTrue(TEXT("restored elevator is resting at floor two"),
-			ElysiumEntityDebugTest::Row(RestoredElevator, TEXT("Current floor")) == TEXT("2")
-			&& ElysiumEntityDebugTest::Row(RestoredElevator, TEXT("Target floor")) == TEXT("(none)"));
-	}
 
 	World.AcceptInput(TEXT("lift_door"), FName(TEXT("ScriptHide")), FElysiumVariant::Void(),
 		LiveDoor->Handle, LiveDoor->Handle);
@@ -1143,6 +1146,63 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	World.UpdatePlayerInteraction();
 	TestEqual(TEXT("ScriptUnhide makes the button focusable again"),
 		World.GetFocusedUsable(), LiveButton->Handle);
+
+	const FVector OriginalSolved = LiveElevator->Body->GetComponentLocation();
+	const auto OriginalNative = ElysiumModelPhysics::CaptureIdentity(LiveElevator->VPhysicsGetObject());
+	World.Teardown(); // replacing this map lifecycle must retire its bodies from the shared native scene
+	TestFalse(TEXT("old map native incarnation retires before the restored scene advances"), ElysiumModelPhysics::IsCurrentOutput(OriginalNative));
+	// Physics restores independently solved state; the mover keeps its in-flight logical clocks.
+	AActor* RestoreOwner = EngineWorld->SpawnActor<AActor>();
+	USceneComponent* RestoreRoot = NewObject<USceneComponent>(RestoreOwner, TEXT("RestoreRoot"));
+	RestoreOwner->SetRootComponent(RestoreRoot);
+	RestoreRoot->RegisterComponent();
+	RestoreOwner->AddInstanceComponent(RestoreRoot);
+	FElysiumRecordingServices RestoreServices;
+	FElysiumEntityWorld Restored(RestoreOwner, nullptr, RestoreServices.Bundle());
+	Restored.Load(MoveTemp(RestoreDefs));
+	FElysiumEntity* RestoredElevator = Restored.FindByName(TEXT("lift"));
+	const auto BaselineNative = ElysiumModelPhysics::CaptureIdentity(RestoredElevator ? RestoredElevator->VPhysicsGetObject() : nullptr);
+	TestTrue(TEXT("fresh Load supplies a native baseline before restore"), ElysiumModelPhysics::IsCurrentOutput(BaselineNative));
+	TestTrue(TEXT("actual Physics block restores the in-flight elevator"), Restored.ApplySnapshot(MovingSnapshot, .5) != INDEX_NONE);
+	TestFalse(TEXT("Physics restore retires the Load-created baseline incarnation"), ElysiumModelPhysics::IsCurrentOutput(BaselineNative));
+	Restored.Activate(0.5);
+	TestTrue(TEXT("restored elevator preserves the moving logical pose and local clocks"),
+		RestoredElevator && RestoredElevator->GetAbsOrigin().Equals(SavedLogical, .01)
+		&& RestoredElevator->LocalTime == SavedLocalTime && RestoredElevator->PhysicsMoveDoneTime == SavedDeadline
+		&& RestoredElevator->NextThink == SavedNextThink && RestoredElevator->PhysicsMoveDoneTime > RestoredElevator->LocalTime);
+	FElysiumSavedPhysicsBody RestoredNative;
+	TestTrue(TEXT("rebuilt brush keeps its independently saved solved pose and recipe"),
+		RestoredElevator && ElysiumModelPhysics::Capture(RestoredElevator->VPhysicsGetObject(), RestoredNative)
+		&& RestoredNative.Pose.Equals(SavedNative.Pose, .01)
+		&& RestoredNative.Recipe.Kind == EElysiumPhysicsRecipeKind::Brush);
+	AdvanceMoverFrames(Restored, .5 + 1. / 60.);
+	const FElysiumPhysicsShadowState* ReentryTarget = RestoredElevator ? ElysiumModelPhysics::ShadowFor(RestoredElevator->VPhysicsGetObject()) : nullptr;
+	TestTrue(TEXT("first restored native frame advances and submits the saved moving request"),
+		RestoredElevator && RestoredElevator->LocalTime > SavedLocalTime && ReentryTarget
+		&& ReentryTarget->Target.GetLocation().Equals(RestoredElevator->GetAbsOrigin(), .01));
+	TestEqual(TEXT("first restored frame emits no synthetic arrival"), CounterValue(Restored.FindByName(TEXT("reach2"))), 0.f);
+	AdvanceMoverFrames(Restored, 1.1);
+	if (RestoredElevator)
+	{
+		void* ContactActor = nullptr;
+		const bool bContact = ElysiumModelPhysics::GetContactPoint(RestoredElevator->VPhysicsGetObject(), ContactActor);
+		const FElysiumEntity* ContactOwner = ElysiumModelPhysics::GameDataForObject(ContactActor);
+		AddInfo(FString::Printf(TEXT("restored lift final logical=%s solved=%s velocity=%s local=%.9g deadline=%.9g original=%s contact=%d owner=%s"),
+			*RestoredElevator->GetAbsOrigin().ToString(), *RestoredElevator->Body->GetComponentLocation().ToString(),
+			*RestoredElevator->Velocity.ToString(), RestoredElevator->LocalTime, RestoredElevator->PhysicsMoveDoneTime,
+			*OriginalSolved.ToString(), bContact, ContactOwner ? *ContactOwner->TargetName : TEXT("(null)")));
+	}
+	TestTrue(TEXT("restored in-flight elevator reaches its requested destination through native frames"),
+		RestoredElevator && RestoredElevator->Body
+		&& FMath::IsNearlyEqual(RestoredElevator->GetAbsOrigin().Z, 254.f, 0.1f));
+	if (RestoredElevator)
+	{
+		TestTrue(TEXT("restored elevator is resting at floor two"),
+			ElysiumEntityDebugTest::Row(RestoredElevator, TEXT("Current floor")) == TEXT("2")
+			&& ElysiumEntityDebugTest::Row(RestoredElevator, TEXT("Target floor")) == TEXT("(none)"));
+	}
+	TestEqual(TEXT("restored arrival fires floor two once"), CounterValue(Restored.FindByName(TEXT("reach2"))), 1.f);
+	TestEqual(TEXT("restored arrival preserves the prior generic count and fires once"), CounterValue(Restored.FindByName(TEXT("reach_any"))), 2.f);
 
 	return true;
 }

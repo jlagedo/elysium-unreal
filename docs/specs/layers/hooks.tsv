@@ -1,4 +1,6 @@
 lower_layer	upper_layer	caller	caller_name	caller_maps	caller_status	callee	callee_name
+L0 entity	L3 player	0x10036bd0	FinishRotPushedEntity player pending-view branch		pending:L3 consumer/persistence unrecovered; L0 angular write executable	0x10036bd0	Player field writes +0x207c=2 and +0x2080+=deltaYaw before SetLocalAngularVelocity(existing pitch,deltaYaw,existing roll)
+L0 entity	L2 character	0x101d31c0	TraceFilterSimple::ShouldHitEntity projectile91 branch		pending:L2 stuck/attached producers; caller map count unrecovered	0x101efba0	Projectile::ShouldCollide (m_bStuckInWorld/m_bAttached; MingXiaoSpit species consumer L4)
 L0 entity	L1 animation	0x1006e130	Global::FUN_1006e130	108	ported	0x1006ef50	Global::FUN_1006ef50
 L0 entity	L1 animation	0x1006f080	Global::FUN_1006f080	108	ported	0x100927f0	CBaseAnimating::GetBoneTransform
 L0 entity	L1 animation	0x1006f080	Global::FUN_1006f080	108	ported	0x10093000	CBaseAnimating::GetAttachment03

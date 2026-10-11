@@ -20,8 +20,17 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	// deferred untouch check `PhysicsCheckForEntityUntouch` 0x1003d490 compares against `m_touchStamp`)
 	// and r019's two type-1 touch-link lists (what slot 207 `IsCurrentlyTouching` 0x1003d3d0 reads as
 	// `HasDataObjectType(this, 1)`). A key is held exactly while both sides hold a node for each other.
-	const uint64 TouchKey = (static_cast<uint64>(static_cast<uint32>(Brush.Index)) << 32)
+	uint64 TouchKey = (static_cast<uint64>(static_cast<uint32>(Brush.Index)) << 32)
 		| static_cast<uint32>(Activator.Index);
+	const uint64 ReverseKey = (static_cast<uint64>(static_cast<uint32>(Activator.Index)) << 32)
+		| static_cast<uint32>(Brush.Index);
+	const bool bReverseStored = !ActiveTouches.Contains(TouchKey) && ActiveTouches.Contains(ReverseKey);
+	if (bReverseStored && !bBegin)
+	{
+		RouteEntityTouch(Activator, Brush, false, bPhysicalContact);
+		return;
+	}
+	if (bReverseStored) TouchKey = ReverseKey; // same physical nodes, original pair ownership
 	if (!bBegin)
 	{
 		// Collision is switched off as part of Hide/Kill, after the entity has become inert. Release
@@ -117,9 +126,11 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	{
 		// The existing node on each side has its stamp refreshed and `PhysicsTouch` runs (the
 		// lifecycle story's); no second node, no second StartTouch.
-		*Existing = Stamps;
+		if (bReverseStored) { Existing->Brush = Stamps.Activator; Existing->Activator = Stamps.Brush; }
+		else *Existing = Stamps;
 		TouchLinkBegin(*E, Activator);
-		if (Mover != nullptr)
+		Mover = Resolve(Activator);
+		if (Mover != nullptr && Resolve(Brush) && ActiveTouches.Contains(TouchKey))
 		{
 			TouchLinkBegin(*Mover, Brush);
 		}
@@ -133,9 +144,8 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	// and `PhysicsTouch` belong to the touch-lifecycle story).
 	TouchLinkBegin(*E, Activator);
 	++TouchBeginCount;
-	E->OnTouchStart(Activator);
 	Mover = Resolve(Activator); // synchronous callbacks can remove either side or release the pair
-	if (Mover != nullptr && ActiveTouches.Contains(TouchKey))
+	if (Mover != nullptr && Resolve(Brush) && ActiveTouches.Contains(TouchKey))
 	{
 		TouchLinkBegin(*Mover, Brush);
 	}
@@ -193,11 +203,13 @@ void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumE
 	if (FElysiumTouchLink* Existing = ElysiumWorldFindTouchLink(Head, Other))
 	{
 		Existing->TouchStamp = Entity.TouchStamp;
+		FElysiumEntity* Toucher = Resolve(Other);
+		if (Toucher && !Entity.IsMarkedForDeletion() && !Toucher->IsMarkedForDeletion()) Entity.Touch(Toucher); //1003daa0
 		return;
 	}
 	// `AllocTouchLink` (pool `DAT_106bd904`, counter `DAT_106bd9b8`): the cap is 0x200 -- retail prints
-	// "AllocTouchLink: MAX_TOUCHLINKS limit" and answers no link. The pool bodies (`thunk_FUN_1013dc60`
-	// / `thunk_FUN_1013dce0`) are UNRECOVERED; `new` / `delete` stand in.
+	// "AllocTouchLink: MAX_TOUCHLINKS limit" and answers no link. Native allocation supplies
+	// storage; no shipped observer requires the retail pool layout.
 	if (LiveTouchLinks >= 0x200)
 	{
 		UE_LOG(LogElysiumWorld, Error, TEXT("AllocTouchLink: MAX_TOUCHLINKS limit"));
@@ -214,8 +226,23 @@ void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumE
 	Node->PrevLink = Head;
 	Head->NextLink = Node;
 	Node->NextLink->PrevLink = Node;
-	// `|= 1`: the begin dispatched (the bit `PhysicsRemoveToucher` tests before `EndTouch`).
-	Node->Flags |= 1;
+	//1003dc70: first/repeat comes from the node, not the directional pair key. Reciprocal
+	// Impact therefore refreshes Touch only. Own solid/flag20/trigger then OTHER trigger gates.
+	const bool bOwnSolid = Entity.RetailSolidType != 0 && (Entity.RetailSolidFlags & 4u) == 0;
+	FElysiumEntity* Toucher = Resolve(Other);
+	if ((!bOwnSolid || (Entity.RetailSolidFlags & 0x20u) != 0 || (Entity.RetailSolidFlags & 8u) != 0)
+		&& Toucher && (Toucher->RetailSolidFlags & 8u) == 0)
+	{
+		Node->Flags |= 1;
+		if (!Entity.IsMarkedForDeletion() && !Toucher->IsMarkedForDeletion())
+		{
+			const FElysiumEntityHandle Self = Entity.Handle;
+			Entity.StartTouch(Toucher); //174 before175; no second gameplay admission test
+			FElysiumEntity* LiveSelf = Resolve(Self);
+			Toucher = Resolve(Other);
+			if (LiveSelf && Toucher) LiveSelf->Touch(Toucher);
+		}
+	}
 }
 
 void FElysiumEntityWorld::TouchLinkEnd(FElysiumEntity& Entity, const FElysiumEntityHandle& Other)

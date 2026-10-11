@@ -18,23 +18,8 @@ void FElysiumNpcBase::BaseEntityStartTouch(FElysiumEntity* Other)
 {
 	// `CBaseEntity::StartTouch` `0x100a49d0`. The entire body past the scope frame is the parent
 	// forward: `if (m_pParent resolves live) parent->vtable[+0x2b8](other)`.
-	if (!MoveParent.IsSet() || World == nullptr)
-	{
-		return;
-	}
-	FElysiumEntity* Parent = World->Resolve(MoveParent);
-	if (Parent == nullptr)
-	{
-		return;
-	}
-	++ParentTouchPropagations;
-	if (FElysiumNpc* ParentNpc = Parent->AsNpc())
-	{
-		// Retail dispatches slot 174 virtually, so a parent with a species override takes it.
-		ParentNpc->StartTouchSpecies(Other);
-	}
-	// A parent that is not an NPC carries no slot 174 in this runtime; the dispatch is counted above
-	// and nothing runs, which is stated rather than approximated.
+	if (World && World->Resolve(ParentHandle)) ++ParentTouchPropagations;
+	FElysiumEntity::StartTouch(Other);
 }
 
 void FElysiumNpcBase::BaseEntityTouch(FElysiumEntity* Other)
@@ -42,24 +27,11 @@ void FElysiumNpcBase::BaseEntityTouch(FElysiumEntity* Other)
 	// `CBaseEntity::Touch` `0x100a4af0`. Two steps, and the ORDER is the fact: the touch think
 	// function FIRST, the parent forward second.
 	//
-	// SEAM: `m_pfnTouch` (`+0x1ac`) has no port member — this runtime has no per-entity touch
-	// callback pointer — so the call is counted and nothing runs.
+	// Keep the existing higher-layer diagnostic count; the generic base now owns the actual
+	// installed +1ec callback and any-class parent relay instead of a diagnostic substitute.
 	++TouchFunctionCalls;
-
-	if (!MoveParent.IsSet() || World == nullptr)
-	{
-		return;
-	}
-	FElysiumEntity* Parent = World->Resolve(MoveParent);
-	if (Parent == nullptr)
-	{
-		return;
-	}
-	++ParentTouchPropagations;
-	if (FElysiumNpc* ParentNpc = Parent->AsNpc())
-	{
-		ParentNpc->TouchSpecies(Other);   // the parent's slot 175 (`vtable + 700`)
-	}
+	if (World && World->Resolve(ParentHandle)) ++ParentTouchPropagations;
+	FElysiumEntity::Touch(Other);
 }
 
 // -------------------------------------------------------------------------------------------------
