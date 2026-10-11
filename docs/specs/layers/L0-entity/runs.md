@@ -1,5 +1,41 @@
 # Worker runs — L0-entity
 
+## World authored selector/declaration producer — 2026-10-11 (after f327317b)
+
+Root/coordinator reviewed precode scope before edits: map schema1.2.0 preserves
+ordered late-bound name/atoi-slot declarations and exact supported IVPS triangle
+association; public typed explicit-state helper retains manager absence semantics.
+Retail1002e140/10158600 ->2604eb60/2603ea60 ->26015ca0/26024150/26015ce0
+defines body-current0, named mappings, present-zero and absent-preserve arms.
+Finite108-map source inventory has108 world tables, no negative/>=128 slots.
+Negative/overflow publication/installation explicitly refuses atomically; no OOB clone.
+
+Functional8 froze before final gates (trial2 manifest SHA03a585e7a0bf01f8e9bfbb7c8bcf2e4c2756b23cc0d356cd052ed2500b2f4785).
+Pipeline138 passes; build143424.508298Z passes; focused143608.633975Z has3clean,
+0failed/notRun/inProcess. Core exports143656.240219Z/143817.983491Z publish36850/
+48130 triangle associations with exact original source identity/digest and whole BIN
+geometry bytes unchanged. Public bake2 fromcollision/deepverify/nav143921.962539Z
+passesboth; hull/disp/brushcounts2391/3584/185 and3882/288/145, source sidecars exact.
+Scenario144233.633131Z passes2/nullfirst_unmet/events290/81; wrapper144233.328242Z
+exits0, existing27startup errors29warnings separate. Trial1 failed only an invalid new
+capsule assumption; source/diff/hash/receipt preserved before correction. Original valid
+tests retained. Progress and the pusher walk contain exact paths; original/retained
+receipts and old/new GLBs are indexed under
+E:/elysium-work/codex/l0-world-material-contract-20261011/final-manifest.json.
+
+Native bake semantic association and supported native face/contact binding remain
+required consuming work. No world uniform override, mechanics/clock/save/clamp change,
+surface-table exporter dependency, native topology clone or moving44/178 parity claim.
+Original0 newly closed,23/88 complete65remaining; fullL0/r044/r045 OPEN. Worker
+stops, no engine jobs/next packet/staging/commit/push. Coordinator default191 at
+144345.322387Z passes112clean79warned0failed/notRun/inProcess (wrapper144345.165444Z
+exits0). Bounded19 at144428.462209Z passes19 on arena/sm_hub_1, both hosts exit0,
+ordinarynullfirst_unmet/2inverted refusal passes; wrapper144428.243679Z exits0,
+existing27errors535warnings separate. Doctor144542.658871Z exits0/21existing warnings;
+repo-only144553.947638Z exits0/0warnings. Original/copied hashes are retained under
+coordinator-receipts and final-manifest.json. Coordinator owns independent review,
+final checkpoint reconciliation and exact-path commit.
+
 ## Reserved shadow material and typed pair response — 2026-10-11 (after f0e277c1)
 
 Pre-code contract recovered45/2601a7e0 reserved0xf000 first-default copy,

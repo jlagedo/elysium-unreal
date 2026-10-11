@@ -1,5 +1,28 @@
 # Physics surface parser input seam
 
+## Late-bound world material resolver prerequisite (2026-10-11)
+
+Map root schema1.2.0 supplies ordered requested name/atoi-slot declarations and
+authored triangle selectors, without adding an exporter SurfaceProps dependency.
+FElysiumWorldMaterialMapping retains128 uint16 slots as explicit value state. A fresh
+manager starts identity; InstallWorldMaterialTable accepts an existing mapping plus
+present/absent input and ordered declarations against this existing typed service.
+Absent preserves state; present starts zeroed, ordered duplicate slots last-win,
+>=128 is ignored, and unknown names narrow to65535. Empty present tables reset0.
+ResolveWorldMaterial selector0 returns the explicit current body row; nonzero maps
+and delegates existing GetSurfaceData, retaining first-row special/ordinary-null arms.
+No name is described as already resolved by the map producer. Returned rows borrow
+table storage and require copied typed values before any future native binding.
+
+Signed ASCII decimal-prefix atoi behavior is preserved, including partial and
+nonnumeric tokens. Negative/overflow inputs explicitly refuse atomically; no shipped
+108-map witness authors these. The helper does not modify ProcessService map state,
+bind a native material, add a clock/save word, or replace the source capsule below.
+The required baked association and supported native contact-binding consumer remain
+open. Typed raw elasticity2 is retained; older flattened physical asset clamps and
+general native response parity are unchanged. See seam_map_map.md and the recovered
+world material section in physics-interaction.md for source/consumer contracts.
+
 This unit supplies the actual SurfaceProps001 parser's whole source table. Retail semantics and
 layout are owned by `docs/vtmb/physics-interaction.md`, "Independent physics surface material
 producer". This boundary owns all input bytes, including inter-entry comments and whitespace,

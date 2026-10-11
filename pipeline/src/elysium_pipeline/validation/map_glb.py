@@ -11,6 +11,7 @@ PAKFILE entry inside the lump it was cut from and every material name carrying a
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 import struct
 from typing import Any, Mapping, Sequence
@@ -367,6 +368,19 @@ def _check_physics(root: Mapping[str, Any], document: Mapping[str, Any]) -> None
     vertex_total = _accessor_count(document, positions) if positions is not None else 0
     index_total = _accessor_count(document, indices) if indices is not None else 0
     for model in physics.get("models") or []:
+        _require(isinstance(model.get("materialTables"), list), "physics materialTables missing")
+        prior_block = -1
+        for table in model["materialTables"]:
+            _require(isinstance(table.get("blockIndex"), int) and table["blockIndex"] > prior_block,
+                     "physics material table block order invalid")
+            prior_block = table["blockIndex"]
+            _require(isinstance(table.get("declarations"), list), "physics material declarations missing")
+            for declaration in table["declarations"]:
+                _require(isinstance(declaration.get("surfaceName"), str)
+                         and isinstance(declaration.get("slotText"), str)
+                         and isinstance(declaration.get("slot"), int)
+                         and 0 <= declaration["slot"] <= 0x7fffffff,
+                         "physics material declaration invalid")
         for solid in model.get("solids") or []:
             if solid.get("kind") == "havok-mopp":
                 _require("moppCode" in solid, "a MOPP solid publishes no payload span")
@@ -384,6 +398,15 @@ def _check_physics(root: Mapping[str, Any], document: Mapping[str, Any]) -> None
                     int(ledge["indexCount"]) == int(ledge["triangleCount"]) * 3,
                     "a hull's index count is not three per triangle",
                 )
+                associations = ledge.get("materialAssociations") or []
+                _require(len(associations) == int(ledge["triangleCount"]),
+                         "physics material association count disagrees")
+                for ordinal, association in enumerate(associations):
+                    _require(association.get("firstIndex") == int(ledge["firstIndex"]) + ordinal * 3
+                             and association.get("sourceOffset") == int(ledge["sourceOffset"]) + 16 + ordinal * 16
+                             and isinstance(association.get("materialSelector"), int)
+                             and 0 <= association["materialSelector"] <= 127,
+                             "physics material association ordinal/selector disagrees")
     mopp = physics.get("moppCode")
     if mopp:
         total = _accessor_count(document, mopp["accessor"])
@@ -489,6 +512,87 @@ def _placement(origin, angles) -> tuple[list[float], list[float]]:
     return translation, [value / length for value in rotation]
 
 
+def _reread_physics_materials(root: Mapping[str, Any], data: bytes, start: int, length: int) -> None:
+    """Independent source walk: table text and triangle associations, never decoder output."""
+    models = (root.get("physics") or {}).get("models") or []
+    cursor, model_ordinal = start, 0
+    while length and cursor + 16 <= start + length:
+        model_index, data_size, key_size, solid_count = struct.unpack_from("<4i", data, cursor)
+        if model_index == -1:
+            break
+        _require(model_ordinal < len(models), "physics source model missing")
+        model = models[model_ordinal]
+        _require((model["sourceOffset"], model["modelIndex"], model["solidCount"])
+                 == (cursor, model_index, solid_count), "physics source model association disagrees")
+        body = cursor + 16
+        solid_cursor = body
+        solids = model.get("solids") or []
+        _require(len(solids) == solid_count, "physics source solid count disagrees")
+        for solid in solids:
+            solid_size = struct.unpack_from("<i", data, solid_cursor)[0]
+            surface = solid_cursor + 4
+            _require(solid["sourceOffset"] == solid_cursor, "physics source solid association disagrees")
+            if data[surface + 44:surface + 48] == b"IVPS":
+                tree_root = struct.unpack_from("<i", data, surface + 32)[0]
+                pending, seen, source_ledges = [surface + tree_root], set(), []
+                while pending:
+                    node = pending.pop()
+                    _require(surface <= node <= surface + solid_size - 28 and node not in seen,
+                             "physics source ledge tree invalid")
+                    seen.add(node)
+                    right, relative_ledge = struct.unpack_from("<ii", data, node)
+                    if right:
+                        pending.extend((node + right, node + 28))
+                    else:
+                        source_ledges.append(node + relative_ledge)
+                ledges = solid.get("ledges") or []
+                _require([row["sourceOffset"] for row in ledges] == sorted(source_ledges),
+                         "physics material ledge association disagrees with source tree")
+                for ledge in ledges:
+                    source = ledge["sourceOffset"]
+                    count = struct.unpack_from("<h", data, source + 12)[0]
+                    _require(ledge["triangleCount"] == count, "physics source triangle count disagrees")
+                    for ordinal, association in enumerate(ledge["materialAssociations"]):
+                        record = source + 16 + ordinal * 16
+                        _require(association["materialSelector"] == data[record + 3] & 127,
+                                 "physics material selector disagrees with source triangle")
+            solid_cursor = surface + solid_size
+        key_start = body + data_size
+        _require(model["keyValuesSourceOffset"] == key_start, "physics material table source offset disagrees")
+        text = data[key_start:key_start + key_size].decode("latin-1")
+        tokens = [quoted or bare or brace for quoted, bare, brace in
+                  re.findall(r'"([^"]*)"|([^\s\x00{}"]+)|([{}])', text)]
+        tables, position, block_index = [], 0, 0
+        while position < len(tokens):
+            kind = tokens[position].lower()
+            _require(position + 1 < len(tokens) and tokens[position + 1] == "{",
+                     f"physics model {model_index} source table {block_index} opening missing")
+            position += 2
+            declarations = []
+            while True:
+                _require(position < len(tokens),
+                         f"physics model {model_index} source table {block_index} closing missing")
+                if tokens[position] == "}":
+                    break
+                _require(position + 1 < len(tokens) and tokens[position + 1] not in ("{", "}"),
+                         f"physics model {model_index} source table {block_index} pair incomplete")
+                name, slot_text = tokens[position:position + 2]
+                if kind == "materialtable":
+                    prefix = re.match(r"[ \t\r\n\v\f]*([+-]?[0-9]+)", slot_text)
+                    slot = int(prefix.group(1)) if prefix else 0
+                    _require(0 <= slot <= 0x7fffffff, "physics source material slot unsafe")
+                    declarations.append({"surfaceName": name, "slotText": slot_text, "slot": slot})
+                position += 2
+            position += 1
+            if kind == "materialtable":
+                tables.append({"blockIndex": block_index, "declarations": declarations})
+            block_index += 1
+        _require(model["materialTables"] == tables, "physics material declarations disagree with source")
+        model_ordinal += 1
+        cursor = key_start + key_size
+    _require(model_ordinal == len(models), "physics published model count disagrees with source")
+
+
 def _reread(root: Mapping[str, Any], data: bytes) -> None:
     """Re-read the BSP with this module's own struct calls and compare what the unit states."""
 
@@ -509,6 +613,7 @@ def _reread(root: Mapping[str, Any], data: bytes) -> None:
             (int(row["offset"]), int(row["length"]), int(row["version"])) == (offset, length, lump_version),
             f"directory row {index} disagrees with the file",
         )
+    _reread_physics_materials(root, data, directory[29][0], directory[29][1])
     faces = root.get("faces") or []
     _require(len(faces) == directory[7][1] // FACE_BYTES,
              f"the unit states {len(faces)} faces; lump 7 holds {directory[7][1] // FACE_BYTES}")

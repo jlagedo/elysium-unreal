@@ -30,6 +30,21 @@ struct ELYSIUMUE_API FElysiumPhysicsSurfaceData
 	float Dampening() const { return Values.Dampening; }
 };
 
+/** Authored key=name/value=atoi slot, retained in source order, resolved at installation. */
+struct ELYSIUMUE_API FElysiumWorldMaterialDeclaration
+{
+	FString SurfaceName;
+	FString SlotText;
+};
+
+/** Explicit manager state. A future process-owned map consumer retains it across levels.
+ * This value alone does not install native materials or identify a Chaos convex face. */
+struct ELYSIUMUE_API FElysiumWorldMaterialMapping
+{
+	FElysiumWorldMaterialMapping();
+	uint16 Slots[128];
+};
+
 /** Surface authored-data parser and material lookup. Returned rows borrow
  * table storage: a later parse may relocate them, as retail's vector does. The process
  * service survives level/world teardown. No baked UPhysicalMaterial clamps are read. */
@@ -48,6 +63,11 @@ public:
 	const TArray<FString>& Diagnostics() const { return Messages; }
 	bool LoadDeployed(FString& OutError);
 	static FElysiumPhysicsSurfaceProps& ProcessService();
+	// Pure producer/helper boundary: absent preserves; present resets zero then last-wins.
+	bool InstallWorldMaterialTable(FElysiumWorldMaterialMapping& Mapping, bool bPresent,
+		const TArray<FElysiumWorldMaterialDeclaration>& Declarations, FString& OutError) const;
+	const FElysiumPhysicsSurfaceData* ResolveWorldMaterial(const FElysiumWorldMaterialMapping& Mapping,
+		uint8 Selector, const FElysiumPhysicsSurfaceData* BodyMaterial) const;
 
 private:
 	uint16 Intern(const FString& Text);

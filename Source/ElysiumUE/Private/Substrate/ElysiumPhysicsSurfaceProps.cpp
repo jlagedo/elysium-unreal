@@ -78,6 +78,55 @@ FElysiumPhysicsSurfaceProps::FElysiumPhysicsSurfaceProps()
 	Intern(TEXT(""));
 }
 
+FElysiumWorldMaterialMapping::FElysiumWorldMaterialMapping()
+{
+	// Manager ctor26015ba0; map absence must not construct a fresh manager.
+	for (int32 Slot = 0; Slot < 128; ++Slot) Slots[Slot] = uint16(Slot);
+}
+
+bool FElysiumPhysicsSurfaceProps::InstallWorldMaterialTable(FElysiumWorldMaterialMapping& Mapping,
+	bool bPresent, const TArray<FElysiumWorldMaterialDeclaration>& Declarations, FString& OutError) const
+{
+	OutError.Reset();
+	if (!bPresent) return true;
+	FElysiumWorldMaterialMapping Installed;
+	for (uint16& Entry : Installed.Slots) Entry = 0; // world101587bb, not manager ctor.
+	for (const FElysiumWorldMaterialDeclaration& Declaration : Declarations)
+	{
+		// Parser26024150 ->atoi: ASCII whitespace, optional sign, decimal prefix.
+		const TCHAR* Cursor = *Declaration.SlotText;
+		while (*Cursor == ' ' || *Cursor == '\t' || *Cursor == '\r' || *Cursor == '\n'
+			|| *Cursor == '\v' || *Cursor == '\f') ++Cursor;
+		const bool bNegative = *Cursor == '-';
+		if (*Cursor == '-' || *Cursor == '+') ++Cursor;
+		int64 Slot = 0;
+		while (*Cursor >= '0' && *Cursor <= '9')
+		{
+			Slot = Slot * 10 + (*Cursor++ - '0');
+			if (Slot > MAX_int32) break;
+		}
+		if ((bNegative && Slot != 0) || Slot > MAX_int32)
+		{
+			// No shipped negative/overflow witness: refuse memory-OOB without partial install.
+			OutError = FString::Printf(TEXT("materialtable slot '%s' is negative or overflows signed atoi"),
+				*Declaration.SlotText);
+			return false;
+		}
+		if (Slot < 128) Installed.Slots[Slot] = uint16(GetSurfaceIndex(Declaration.SurfaceName));
+	}
+	Mapping = Installed; // #8 26015b90 ->26015ce0 copies low16; duplicates last-wins.
+	return true;
+}
+
+const FElysiumPhysicsSurfaceData* FElysiumPhysicsSurfaceProps::ResolveWorldMaterial(
+	const FElysiumWorldMaterialMapping& Mapping, uint8 Selector,
+	const FElysiumPhysicsSurfaceData* BodyMaterial) const
+{
+	// Contact2604eb60: feature zero is the current body input, not mapped slot zero.
+	if (Selector == 0) return BodyMaterial;
+	return GetSurfaceData(Selector < 128 ? Mapping.Slots[Selector] : Selector); //26015ca0
+}
+
 uint16 FElysiumPhysicsSurfaceProps::Intern(const FString& Text)
 {
 	// 26022b40 / 260229d0: ctor260228e0 selects byte comparator260227b0 (case-sensitive).

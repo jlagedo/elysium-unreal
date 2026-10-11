@@ -1,5 +1,50 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Authored world material producer prerequisite checkpoint (2026-10-11)
+
+After f327317b, the reviewed bounded packet closes supported IVPS map-triangle
+selector/association and ordered materialtable declaration production, plus a pure
+typed resolver with explicit retained manager state. The durable reviewed contract is
+E:/elysium-work/codex/l0-world-material-contract-20261011/precode-contract.md.
+Retail world1002e140 ->10158600 selects named default for static base bodies, but
+contact2604eb60/2603ea60 selects body-current on feature0 and manager#1 on nonzero.
+World101587bb zeros present tables;26024150 resolves ordered names into atoi slots;
+26015ce0 narrows low16,26015ca0 remaps. Absence preserves installed mapping; unknown
+maps65535 to first authored row, not necessarily named default. Full arms/public API
+and malformed-input boundary are in physics-interaction.md and the existing seams.
+
+Fresh identity, present-empty zero-reset, inherited absent mapping, duplicate last-win,
+unknown/missing/invalid rows, nonordinal named rows, reserved current-body0 and raw2
+typed data have literal witnesses. Publication source reread checks every selector and
+triangle association plus ordered declarations, including tamper and malformed tokens.
+Affected pipeline138 passes. Incremental build143424.508298Z and focused3clean at
+143608.633975Z pass. Actual public core-map exports143656.240219Z/143817.983491Z
+publish36850/48130 supported triangle associations. Existing source identities,
+entire geometry BIN bytes and original physics records match previous exports exactly.
+Original4 hull/dispcol sidecars remain byte-identical after public bake2 fromcollision
+with deepverify/nav at143921.962539Z; both maps pass. Actual native cooks retain
+tutorial2391 worldhulls/3584 disptris/185 brushbodies and hub3882/288/145.
+Scenario144233.633131Z passes2, nullfirst_unmet,290/81events; existing27startup errors
+and29warnings remain separate. Functional8 paths froze before final gates in
+functional-freeze-trial2/manifest.json SHA03a585e7a0bf01f8e9bfbb7c8bcf2e4c2756b23cc0d356cd052ed2500b2f4785.
+
+Trial1 preserved source/diff/hash before correcting an invalid new test's assumption
+that the map root embeds a BSP capsule. Existing format publishes source identity/digest;
+the corrected witness verifies exact closure bytes and published digest. Original valid
+tests and geometry/order assertions were not weakened. All original/retained receipts,
+old/new GLBs and source hashes are in final-manifest.json under the packet evidence root.
+
+Required next consumer remains semantic associations/declarations through the native
+bake and supported production face/contact selection before normal226/100a55b0/44/178
+binding. Current vertex-only convex payload and absent public authored convex selector
+service cannot establish that. No uniform world material write, FromJson clamp change,
+physics clock/mechanics change or IVP clone occurred. Common99 input prefix/probe
+provenance and settled inertia/damping/cadence/qualification/lifetime remain unchanged.
+Normal native44f20/178f32 versus retail44f26/no178, raw2 native semantics, player-owner
+and movementallowed/L4 remain OPEN. Original0 new,23/88 complete65remaining; fullL0
+and r044/r045 stay OPEN. Coordinator owns final gates/review/exact-path commit; worker
+starts no next packet and leaves no engine job.
+
 ## Reserved material packet contract and boundary (2026-10-11)
 
 The durable pre-code contract, reviewed before functional edits, is

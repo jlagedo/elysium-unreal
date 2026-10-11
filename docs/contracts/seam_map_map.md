@@ -1,5 +1,54 @@
 # Map GLB seam
 
+## Authored collision material provenance — schema1.2.0 (2026-10-11)
+
+Schema1.2.0 adds metadata to the existing root physics producer; geometry/BIN,
+indices, triangle order, original records and source identity/digest are unchanged.
+The map root's existing sourceResolution identifies the selected BSP and its digest;
+it does not embed a BSP capsule. Publication independently rereads that exact source.
+
+| Additive field | Meaning |
+|---|---|
+| `physics.models[].materialTables[]` | Materialtable blocks in source order; empty list means no block |
+| `materialTables[].blockIndex` | Ordinal in the unchanged ordered `keyValues` blocks |
+| `materialTables[].declarations[]` | Ordered authored pairs, preserving duplicate slots and unknown names |
+| `declarations[].surfaceName` | Requested exact semantic name; late-bound to process SurfaceProps, not a resolved row |
+| `declarations[].slotText` | Original authored value token |
+| `declarations[].slot` | Signed ASCII decimal-prefix atoi result; nonnumeric is0, >=128 ignored by installation |
+| `physics.models[].solids[].ledges[].materialAssociations[]` | One association per supported IVPS emitted triangle, in the same order |
+| `materialAssociations[].sourceOffset` | Absolute authored triangle record offset in the selected BSP |
+| `materialAssociations[].firstIndex` | Triangle's first index in the unchanged physics index accessor |
+| `materialAssociations[].materialSelector` | Triangle byte3&127; authored lookup selector, never a SurfaceProps row ordinal or native face ID |
+
+Retail2604eb60 selects current body material for selector0, bypassing mapped slot0.
+Nonzero selects manager#1; the manager's initial128-slot state is identity. World
+101587bb/26024150/26015ce0 installs a present table from zeroed128 entries,
+ordered named lookups and low16 narrowing; duplicate slots last-win. Unknown names
+become65535 and resolve first authored row; missing present slots become0. An empty
+present block therefore resets mapping to0. Absence preserves incoming installed
+manager state across maps. Installation belongs to a process-owned future consumer,
+not the exporter; no new surface-table source dependency or visual VMT join is added.
+
+Negative/overflow atoi input, absent from the finite108-map shipped inventory, is
+explicitly refused before publication or pure helper installation. No retail OOB
+write/undefined arithmetic is reproduced. Block classification follows the existing
+lowercase KeyValues seam parser; all shipped materialtable names are lowercase.
+
+The validator independently walks source model/solid/ledge records, checks every
+selector byte and exact triangle ordinal/source association, and tokenizes source
+table pairs to check names, raw slot tokens, parsed values, duplicates and block order.
+Malformed source tokens produce contextual validation errors. MOPP interiors remain
+typedUnidentified; no associations are fabricated for them.
+
+This producer is a prerequisite. Current cooked collision payloadversion3 still
+contains native vertex-only convex shapes and displacement soup. Required consuming
+work must carry semantic associations/declarations through the bake, retain the
+process mapping's absence semantics, and prove supported native face/contact selection
+before material binding. Public FConvex does not provide authored face material
+selection through GetMaterialIndex. No IVP runtime topology or private native solver
+reconstruction follows. The detailed retail/API contract is physics-interaction.md's
+"Authored world collision material selection" section.
+
 This document defines the root unit of one VtMB BSP map. A BSP is one member cut into four
 units — the map root and three lump-family sub-units — so that an entity query does not load
 world geometry and a lighting inspection does not load the entity lump:

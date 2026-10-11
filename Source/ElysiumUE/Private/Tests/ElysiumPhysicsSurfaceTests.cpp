@@ -128,4 +128,52 @@ bool FElysiumPhysicsSurfaceParserTest::RunTest(const FString&)
 	TestEqual(TEXT("once-only shadow was not refreshed"), EmptyFirst.GetSurfaceData(0xf000)->Density(), 0.f);
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldMaterialResolverTest,
+	"Elysium.Substrate.PhysicsSurface.WorldMaterialResolver",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumWorldMaterialResolverTest::RunTest(const FString&)
+{
+	FElysiumPhysicsSurfaceProps Service;
+	Service.ParseSurfaceData(TEXT("world-test"), TEXT("first { friction .3 } default { friction .8 } metal { elasticity 2 } wood { friction .6 }"));
+	FElysiumWorldMaterialMapping Mapping;
+	FString Error;
+	TestEqual(TEXT("fresh manager identity127"), Mapping.Slots[127], uint16(127));
+	TestTrue(TEXT("identity feature1 is default row1"), Service.ResolveWorldMaterial(Mapping, 1, nullptr) == Service.GetSurfaceData(1));
+	TestNull(TEXT("ordinary invalid mapped row stays null"), Service.ResolveWorldMaterial(Mapping, 127, nullptr));
+	const TArray<FElysiumWorldMaterialDeclaration> Installed = {
+		{TEXT("metal"), TEXT(" +7suffix")}, {TEXT("wood"), TEXT("7")},
+		{TEXT("missing"), TEXT("8")}, {TEXT("metal"), TEXT("9")},
+		{TEXT("ignored"), TEXT("128")}, {TEXT("metal"), TEXT("0x10")}};
+	TestTrue(TEXT("present table installs"), Service.InstallWorldMaterialTable(Mapping, true, Installed, Error));
+	const FElysiumPhysicsSurfaceData* Wood = Service.ResolveWorldMaterial(Mapping, 7, nullptr);
+	if (TestNotNull(TEXT("duplicate slot resolves named row"), Wood))
+		TestEqual(TEXT("duplicate slot last wins named row"), Wood->Friction(), .6f);
+	TestEqual(TEXT("unknown narrows to65535"), Mapping.Slots[8], uint16(65535));
+	TestTrue(TEXT("unknown resolves first authored row, not named default"), Service.ResolveWorldMaterial(Mapping, 8, nullptr) == Service.GetSurfaceData(0));
+	TestTrue(TEXT("missing present slot maps row0"), Service.ResolveWorldMaterial(Mapping, 6, nullptr) == Service.GetSurfaceData(0));
+	const FElysiumPhysicsSurfaceData* Metal = Service.ResolveWorldMaterial(Mapping, 9, nullptr);
+	if (TestNotNull(TEXT("raw authored metal row resolves"), Metal))
+		TestEqual(TEXT("typed raw elasticity2 retained"), Metal->Elasticity(), 2.f);
+	const FElysiumPhysicsSurfaceData* Body = Service.GetSurfaceData(0xf000);
+	TestTrue(TEXT("feature zero selects current reserved body despite mapped slot0"), Service.ResolveWorldMaterial(Mapping, 0, Body) == Body);
+	TestNull(TEXT("feature zero null body has no invented fallback"), Service.ResolveWorldMaterial(Mapping, 0, nullptr));
+	TestTrue(TEXT("absent block preserves prior installed manager state"), Service.InstallWorldMaterialTable(Mapping, false, {}, Error));
+	TestEqual(TEXT("absent block retained wood"), Mapping.Slots[7], uint16(Service.GetSurfaceIndex(TEXT("wood"))));
+	for (const TCHAR* Token : {TEXT("-1"), TEXT(" -12tail"), TEXT("2147483648"), TEXT("99999999999999999999")})
+	{
+		const TArray<FElysiumWorldMaterialDeclaration> Invalid = {{TEXT("metal"), TEXT("7")}, {TEXT("wood"), Token}};
+		TestFalse(TEXT("unsafe authored slot refuses without OOB clone"), Service.InstallWorldMaterialTable(Mapping, true, Invalid, Error));
+		TestEqual(TEXT("refusal retains previous mapping atomically"), Mapping.Slots[7], uint16(Service.GetSurfaceIndex(TEXT("wood"))));
+	}
+	for (const TCHAR* Token : {TEXT("+"), TEXT("-oops"), TEXT("-0tail"), TEXT("nondigit")})
+	{
+		TestTrue(TEXT("atoi malformed nonnumeric token is zero"), Service.InstallWorldMaterialTable(Mapping, true, {{TEXT("metal"), Token}}, Error));
+		TestEqual(TEXT("decimal prefix mapped slot zero"), Mapping.Slots[0], uint16(Service.GetSurfaceIndex(TEXT("metal"))));
+	}
+	TestTrue(TEXT("signed decimal partial token installs"), Service.InstallWorldMaterialTable(Mapping, true, {{TEXT("wood"), TEXT("\t+12.5")}}, Error));
+	TestEqual(TEXT("decimal prefix stops at punctuation"), Mapping.Slots[12], uint16(Service.GetSurfaceIndex(TEXT("wood"))));
+	TestTrue(TEXT("empty present table resets mapping"), Service.InstallWorldMaterialTable(Mapping, true, {}, Error));
+	TestEqual(TEXT("empty present table zero reset12"), Mapping.Slots[12], uint16(0));
+	return true;
+}
 #endif

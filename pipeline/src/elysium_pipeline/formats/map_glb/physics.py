@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
 import math
+import re
 import struct
 from typing import Any, Callable
 
@@ -37,6 +38,25 @@ TERMINATOR_MODEL_INDEX = -1
 
 class MapPhysicsError(ValueError):
     """The PHYSCOLLIDE lump is not the compact-surface container this seam accounts for."""
+
+
+def material_slot(text: str) -> int:
+    """26024150's atoi decimal prefix; refuse unobserved overflow/OOB writes."""
+    match = re.match(r"[ \t\r\n\v\f]*([+-]?[0-9]+)", text)
+    slot = int(match.group(1)) if match else 0
+    if slot < 0 or slot > 0x7FFFFFFF:
+        raise MapPhysicsError(f"materialtable slot {text!r} is negative or overflows signed atoi")
+    return slot
+
+
+def material_tables(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # Requested names stay late-bound to process SurfaceProps; never join VMT slots.
+    return [
+        {"blockIndex": index, "declarations": [
+            {"surfaceName": pair["key"], "slotText": pair["value"],
+             "slot": material_slot(pair["value"])} for pair in block["pairs"]]}
+        for index, block in enumerate(blocks) if block["type"] == "materialtable"
+    ]
 
 
 @dataclass(slots=True)
@@ -317,6 +337,7 @@ def decode(data: bytes, offset: int, length: int) -> PhysicsDecode:
                 "keydataSize": int(keydata_size),
                 "solidCount": int(solid_count),
                 "keyValues": blocks,
+                "materialTables": material_tables(blocks),
                 "keyValuesSourceOffset": key_offset,
                 "solids": solids,
             }
@@ -389,8 +410,13 @@ def _ledge(
     first_vertex = len(vertices)
     first_index = len(indices)
     virtual_edges = 0
+    material_associations = []
     for triangle in range(triangle_count):
         base = triangle_start + triangle * TRIANGLE_BYTES
+        # 2603ea60 ->2604eb60: zero selects body material; nonzero manager#1.
+        material_associations.append({"sourceOffset": base,
+                                      "firstIndex": first_index + triangle * 3,
+                                      "materialSelector": data[base + 3] & 0x7F})
         corners = []
         for edge in range(3):
             raw = struct.unpack_from("<I", data, base + 4 + edge * 4)[0]
@@ -436,4 +462,5 @@ def _ledge(
         "vertexCount": vertex_count,
         "firstIndex": first_index,
         "indexCount": triangle_count * 3,
+        "materialAssociations": material_associations,
     }

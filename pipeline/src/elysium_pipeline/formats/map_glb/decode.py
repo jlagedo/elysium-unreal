@@ -915,6 +915,8 @@ def decode_map(
             "moppCode": _mopp_block(data, decoded_physics.mopp, builder, typed_unidentified),
             "triangleRecords": {
                 "recordBytes": physics.TRIANGLE_BYTES,
+                "materialSelector": "record byte3 & 127; zero uses current body material; "
+                                    "nonzero resolves through retained process material table",
                 "note": "each IVP_Compact_Triangle states three start points, which are the "
                         "index accessor, and three opposite-edge links, which are that same "
                         "topology's adjacency",

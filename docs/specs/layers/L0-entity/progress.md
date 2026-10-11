@@ -1,5 +1,56 @@
 # L0 progress — the orchestrator's log
 
+## Authored world material provenance prerequisite — 2026-10-11 (after f327317b)
+
+Reviewed producer scope adds map schema1.2.0 ordered requested-name/atoi-slot
+declarations and supported IVPS triangle selector/source/index association. A public
+typed pure helper takes explicit retained128 mapping plus body-current material;
+absent preserves, present zeroes, duplicate last-win, unknown65535 first-row and
+feature0/body-current arms are literal-tested. No uniform world material/native
+binding, physics mechanics/clock/save change or exporter surface-table dependency.
+Full retail factory/contact mapping is recorded in physics-interaction.md and the
+pusher walk. Shipped108-map inventory has108 world tables and no negative/>=128 slots.
+
+Functional8 paths froze before final gates:
+E:/elysium-work/codex/l0-world-material-contract-20261011/functional-freeze-trial2/manifest.json
+SHA03a585e7a0bf01f8e9bfbb7c8bcf2e4c2756b23cc0d356cd052ed2500b2f4785.
+Affected offline pipeline138 passes; build143424.508298Z exits0/75s; focused3clean
+at E:/elysium-work/reports/tests/20261011T143608.633975Z-elysium-substrate-physicssurface/index.json
+passes0failed/notRun/inProcess (wrapper143608.481536Z exits0, runtime1warning separate).
+Actual coremap exports143656.240219Z/143817.983491Z pass:36850/48130 triangle
+associations, exact original source identity/digest, entire BIN geometry and old
+physics records unchanged. New and old GLBs are retained. Public bake2 fromcollision
+with deepverify/nav143921.962539Z exits0/175s, both maps pass; native hull/disp/brush
+counts2391/3584/185 tutorial and3882/288/145 hub. Original4 hull/disp sidecars are
+byte-identical. Scenario2 at E:/elysium-work/reports/arena/20261011T144233.633131Z/index.json
+and arena/index.json passes2/nullfirst_unmet/events290/81; wrapper144233.328242Z
+exits0/28.1s, existing27startup errors29warnings separate from scenario assertions.
+
+Trial1 source/diff/hash and137pass/1fail receipt were preserved before correcting
+an invalid new capsule test assumption. Map root preserves source identity/digest
+and exact closure bytes; it does not embed a BSP capsule. No original valid test
+was weakened. Original/retained reports, logs, old/new GLBs, source and proof hashes
+are indexed in the packet final-manifest.json. Only documentation follows final gates.
+Coordinator default191 at
+E:/elysium-work/reports/tests/20261011T144345.322387Z-elysium-session-elysium-substrate/index.json
+passes112clean79warned0failed/notRun/inProcess; wrapper144345.165444Z-test.json exits0.
+Bounded19 at E:/elysium-work/reports/arena/20261011T144428.462209Z/index.json passes19
+across arena/sm_hub_1, both hosts exit0, ordinaryfirst_unmet null and2refusal selftests
+retain inverted passes. Wrapper144428.243679Z-arena.json exits0; existing27startup
+errors535warnings remain separate. Doctor144542.658871Z exits0/21existing warnings;
+repo-only policy144553.947638Z exits0/0warnings. Full coordinator copies are in
+coordinator-receipts under the packet evidence root. Coordinator owns review and exact-path commit.
+
+Completed declaration/association/helper is a prerequisite inside open packages.
+Required next consuming closure: carry semantic associations/declarations into the
+bake and prove supported native production face/contact selection before binding
+normal226/100a55b0/44/178. Vertex-only convex payload lacks that association.
+FromJson clamp/raw2 response, normal44nativef20/178f32 versus retail44f26/no178,
+movementallowed/L4 and special-player ownership remain OPEN. Common99 input/probe
+provenance and settled mechanics remain unchanged. **0 original packages newly closed;
+23/88 complete,65 remaining.** FullL0/r044/r045 remain OPEN. Worker stops with no
+jobs or next packet; no commit/stage/push or tracked gamecontent/golden/audit/hook changes.
+
 ## Reserved material semantics, pair effects and lifecycle checkpoint — 2026-10-11
 
 One bounded packet after f0e277c1 maps the recovered normal45/2601a7e0 reserved

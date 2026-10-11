@@ -1,5 +1,69 @@
 # VtMB's rigid-body world — ragdolls, the physics hands, and the placed physics surface
 
+## Authored world collision material selection (2026-10-11)
+
+The world factory is vampire1002e140 ->10158600. Initial static body10158612..64
+and each parsed solid/staticsolid1015884a..82 use SurfaceProps#3("default"),
+independent of parsed surfaceprop. They retain worldspawn creation data, static
+origin/angles and flags|200; parsed solids set contents through66. Fluid's water
+arm10158743..78 is separate. These base materials do not establish uniform face
+response: contact2604ec00 calls2604eb60 before the settled friction/elasticity
+products.2603ea60 reads collision triangle byte3&7f. Feature0 selects the current
+body material+98; nonzero calls material-manager#1. Visual VMT slots and sound or
+trace surface selection are not this producer.
+
+Manager ctor26015ba0 initializes128 uint16 slots to identity0..127. World101587bb
+zeroes128 INT entries for a present materialtable. Collision007 parser#6=26024150
+reads ordered key=surface NAME via SurfaceProps#3, value=atoi SLOT, and writes
+when signed slot<128. Duplicate slots are last-wins; >=128 is ignored. Negative
+slots write before the retail table (there is no lower-bound guard). Installation
+SurfaceProps#8=26015b90 adds58 to the manager and26015ce0 copies low16 of the128
+entries. Missing entries in a present table therefore become0; unknown case-sensitive
+names return-1 and become65535. Each present block starts zeroed and installs in
+source order. An absent table does not call installation: existing manager state
+survives, including mapping from an earlier level. Identity is only fresh-manager
+initialization, not an absent-map default.
+
+Manager#1=26015cc0 ->26015ca0 remaps features<=127 through that retained table,
+then SurfaceProps#10.26014f60 ->26015080/260150f0 maps65535 to the first authored
+row, which need not be named default; f000 is reserved. Invalid ordinary rows stay
+null. Feature0 bypasses mapping slot0 and preserves the body's current material,
+including an installed/retained reserved shadow input. Friction/elasticity remain
+raw dimensionless FLOAT values before the established pair products.
+
+The bounded producer now publishes ordered requested-name/slot declarations and
+each supported IVPS source triangle's seven-bit selector and exact index/source
+association in map schema1.2.0. Names resolve through existing process SurfaceProps,
+not an exporter table dependency or assumed row ordinal. FElysiumWorldMaterialMapping
+and public InstallWorldMaterialTable/ResolveWorldMaterial form a pure explicit-state
+helper: absent preserves, present zeroes, unknown narrows, duplicate last-wins, zero
+uses explicit current body input. The caller retains mapping and owns installation
+order. Returned rows borrow the established table lifetime. This helper does not
+install map state or native materials. It introduces no clock, save word or higher hook.
+
+Signed ASCII decimal-prefix atoi is retained for partial/nonnumeric tokens. Negative
+and signed-overflow input is explicitly refused atomically, rather than cloning
+memory OOB/undefined arithmetic. Finite UP-first inventory of108 maps/6681 physics
+models found108 materialtables, all on model0, no negative slots and none>=128.
+MOPP interiors remain typedUnidentified and receive no fabricated face association.
+
+Installed UE5.8 SetPhysMaterialOverride remains the supported component binding;
+BodyInstance.cpp3143 also recomputes mass after updating materials under ExecuteWrite.
+ContactModification.h exposes public shapes, implicits, point locations/normal/separation
+and material coefficient modifications, but no authored convex face selector getter.
+ImplicitObject.h418 GetMaterialIndex defaults0; FConvex has no override, while
+TriangleMeshImplicitObject does. Existing vertex-only FKConvexElem payloadversion3
+does not prove source-face association. The next required consuming closure must carry
+copied semantic associations/declarations through the bake and prove supported native
+face/contact selection on production geometry before binding or normal226/44/178 claims.
+No IVP topology, allocator, geometry, scheduling or solver reconstruction follows.
+
+The older flattened FromJson elasticity clamp is unchanged; typed raw elasticity2 is
+an authored-data witness, not native restitution equivalence. Normal44nativef20/178f32
+versus retail44f26/no178 remains open, as do movementallowed/L4 and special-player
+26015bd0/2601bc60 ownership. Evidence and gates are in the matching pusher walk and
+E:/elysium-work/codex/l0-world-material-contract-20261011/final-manifest.json.
+
 ## Reserved shadow material and ordinary native pair response (2026-10-11)
 
 Normal Pusher.cpp617 / Prop.cpp815 call object45/26018520 with false,false.

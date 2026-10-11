@@ -109,7 +109,7 @@ def _pakfile(members: dict[str, bytes], gap: bytes = b"") -> bytes:
     return bytes(body)
 
 
-def _ivps_solid(*, magic: bytes = b"IVPS", points=None) -> bytes:
+def _ivps_solid(*, magic: bytes = b"IVPS", points=None, material_bytes=None) -> bytes:
     """One compact surface holding a single tetrahedron ledge."""
 
     points = points or [
@@ -120,8 +120,9 @@ def _ivps_solid(*, magic: bytes = b"IVPS", points=None) -> bytes:
     ]
     triangles = [(0, 1, 2), (0, 2, 3), (0, 3, 1), (1, 3, 2)]
     ledge = bytearray(struct.pack("<iiIhh", 80, 0, (16 << 8) | 1, len(triangles), 0))
-    for corners in triangles:
-        ledge.extend(struct.pack("<I", 0))
+    for ordinal, corners in enumerate(triangles):
+        material_byte = (material_bytes or [0] * 4)[ordinal]
+        ledge.extend(struct.pack("<I", material_byte << 24))
         for corner in corners:
             ledge.extend(struct.pack("<I", corner))
     assert len(ledge) == 16 + len(triangles) * 16
@@ -243,6 +244,8 @@ def build_bsp(
     prop_type: int = 0,
     prop_origin: tuple[float, float, float] = (16.0, 32.0, 48.0),
     primitives: bool = False,
+    material_bytes=None,
+    physics_keytext: bytes = b'solid {\n"index" "0"\n"surfaceprop" "concrete"\n}\n\0',
 ) -> bytes:
     builder = BspBuilder()
     builder.add(0, b'{\n"classname" "worldspawn"\n}\n\0')
@@ -332,12 +335,12 @@ def build_bsp(
         builder.add(39, struct.pack("<4H", 0, 1, 2, 3))
     if inter_lump_fill:
         builder.pad(len(inter_lump_fill), inter_lump_fill)
-    solids = [_ivps_solid()]
+    solids = [_ivps_solid(material_bytes=material_bytes)]
     if mopp is not None:
         solids.append(_mopp_solid(mopp))
     builder.add(
         29,
-        _physcollide(solids, b'solid {\n"index" "0"\n"surfaceprop" "concrete"\n}\n\0'),
+        _physcollide(solids, physics_keytext),
     )
     members = {
         f"materials/{PATCHED_NAME}.vmt": b'"LightmappedGeneric"\n{\n}\n',
@@ -402,6 +405,95 @@ def decoded(data: bytes, **kwargs):
 
 def extension_of(document) -> dict:
     return document["extensions"][map_glb.MAP_EXTENSION]
+
+
+def test_authored_material_provenance_preserves_geometry_and_triangle_order(tmp_path):
+    keytext = (b'solid { "index" "0" } materialtable { "metal" " +7suffix" '
+               b'"wood" "7" "missing" "127" "ignored" "128" "first" "nondigit" } '
+               b'materialtable { }\0')
+    data = build_bsp(material_bytes=[0, 1, 127, 0x82], physics_keytext=keytext)
+    destination, _index = export_unit(tmp_path, data)
+    document, binary = read_glb(destination)
+    closure, _model = decoded(data)
+    assert closure.bsp.data == data
+    member = extension_of(document)["sourceResolution"]["members"][0]
+    assert member["path"] == MAP_KEY
+    assert member["byteLength"] == len(data)
+    assert member["sha256"] == hashlib.sha256(data).hexdigest()
+    published = extension_of(document)["physics"]["models"][0]
+    ledge = published["solids"][0]["ledges"][0]
+    assert ledge["materialAssociations"] == [
+        {"sourceOffset": ledge["sourceOffset"] + 16 + ordinal * 16,
+         "firstIndex": ledge["firstIndex"] + ordinal * 3, "materialSelector": selector}
+        for ordinal, selector in enumerate([0, 1, 127, 2])]
+    assert published["materialTables"] == [
+        {"blockIndex": 1, "declarations": [
+            {"surfaceName": name, "slotText": text, "slot": slot} for name, text, slot in
+            [("metal", " +7suffix", 7), ("wood", "7", 7), ("missing", "127", 127),
+             ("ignored", "128", 128), ("first", "nondigit", 0)]]},
+        {"blockIndex": 2, "declarations": []}]
+    # Independently compare native geometry BIN accessor bytes against unchanged source geometry.
+    baseline, baseline_bin = exporter.build_document(decoded(build_bsp())[1])
+    for field in ("positionAccessor", "indexAccessor"):
+        def payload(doc, blob):
+            accessor = doc["accessors"][extension_of(doc)["physics"][field]]
+            view = doc["bufferViews"][accessor["bufferView"]]
+            return blob[view.get("byteOffset", 0):view.get("byteOffset", 0) + view["byteLength"]]
+        assert payload(document, binary) == payload(baseline, baseline_bin)
+
+
+@pytest.mark.parametrize("token,slot", [("+", 0), ("-oops", 0), ("-0tail", 0),
+                                     ("\t+12.5", 12), ("0x10", 0), ("127junk", 127)])
+def test_materialtable_decimal_prefix_publication(token, slot):
+    data = build_bsp(physics_keytext=f'materialtable {{ "wood" "{token}" }}'.encode())
+    assert decoded(data)[1].physics["models"][0]["materialTables"][0]["declarations"][0]["slot"] == slot
+
+
+@pytest.mark.parametrize("token", ["-1", " -12tail", "2147483648", "99999999999999999999"])
+def test_materialtable_unsafe_slot_refuses_export(tmp_path, token):
+    data = build_bsp(physics_keytext=f'materialtable {{ "wood" "{token}" }}'.encode())
+    with pytest.raises(ValueError, match="materialtable slot"):
+        export_unit(tmp_path, data)
+    assert not list(tmp_path.rglob("*.glb"))
+
+
+@pytest.mark.parametrize("mutation", ["selector", "source", "ordinal", "name", "slot", "order", "missing", "association-missing", "association-extra"])
+def test_source_validation_refuses_tampered_material_association_or_declarations(mutation):
+    data = build_bsp(material_bytes=[1, 2, 3, 4],
+                     physics_keytext=b'materialtable { "wood" "2" "metal" "1" }')
+    closure, model = decoded(data)
+    document, binary = exporter.build_document(model)
+    physics_model = extension_of(document)["physics"]["models"][0]
+    associations = physics_model["solids"][0]["ledges"][0]["materialAssociations"]
+    declarations = physics_model["materialTables"][0]["declarations"]
+    if mutation == "selector": associations[0]["materialSelector"] = 7
+    if mutation == "source": associations[0]["sourceOffset"] += 16
+    if mutation == "ordinal": associations.reverse()
+    if mutation == "name": declarations[0]["surfaceName"] = "other"
+    if mutation == "slot": declarations[0]["slotText"], declarations[0]["slot"] = "3", 3
+    if mutation == "order": declarations.reverse()
+    if mutation == "missing": physics_model["materialTables"] = []
+    if mutation == "association-missing": associations.pop()
+    if mutation == "association-extra": associations.append(dict(associations[-1]))
+    with pytest.raises(ValueError, match="material"):
+        validation.validate_document(document, binary, source_members=closure.members())
+
+
+@pytest.mark.parametrize("bad_text,reason", [(b'materialtable', "opening missing"),
+                                           (b'materialtable {', "closing missing"),
+                                           (b'materialtable { "wood" }', "pair incomplete")])
+def test_source_material_token_failures_are_contextual(bad_text, reason):
+    data = build_bsp(physics_keytext=b'materialtable { "wood" "2" }')
+    _closure, model = decoded(data)
+    document, _binary = exporter.build_document(model)
+    root = extension_of(document)
+    physics_model = root["physics"]["models"][0]
+    key_start, key_size = physics_model["keyValuesSourceOffset"], physics_model["keydataSize"]
+    damaged = bytearray(data)
+    damaged[key_start:key_start + key_size] = bad_text.ljust(key_size, b' ')
+    offset, length = struct.unpack_from("<2i", data, 8 + 29 * 16)
+    with pytest.raises(ValueError, match=f"physics model 0 source table 0 {reason}"):
+        validation._reread_physics_materials(root, bytes(damaged), offset, length)
 
 
 # --------------------------------------------------------------------------------------------
