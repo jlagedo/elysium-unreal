@@ -3550,3 +3550,16 @@ The bounded `l0_physics_solid_mask` record calls the live slot on registered rel
 receivers and checks the three return values without trace or physics-body fixtures.
 No generic position query, entity trace, shadow/body production or transform function closes
 with this selector. Gate results belong to the coordinator's progress checkpoint.
+
+## CPhysicsProp body input fields and native lifetime (2026-10-11)
+
+The replayed CPhysicsProp datamap identifies mMassBias(+0x77c), external `massbias`, and
+mMassOverride(+0x780), external `override_mass`, both SAVE|KEY (flags6). Factory10191340
+allocates0x78c via100aa720; VEngineServer014#45 engine.dll201092d0 calls calloc(1,size).
+CBreakableProp ctor1018f1c0 and the leaf factory do not overwrite these words, so their default
+is0. The class field bindings now provide both actual keyvalue and save producers. Creation
+10191510 applies positive massbias and clamp before positive override_mass, and supplies the
+spawnflags bit1 sleep input. PhysProp's actual Spawn/SetModel/Kill/world teardown callers now
+use the dedicated native body adapter; GetAttachBody remains a scene attachment anchor, while
+dynamic body identity and activity are queried separately. This does not complete generic
+VPhysicsSetObject, deferred deletion, callback/relink order or solved-pose publication.

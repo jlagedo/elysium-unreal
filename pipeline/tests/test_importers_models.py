@@ -58,6 +58,8 @@ def _model_document(
         body_parts = [{"index": 0, "models": [{"index": 0}]}]
     if physics == "default":
         physics = {
+            "keyValues": [{"type": "solid", "pairs": [
+                {"key": "mass", "value": "12"}, {"key": "surfaceprop", "value": "wood"}]}],
             "solids": [{
                 "properties": {"mass": 12.0, "surfaceprop": "wood"},
                 "hulls": [{"sourceOffset": 0}],
@@ -266,3 +268,34 @@ def test_map_scoped_selection_matches_real_corpus():
 def test_stage_refuses_to_run_unscoped(tmp_path):
     with pytest.raises(importer.ModelImportError, match="unscoped"):
         importer.stage_models(tmp_path / "export", tmp_path / "stage")
+
+
+def test_body_input_selection_preserves_all_render_collision_solids():
+    extension = {"physics": {"solids": [{"hulls": [1, 2], "properties": {}},
+                                          {"hulls": [3, 4, 5]}],
+                             "keyValues": [{"type": "editparams", "pairs": []},
+                                           {"type": "SOLID", "pairs": [
+                                               {"key": "index", "value": "7"},
+                                               {"key": "mass", "value": "2"},
+                                               {"key": "mass", "value": "9"},
+                                               {"key": "masscenter", "value": "1 2 3"}]},
+                                           {"type": "solid", "pairs": [{"key": "mass", "value": "99"}]}]}}
+    collision = importer._build_collision(extension)
+    assert collision["hullCount"] == 5  # shared render/static mesh cook remains complete
+    inputs = collision["bodyInputs"]
+    assert inputs["sourceBody"] is True
+    assert inputs["firstSolidHullCount"] == 2  # dynamic model creator selects binary solid0
+    assert [pair["value"] for pair in inputs["solidPairs"][:3]] == ["7", "2", "9"]
+    assert inputs["massCenterCm"] == pytest.approx([2.54, -5.08, 7.62])
+
+
+def test_body_input_absence_is_distinct_from_bbox_visual_collision():
+    collision = importer._build_collision({"mdl": {"header": {"hullMin": [0, 0, 0], "hullMax": [1, 2, 3]}}})
+    assert collision["mode"] == "bbox"
+    assert collision["bodyInputs"]["sourceBody"] is False
+    assert collision["bodyInputs"]["solidPairs"] == []
+    assert collision["bodyInputs"]["firstSolidHullCount"] == 0
+
+
+def test_body_input_requires_authored_solid_block_even_with_binary_geometry():
+    assert importer._body_inputs({"physics": {"solids": [{"hulls": [1]}]}})["sourceBody"] is False

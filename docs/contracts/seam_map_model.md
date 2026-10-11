@@ -1279,3 +1279,22 @@ Shipped scope: 100 event records name 16 paths; 15 resolve, and
 `models/items/walkie_talkie.mdl` is the one source gap (`items/walkie_talkie/walkie_talkie`'s
 own sequence names a sibling copy of itself that is in no VPK).
 
+
+### Selected prop physics inputs (2026-10-11)
+
+Each collision recipe now carries `bodyInputs.version:1`, `sourceBody`, ordered `solidPairs`,
+`firstSolidHullCount` and optional `massCenterCm`. Presence requires binary solid0 plus a real
+first authored solid block. Authored index does not choose the binary solid. Original ordered
+pairs remain on asset userdata; typed defaults/last-key overrides are parsed by the runtime
+editor projection. The shared mesh/provenance hull count continues to describe ALL cooked
+solids. UElysiumModelPhysicsInputs.SelectedBody describes only binary solid0, and only
+UElysiumPhysicsPropComponent uses it. Static/generic mesh consumers retain their previous cook.
+Raw selected-body surfaceprop is distinct from the older display/material fallback projection.
+
+The optional authored masscenter is converted once from Source inches/axes to Unreal cm/axes;
+component scale is applied when installing native COM. `sourceBody:false` means retail inert
+prop state even if the visible mesh has cooked bbox fallback geometry. Missing userdata means
+an obsolete host bake, diagnosed for reimport; it is not source absence. The new per-model
+recipe input invalidates selected model bakes without a global manifest version migration.
+The two validation witnesses were publicly reimported; unselected old assets are not claimed
+ready for the new adapter. No runtime source corpus or scratch-file reads are introduced.

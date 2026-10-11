@@ -225,3 +225,22 @@ The detailed retail evidence and missing producers are in `docs/vtmb/entity_io.m
 | L0-r086 | physics | `L0.physics.l0-physics-constraint-entity-family-3` | 4 | 447 | 34 | yes | L0-r001, L0-r026, L0-r044, L0-r045 … |
 | L0-r087 | movers_doors | `L0.movers_doors.l0-entity-io-prop-switch-sound-and-reset-1`, `L0.movers_doors.l0-movers-doors-door-arrival-binding-1` | 5 | 1234 | 49 | yes | L0-r001, L0-r008, L0-r026, L0-r039 … |
 | L0-r088 | parked | `L0.parked.l0-physics-ragdoll-physics-asset-import-1`, `L0.parked.l0-save-restore-reliable-native-slot-storage-1`, `L0.parked.l0-save-restore-content-compatibility-preflight-1`, `L0.parked.l0-save-restore-semantic-save-diagnostics-1`, `L0.parked.l0-save-restore-retail-save-roster-match-1`, `L0.parked.l0-save-restore-retail-save-roster-match-2`, `L0.parked.l0-save-restore-retail-save-native-slot-import-1` | 0 | 0 | 25 | yes | L0-r001, L0-r029, L0-r030, L0-r079 … |
+
+## Selected model adapter prerequisite (2026-10-11; broad run remains open)
+
+Root approved the independent authored input conversion and direct prop creation/lifetime
+prerequisite before generic callback/publication consumers. This is not the complete body/
+controller packet described by the older run boundary. Public importer supplies first-solid
+geometry/pairs; actual prepared model factory supplies the production proxy; actual datamap
+key/save fields supply entity mass inputs. Chaos supplies bodies, base properties and activity.
+Source absence, real SetModel replacement, Kill, teardown and failed recreation are covered.
+Generic SetObject/relink/touch order, environment enumeration/deletion/clock, solved publication,
+contact dampening/other retained parameter response, static/bbox/shadow callers remain open.
+No r044/r045/broad physics or original layer run closes;23/88 is unchanged.
+Worker and coordinator evidence is appended in progress.md; build/default175/175,
+touched8/8 plus exact Arm.Geometry.Sight3/3, and bounded18/18 arena gates passed. No compact IVP implementation is restored.
+
+Selected prerequisite accepted by coordinator2026-10-11; exact evidence and the empty-prefix
+correction are in progress.md. Next gate uses Elysium.Arm.Geometry.Sight. Generic identity
+callbacks/ordered lifetime and solved publication are the next concrete producer frontier;
+contact/dynamics/timing equivalence and model migration remain open.23/88 unchanged.

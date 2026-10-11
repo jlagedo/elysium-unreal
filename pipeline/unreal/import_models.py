@@ -800,6 +800,11 @@ def apply_collision(static_mesh, entry, document, binary, extension):
             raise RuntimeError("bbox collision with no hullBounds")
         shapes = set_bbox_collision(static_mesh, bounds)
 
+    ok, error = unreal.ElysiumModelPhysicsInputs.apply_json(
+        static_mesh, json.dumps(collision["bodyInputs"]))
+    if not ok:
+        raise RuntimeError("model body inputs rejected: %s" % error)
+
     body = static_mesh.get_editor_property("body_setup")
     if body is None:
         static_mesh.create_body_setup()

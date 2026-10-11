@@ -13,6 +13,14 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Selected model adapter prerequisite (2026-10-11): public first-solid importer and real
+  PhysProp factory now transfer authored body inputs to Chaos and retire the native identity
+  on source absence, replacement/removal/failure. Coordinator gates below pass. Older assets
+  need targeted reimport before this path is usable; only two witness units were migrated.
+  Configuration/output evidence does not close contact/dynamics/timing equivalence or r044/r045.
+  Next: generic entity identity SetObject/Swap callbacks and ordered lifetime/publication seams,
+  with their real producers, then query/contact rules and shadow/NPC consumers.23/88 unchanged.
+
 - Owner steering (2026-10-10) supersedes the earlier IVP reconstruction frontier. Read
   `docs/vision.md` ownership test: Unreal owns rigid mechanics, geometry, broadphase/contact
   solving and internal scheduling. The substrate retains authored values, named rules, lifecycle
@@ -477,3 +485,56 @@ gated in the clone, cherry-picked onto `main`, and re-gated here (`decisions.md`
 - r032: `docs/vtmb/activity_enum.md:22` says FUN_10412260 inserts at the vector head; it appends at the end.
 - r005: `health`/`radius`/`message` of ambient_generic are code-built datamap keys the ledger missed;
   `docs/vtmb/audio_pipeline.md:354-355` should read `20/x` for fadein/fadeout.
+
+## Selected model adapter worker evidence (2026-10-11; coordinator gates pending)
+
+Independent selected-model input/lifetime prerequisite: public import->typed userdata->real
+prepared prop factory->Chaos body is wired. Source absence is distinct from visual bbox and
+stale host cook. Actual class fields supply massbias/override_mass; production creation uses
+current full entity pose, authored sleep and typed surface/parameter values. Real SetModel,
+Kill and live world teardown retire native identity. Full generic body/publication/controller,
+contact dampening and other retained parameter response remain open; no original run closes,
+23/88 unchanged. Coverage details are in the producer walk and physics-interaction.md.
+
+Offline tests: `uv run pytest pipeline/tests/test_importers_models.py
+pipeline/tests/test_model_provenance_keys.py -q`11/11 passed. Public forced import of only
+vtmb:model:scenery/street/trashcan1/trashcan1_base and
+vtmb:model:scenery/structural/society/chair:2 imported,0 failed/0 pruned;
+E:/elysium-work/logs/20261011T002849.179322Z-import-models.json.
+Generated content/expectations remain ignored. Native selected tests passed2/2 after the
+inertia conversion at reports/tests/20261011T003419.413647Z-elysium-substrate-modelphysics/index.json.
+Final pose/query observer verification and coordinator gates are recorded in the next entry.
+
+Final worker build passed: E:/elysium-work/logs/20261011T003915.214312Z-build.json.
+Final `uv run elysium test Elysium.Substrate.ModelPhysics.` passed2/2,0 failed/0 abstained;
+reports/tests/20261011T004023.705918Z-elysium-substrate-modelphysics/index.json inspected.
+This includes real full angles-key native pose, real SetModel replacement and current entity
+creation pose, separately positioned noPHY NoCollision plus native world query miss, and
+live-body world teardown. One editor layout compatibility warning; no test warning/failure.
+The earlier native tensor check exposed Unreal's squared geometric scale; the final conversion
+and actual ratio2 output are tested. Retirement was ordered after collision changes to prevent
+a recreated native actor. Coordinator gates remain pending; this is not layer acceptance.
+
+## Selected model adapter coordinator acceptance (2026-10-11)
+
+Reviewed source, real production caller tests, public importer witness and observer evidence.
+Build passed: logs/20261011T004240.184296Z-build.json. Default175/175 passed
+(96 Success,79 SuccessWithWarnings,0 failed/notRun; new two tests zero warnings/errors):
+reports/tests/20261011T004246.774264Z-elysium-session-elysium-substrate/index.json.
+Touched ModelPhysics/PropSolid/motor filters8/8 passed in
+reports/tests/20261011T004425.946074Z-elysium-substrate-modelphysics-elysium-a-22415118/index.json.
+That command exited7 because the supplied Elysium.Geometry.Sight prefix was empty; no test failed.
+Corrected Elysium.Arm.Geometry.Sight3/3 passed:
+reports/tests/20261011T004605.073558Z-elysium-arm-geometry-sight/index.json.
+Gate command reminder: use **Elysium.Arm.Geometry.Sight**, not Elysium.Geometry.Sight.
+
+Bounded18 arena regression passed in two boots (both exit0):
+reports/arena/20261011T004446.468567Z/index.json inspected;18 pass,0 fail/error.
+Ordinary first_unmet entries are null; the two refusal selftests pass by expected inversion.
+Existing startup/runtime warnings and UE experimental Python toolset errors remain visible
+in logs; no arena failure. No full arm/fullarena/boot-order layer acceptance was attempted.
+
+Inspected inherited base225/226 no-op comments and exact CAISound audit rows now state partial:
+retail removal clears shadow/identity and solved movetype7 pose publishes before touch/relink;
+selected prop override is narrower. No runtime callback metadata or behavior changed in this
+review correction. git diff --check passed. No original run closes;23/88 remains unchanged.

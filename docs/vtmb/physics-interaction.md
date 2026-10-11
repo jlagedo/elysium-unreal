@@ -760,3 +760,55 @@ ordered physical timing, followed by contact filtering/notifications and shadow 
 Internal IVP shape/core/scheduler/packed topology is not a requirement absent an authored observer.
 The known named observers and staged seams are in the producer walk. No original run or broad
 entity/body/trace row closes, and the saved r022a frame/cache candidate stays deferred.
+
+## Selected model body authored input adapter (2026-10-11)
+
+This is a narrow production prop creation prerequisite, not closure of the environment,
+controller, contact or publication chains. Vampire.dll1002e3a0 selects binary vcollide solid0;
+1002e210 independently parses the first case-insensitive authored `solid` block, without using
+its `index` to select geometry. Vphysics.dll260238f0 applies pairs in source order (duplicates
+replace earlier values), including mass/inertia/damping/rotdamping/volume/drag/rollingdrag,
+surfaceprop and optional authored masscenter. Callback10158260 copies1046ecb4 defaults:
+mass1, inertia1, damping0.1, rotdamping0.1, rotinertialimit0.5, volume0, drag1 and no authored
+masscenter. This masscenter is explicit authored data, not a requirement to reconstruct IVP's
+computed surface center. Unrecognized keys are retained as evidence, not invented mechanics.
+
+The actual model importer now cooks a separate selected first-solid UBodySetup into typed
+UElysiumModelPhysicsInputs asset userdata. The shared static mesh still cooks all solids for
+its other consumers. PhysProp's real prepared-model factory selects the dedicated body setup;
+Chaos computes geometry and base mass properties. The adapter transfers authored mass,
+linear/angular damping, inertia multiplier and optional COM, then obtains the process surface
+service's typed friction/elasticity/density/thickness into the established physical material
+class. Unknown or empty surface names use the surface service default. This does not replace
+older flattened audible/static material consumers or claim pair/contact parity.
+
+26018ba0 stores the authored inertia as isotropic moment multipliers (negative becomes1).
+2602ea60's computed-inertia arm multiplies the backend moments by those parameters and mass.
+Unreal's geometric InertiaTensorScale squares an isotropic scale at fixed mass, so the adapter
+uses sqrt(authored multiplier). Actual native tensor tests verify a multiplier2 produces
+ratio2 against the same Chaos base body. Neither IVP's internal base tensor nor its default
+rotinertialimit operation is reconstructed. Native COM uses the authored converted location
+and component scale; full recreation reapplies it because native mass updates can forget COM.
+
+10191510 supplies spawnflags bit1 as start-asleep; missing source body writes SOLID_NONE and
+MOVETYPE_NONE. Successful100a5ea0 writes solid6/flags0 before model creation, then movetype7
+after body creation. Positive massbias multiplies source mass and clamps to[0.5,1000000];
+positive override_mass wins last. These are real CPhysicsProp key/save fields, not inferred
+model properties. The production adapter distinguishes retail source absence from missing
+userdata/stale cook or unsupported Chaos input (diagnostic reimport/failure).
+
+Real public-import witnesses are scenery/street/trashcan1/trashcan1_base (.phy, mass6kg in this
+corpus) and scenery/structural/society/chair (no .phy, visual fallback geometry). Tracked tests
+compare the actual cooked input rather than embedding shipped expected payloads. The no-body
+production caller has no dynamic identity, solid0/movetype0, NoCollision and a real world trace
+passes through its independently positioned visual. Native actor disposal is an implementation
+check, not a claimed retail observer. Model replacement through SetModel, Kill, world teardown,
+failed recreation and activity queries retire/observe native identity.
+
+Remaining gaps: ordered SetObject/relink/touch/publication callbacks, simulation clock,
+environment active enumeration/deferred removal, game-data/body flags and damageType==1,
+bbox/dedicated static body callers, shadow controllers and r022 cache/query consumers.
+Contact dampening is retained by the process surface service but has no Chaos response adapter.
+Drag/rollingdrag/volume and rotinertialimit are retained, not mechanically implemented.
+Configured damping/material values do not establish retail motion/contact feel equivalence;
+restitution range, pair combine rules and contact dampening remain explicit adapter gaps.

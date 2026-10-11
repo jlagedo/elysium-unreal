@@ -391,3 +391,19 @@ identity/create/destroy/activity and ordered postthink timing. Contact filtering
 shadow feedback and NPC sample-think-submit follow in the revised plan. IVP core/scheduler,
 support-tree topology and packed IDs are not prerequisites without an authored observer.
 Original runs remain23/88, broad audit rows remain partial and r022a remains deferred.
+
+## Independent selected-model input/lifetime checkpoint (2026-10-11)
+
+The narrow independent dependency now has actual public importer, cooked first-solid userdata,
+prepared model factory and PhysProp caller coverage. Creation transfers authored pose,
+mass/massbias/override, sleep, damping, relative inertia, explicit COM and typed surface values
+to Chaos; native identity/activity, source-absence inert state and immediate caller retirement
+are exercised. See physics-interaction.md's selected model section for recovered addresses and
+entity_io.md for real key/save producer defaults. Shared static geometry remains all solids;
+only the prop proxy chooses the separately cooked first solid.
+
+This advances step1 without closing its complete packet or r044/r045. Generic publication,
+registration callbacks, game-data flags, active enumeration/deferred deletion, bbox/static
+callers, contact dampening/drag/rotinertialimit response and controller/timing consumers remain
+open. Real native input checks prove configuration/conversion, not retail angular/contact feel.
+r022a remains deferred. No original run closes (23/88 unchanged).

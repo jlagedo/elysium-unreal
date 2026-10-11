@@ -1587,8 +1587,8 @@ bool FElysiumEntity::ForceVPhysicsCollide(FElysiumEntity*)
 //   layer 4, story 29c
 void FElysiumEntity::VPhysicsDestroyObject()
 {
-	// verdict `mechanism`, closed at `Chaos` (0019/6): nothing observes this body, but the slot is
-	// still reached, so it answers the value-initialised default and tallies nothing.
+	// Unfinished L0 identity/shadow lifetime: 100b5040 removes shadow, retires the
+	// owned physics object and clears its reference. The selected prop override is narrower.
 }
 
 // slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`
@@ -1596,8 +1596,8 @@ void FElysiumEntity::VPhysicsDestroyObject()
 //   layer 1, story 29c
 void FElysiumEntity::VPhysicsUpdate(void*)
 {
-	// verdict `mechanism`, closed at `Chaos` (0019/6): nothing observes this body, but the slot is
-	// still reached, so it answers the value-initialised default and tallies nothing.
+	// Unfinished L0 solved-pose publication: 100b4f30 publishes movetype 7 pose,
+	// then touches triggers/relinks children; movetypes 1/8 consume pusher feedback.
 }
 
 // slot 227 0x100a1580 (sdk) `int VPhysicsTakeDamage(CTakeDamageInfo&)`

@@ -596,6 +596,24 @@ def _build_skin_families(
 # --- collision / surface property / Nanite -------------------------------------------------------
 
 
+def _body_inputs(extension: dict) -> dict:
+    """PhysModelCreate 1002e3a0 selects binary solid0 and first solid block independently."""
+    physics = extension.get("physics") or {}
+    first = next((row for row in physics.get("keyValues", ())
+                  if row.get("type", "").lower() == "solid"), None)
+    pairs = first.get("pairs", []) if first is not None else []
+    result = {"version": 1, "sourceBody": bool(physics.get("solids") and first is not None),
+              "solidPairs": pairs,
+              "firstSolidHullCount": len((physics.get("solids") or [{}])[0].get("hulls") or ())}
+    for pair in pairs:
+        if pair["key"].lower() == "masscenter":
+            parts = pair["value"].split()
+            if len(parts) != 3:
+                raise ValueError("solid masscenter requires three authored coordinates")
+            result["massCenterCm"] = list(source_to_unreal(*(float(x) for x in parts)))
+    return result
+
+
 def _build_collision(extension: dict) -> dict:
     physics = extension.get("physics")
     header = (extension.get("mdl") or {}).get("header") or {}
@@ -605,6 +623,7 @@ def _build_collision(extension: dict) -> dict:
         properties = solids[0].get("properties") or {}
         return {
             "mode": "phy",
+            "bodyInputs": _body_inputs(extension),
             "solidCount": len(solids),
             "hullCount": hull_count,
             "massKg": properties.get("mass"),
@@ -623,6 +642,7 @@ def _build_collision(extension: dict) -> dict:
         }
     return {
         "mode": "bbox",
+        "bodyInputs": _body_inputs(extension),
         "solidCount": 0,
         "hullCount": 0,
         "massKg": None,

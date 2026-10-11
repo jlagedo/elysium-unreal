@@ -23,11 +23,15 @@ public:
 	USkeletalMeshComponent* PosedVisual = nullptr; // collision-free authored resting pose
 	bool  bBroken = false;
 	bool bNpcKickable = false; // CPhysicsProp +0x788, npc_kickable; TaskFail consumes this authored permission.
+	float MassBias = 0.f; // +0x77c, SAVE|KEY massbias; positive multiplier precedes override.
+	float MassOverride = 0.f; // +0x780, SAVE|KEY override_mass; nonpositive leaves model mass.
 	int32 Skin = 0;
 	float SkinFadeTime = 0.0f;                // m_flSkinCrossfadeTime — stored, unread (skins snap)
 	bool  bSimulating = false;                // elysium.PhysicsProps decided sim on at spawn
 
 	virtual void Spawn() override;
+	virtual void Kill() override;
+	virtual void VPhysicsDestroyObject() override;
 
 	// A constraint (phys_hinge) attaches to the simulating body, not the brush body.
 	virtual UPrimitiveComponent* GetAttachBody() const override;

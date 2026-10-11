@@ -6,6 +6,8 @@
 #include "ElysiumWorldServices.h"
 #include "Map/ElysiumRetailMaskRecipe.h"   // PropBodyMaskBits -- which retail filters meet an entity prop
 #include "Substrate/ElysiumProp.h"
+#include "Substrate/ElysiumModelPhysics.h"
+#include "ElysiumModelPhysicsInputs.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -24,44 +26,26 @@ static TAutoConsoleVariable<int32> CVarPhysicsProps(
 	TEXT("Simulate prop_physics bodies as Chaos rigid bodies (1, default) or stand them static/non-solid (0)."),
 	ECVF_Default);
 
-namespace
-{
-	const UBodySetup* PropBodySetup(const UStaticMeshComponent* Comp)
-	{
-		const UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
-		return Mesh ? Mesh->GetBodySetup() : nullptr;
-	}
-
-	// Does this body's mesh carry simple collision a Chaos rigid body can simulate against? The
-	// bake writes one convex shape per `.phy` ledge, so an empty AggGeom means the model shipped
-	// no VPhysics collision model at all.
-	bool HasSimpleCollision(const UStaticMeshComponent* Comp)
-	{
-		const UBodySetup* Body = PropBodySetup(Comp);
-		return Body && Body->AggGeom.GetElementCount() > 0;
-	}
-
-	// The model's authored `.phy` mass in kg, which the bake stored on the mesh's body setup, or
-	// 0 when the model carries none. It has to be re-applied to the *component*: UBodySetup's
-	// mass override is read off the owning primitive's own FBodyInstance whenever there is one
-	// (UBodySetup::CalculateMass), and a component built at runtime never seeds that from the
-	// asset — leaving Chaos to compute mass from hull volume instead (a 3 kg bin came out 48 kg).
-	float AuthoredMassKg(const UStaticMeshComponent* Comp)
-	{
-		const UBodySetup* Body = PropBodySetup(Comp);
-		return Body && Body->DefaultInstance.bOverrideMass
-			? Body->DefaultInstance.GetMassOverride() : 0.0f;
-	}
-}
-
 void FElysiumPhysProp::Spawn()
 {
 	BuildBody();
 }
 
+void FElysiumPhysProp::VPhysicsDestroyObject()
+{
+    ElysiumModelPhysics::Destroy(Visual);
+    bSimulating = false;
+}
+
+void FElysiumPhysProp::Kill()
+{
+    FElysiumEntity::Kill();
+    VPhysicsDestroyObject();
+}
+
 UPrimitiveComponent* FElysiumPhysProp::GetAttachBody() const
 {
-	return Visual;
+	return Visual; // scene attachment anchor; native physics identity is queried separately.
 }
 
 void FElysiumPhysProp::OnDormancyChanged()
@@ -81,6 +65,7 @@ void FElysiumPhysProp::OnRuntimeTransformChanged()
 
 void FElysiumPhysProp::OnRuntimeModelChanged()
 {
+	VPhysicsDestroyObject();
 	if (Visual)
 	{
 		Visual->DestroyComponent();
@@ -158,7 +143,8 @@ void FElysiumPhysProp::InputSetSkinFadeTime(const FElysiumInputArgs& Args)
 void FElysiumPhysProp::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
-	Out.Emplace(TEXT("Body"), Visual ? TEXT("physics mesh") : TEXT("(none)"));
+	Out.Emplace(TEXT("Body"), ElysiumModelPhysics::Identity(Visual) ? TEXT("Chaos body") : TEXT("(none)"));
+	Out.Emplace(TEXT("Active"), ElysiumModelPhysics::IsActive(Visual) ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Simulating"), bSimulating && !bBroken && !IsInert() ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Broken"), bBroken ? TEXT("yes") : TEXT("no"));
 	// The mass Chaos is actually using, so the model's authored `.phy` mass can be checked
@@ -181,8 +167,8 @@ void FElysiumPhysProp::BuildBody()
 	FElysiumPlacedModelRequest Request;
 	Request.ModelPath = Model;
 	Request.StaticStem = Def->ModelMesh;
-	Request.Location = Def->Origin;
-	Request.Rotation = Def->ModelQuat;
+	Request.Location = Origin;
+	Request.Rotation = ElysiumPlayerView::ToUnreal(Angles).Quaternion();
 	Request.UniformScale = Embodiment->BodyScaleFor(*Def);
 	Request.PlacementToken = Handle.Index;
 	Request.Skin = Skin;
@@ -195,7 +181,7 @@ void FElysiumPhysProp::BuildBody()
 	}
 	else
 	{
-		Visual = Embodiment->BuildPhysPropVisual(Model, Def->Origin, Def->ModelQuat,
+		Visual = Embodiment->BuildPhysPropVisual(Model, Request.Location, Request.Rotation,
 			Embodiment->BodyScaleFor(*Def));
 	}
 	if (!Visual)
@@ -216,44 +202,35 @@ void FElysiumPhysProp::BuildBody()
 		ApplySkin();
 	}
 
-	// A model with no collision model cannot simulate, and VtMB does not remove the entity over
-	// it: CPhysicsProp::CreateVPhysics (vampire.dll @10191510) warns, drops the prop to
-	// SOLID_NONE + MOVETYPE_NONE and returns true, leaving it standing as inert scenery. The
-	// baked mesh carries that fact — no `.phy` meant no simple collision shapes — so read it off
-	// the asset rather than tracking a second flag.
-	if (!HasSimpleCollision(Visual))
-	{
-		UE_LOG(LogElysiumProp, Log,
-			TEXT("%s model '%s' has no collision model — standing inert (VtMB parity)"),
-			*DebugString(), *Def->ModelMesh);
-		Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		bSimulating = false;
-	}
-	// Simulate (or stand static under the console gate). Mass is the model's authored `.phy` value
-	// (baked onto the mesh) unless the entity's own override_mass > 0, which outranks it —
-	// Source's precedence. override_mass is -1 on every prop_physics in the exported maps, so
-	// the authored mass is what nearly all of them weigh.
-	else
-	{
-		bSimulating = CVarPhysicsProps.GetValueOnGameThread() != 0;
-		if (bSimulating)
-		{
-			float Mass = FCString::Atof(*Def->Keys.FindRef(TEXT("override_mass")));
-			if (Mass <= 0.0f)
-			{
-				Mass = AuthoredMassKg(Visual);
-			}
-			if (Mass > 0.0f)
-			{
-				Visual->SetMassOverrideInKg(NAME_None, Mass, true);
-			}
-			Visual->SetSimulatePhysics(true);
-		}
-		else
-		{
-			Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);   // static, non-solid parity
-		}
-	}
+	// 1002e3a0/10191510: source body presence is distinct from a cooked visual fallback box.
+    FString BodyError;
+    if (!Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0)
+    {
+        SetSolid(6);
+        SetSolidFlags(0); // 100a5ea0 writes these before calling the model creator.
+    }
+    bSimulating = !Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0 &&
+        ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
+            MassBias, MassOverride, (SpawnFlags & 1) != 0, BodyError);
+    if (!bSimulating)
+    {
+        Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        const auto* Inputs = UElysiumModelPhysicsInputs::Find(Visual->GetStaticMesh());
+        if (Inputs && !Inputs->bSourceBody)
+        {
+            SetSolid(0);
+            SetMoveType(0, 0); // 10191510's source-absent outcome, not a host bake failure.
+            UE_LOG(LogElysiumProp, Log, TEXT("%s source model has no VPhysics body"), *DebugString());
+        }
+        else if (!Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0)
+        {
+            UE_LOG(LogElysiumProp, Warning, TEXT("%s Chaos adapter unavailable: %s"), *DebugString(), *BodyError);
+        }
+    }
+    else
+    {
+        SetMoveType(7, 0); // VPhysicsInitNormal 100a5ea0.
+    }
 
 	if (IsInert() || bBroken)
 	{
@@ -289,8 +266,7 @@ void FElysiumPhysProp::GateBody()
 	}
 	if (bDown)
 	{
-		Visual->SetSimulatePhysics(false);
-		Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		ElysiumModelPhysics::Destroy(Visual);
 	}
 	else if (bSimulating)
 	{
@@ -302,7 +278,9 @@ void FElysiumPhysProp::GateBody()
 		// again on this body alone.
 		Visual->SetMaskFilterOnBodyInstance(PropMaskBits());
 		Visual->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
-		Visual->SetSimulatePhysics(true);
+		FString BodyError;
+		bSimulating = ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
+			MassBias, MassOverride, (SpawnFlags & 1) != 0, BodyError);
 	}
 }
 

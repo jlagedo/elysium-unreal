@@ -1,3 +1,4 @@
+#include "ElysiumPhysicsPropComponent.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumAnimationPick.h"
 
@@ -420,7 +421,7 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPhysPropVisual(const FString& S
 		return nullptr;
 	}
 
-	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Owner);
+	UStaticMeshComponent* Comp = NewObject<UElysiumPhysicsPropComponent>(Owner);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
 	ElysiumLightStyle::StampUnstyled(Comp);   // R7.4 (G6), as in BuildBrushVisual
