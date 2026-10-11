@@ -8,16 +8,14 @@
 // Retail reads exactly these fields off the `surfacedata_t*` the NPC caches at `+0x5b90`
 // (`vampire.dll 1026d460`) and the player caches as `m_pSurfaceData`:
 //
-//   * `stepleft` (`+0x2c`) / `stepright` (`+0x2e`) — the two footstep keys. Each is a VARIATION
-//     POOL, not a single sound: `scripts/surfaceproperties.txt` repeats the key inside one entry
-//     block and the engine picks between the repeats (`docs/vtmb/surface_properties.md` →
-//     "Footsteps"). Duplicates are therefore alternates and are NEVER collapsed here; a pool's
-//     size is part of the authored data.
+//   * `stepleft` (`+0x2c`) / `stepright` (`+0x2e`) — retail keeps one symbol per slot and repeated
+//     keys overwrite it (vphysics26015170). The arrays below retain the older flattened Unreal
+//     audio asset contract; migration of that audible consumer remains open.
 //   * `gamematerial` — VtMB's single-letter material class, which is what
 //     `CBasePlayer::UpdateStepSound` (`1011e940`) switches its dry step volume on: `D` 0.25/0.55,
 //     `V` 0.40/0.70, anything else 0.20/0.50 (walk/run). Kept as the authored string rather than a
-//     `TCHAR` because 37 of the 63 shipped entries declare none anywhere in their `base` chain, and
-//     an empty string is the honest spelling of that.
+//     `TCHAR` by the older flattened asset contract. Retail also copies current default into each
+//     new row, so absence from an explicit base chain does not establish an empty retail code.
 //   * `impact` / `scrape` — the sound-SCRIPT names in
 //     `scripts/game_sounds_surfaceproperties.txt`. They ride along because the surface table is
 //     resolved once per surface and AUD2's later impact work reads the same record; nothing in the
@@ -31,12 +29,12 @@
 // crossing the seam as data.
 struct FElysiumSurfaceSounds
 {
-	// `stepleft`, in source order. Duplicates preserved: they are the alternates.
+	// Older baked pool representation; retail's parser resolves the last repeated assignment.
 	TArray<FString> StepLeft;
 	// `stepright`, in source order.
 	TArray<FString> StepRight;
 	// `gamematerial`, resolved through the `base` chain. Empty when no unit in the chain declares
-	// one, which is retail's "no letter" and takes `UpdateStepSound`'s default volume pair.
+	// one in this older explicit-chain representation; retail also has the implicit default copy.
 	FString GameMaterial;
 	// `impact` / `scrape` — the first sound-script name each key carries, or empty. Single strings
 	// rather than pools because the script name is the addressing unit; the wavs behind it are the

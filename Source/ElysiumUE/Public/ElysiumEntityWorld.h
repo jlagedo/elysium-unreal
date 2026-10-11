@@ -26,6 +26,7 @@ struct FElysiumTerminalView;
 class FElysiumDlgConversation;
 struct FElysiumDialogueSession;
 class FElysiumGameSoundBus;
+class FElysiumPhysicsSurfaceProps;
 class FElysiumAttackCoordinator;
 class FElysiumLineService;
 struct IElysiumVSoundRegistry;   // Substrate/ElysiumVSoundGroup.h
@@ -391,6 +392,8 @@ public:
 	// lifetime this port has (`Init` 0x1003c660 in the constructor, `Shutdown` 0x1003c950 in the
 	// destructor). `FElysiumEntity::{Get,Create,Destroy}DataObject` dispatch through it.
 	FElysiumDataObjectAccessSystem& DataObjects() const { return *DataObjectSystem; }
+	/** Process-owned SurfaceProps001 material table, initialized before entities. */
+	FElysiumPhysicsSurfaceProps& PhysicsSurfaces() const;
 	// The type-1 (touch-link) data-object steps of the retail touch pass, at the port's touch edges
 	// (L0-r019; the node stamp is r015's `FElysiumEntity::TouchStamp`, `ElysiumEntityCollision.cpp`;
 	// `PhysicsTouch` and the `EndTouch` flag gate stay with the touch-lifecycle story):

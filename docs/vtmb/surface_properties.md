@@ -22,8 +22,9 @@ model field. Both land in this one table.
 | `scripts/game_sounds_surfaceproperties.txt` | 48 sound-script entries the `impact`/`scrape` keys name |
 
 Both are Source KeyValues: `"key" "value"` pairs inside a named block, `//` line comments, CRLF.
-Entry names and keys are **mixed case** (`Kitchen_Pan` beside `metalvent`, `Blade_norm_impact`
-beside `blade_norm_impact`), so a reader folds case on both.
+Entry names, keys and values are lowercased by the retail physics pair reader `26024fd0`.
+The underlying symbol table and ordinary `GetSurfaceIndex` queries remain case-sensitive;
+uppercase lookup of an already parsed lowercase entry returns -1 (`26014ed0`).
 
 ## Inheritance — `base`
 
@@ -32,17 +33,13 @@ beside `blade_norm_impact`), so a reader folds case on both.
 `metalvent`, `player`, `player_control_clip`, `popcan`, `quiet`, `rivet`, `rubber`, `tile`,
 `water`, `watermelon`, `weapon`, `wood`.
 
-Chains resolve transitively and reach depth 4 — `canister` → `metalpanel` → `metalgrate` → `metal`,
-and `boulder` → `rock` → `stone` → `concrete`. Every named base is defined; there are no dangling
-references and no cycles. **A reader must resolve the chain**, because most entries state only
-their deltas: 24 of the 63 carry no physics field of their own at all, and 37 carry no
-`gamematerial`.
-
-`default` is the fallback root and the only entry carrying the complete key set.
-
-Source's surfaceproperties inheritance copies the parent `surfacedata_t` wholesale and then
-re-parses the child's keys, so a child naming one `stepleft` replaces the parent's whole
-left-footstep pool for that slot rather than appending to it.
+The authored chains reach depth 4 — `canister` → `metalpanel` → `metalgrate` → `metal`,
+and `boulder` → `rock` → `stone` → `concrete`. Retail does not recursively resolve a chain:
+`26015170` starts each row with zero bytes, copies the currently stored `default` if present,
+then processes keys in source order. `base` calls `26015140` to copy all 116 payload bytes from
+an already stored row at that exact token position. A missing or forward base leaves the row
+untouched. A late base overwrites earlier child fields; later child fields overwrite that copy.
+No explicit `base default` is required for the initial default copy.
 
 ## Fields
 
@@ -57,8 +54,10 @@ The file's own header comment documents these, and the values bear it out.
 | `friction` | physical friction, 0.01 slick … 1.0 rough | 35 | 0.05 … 100 |
 | `thickness` | when present the material is **not volumetrically solid** — volume is surface area × this, and the space beneath it is air | 10 | 0.04 … 1 |
 
-`elasticity` and `friction` exceed their documented 0–1 ranges on a few entries, so a consumer
-clamps rather than assumes.
+`elasticity` and `friction` exceed their documented 0–1 ranges on a few entries. Retail's IVP
+material reads the raw floats without clamping (`26015b20/26015b30`). The existing Unreal
+physical-material bake clamps elasticity as a presentation/Chaos lane divergence; it is not the
+constructor's retail material producer.
 
 `density`'s unit is the table's own, kg/m³; `UPhysicalMaterial::Density` is g/cm³, so
 `uv run elysium import surface-properties` converts on the way in and keeps the authored kg/m³
@@ -76,10 +75,10 @@ capability rather than authored content.
 
 ### Impacts — a weapon × outcome matrix
 
-Fifteen keys, the cross product of five weapon classes and three damage outcomes:
+The shipped text uses fifteen keys. The executable also accepts the claw row, for eighteen slots:
 
 ```
-{ bullet, metal, wood, blade, fist } × { soak, norm, crit }
+{ metal, wood, blade, fist, bullet, claw } × { norm, soak, crit }
 ```
 
 for example `blade_crit_impact`, `bullet_soak_impact`. The outcome axis is VtMB's own damage
@@ -99,12 +98,19 @@ that does not is the literal `null.wav`, used as a silence placeholder.
 A single-character code on 26 entries, 17 distinct values (`A`, `C`, `D`, `F`, `G`, `I`, `M`, `N`,
 `O`, `P`, `S`, `T`, `U`, `V`, `W`, `X`, `Y`). Source's compact material class.
 
-## Repeated keys are variation pools
+## Repeated keys overwrite one symbol
 
-A key may appear **several times in one block**, and the repeats are alternates chosen at random
-rather than an overriding assignment — up to 4 for `bullet_norm_impact`, `stepleft` and
-`stepright`, and 2–3 for most of the impact matrix. A KeyValues reader that collapses duplicates
-into a dictionary silently discards the variation and makes every footstep identical.
+`26015170` interns every sound value and writes one 16-bit symbol per slot. Repeated `stepleft`,
+`stepright` or matrix keys overwrite that symbol; the last assignment survives. They are not
+variation pools in SurfaceProps001. Duplicate entry definitions are still fully parsed and
+intern their values, but the first stored entry wins (`26015917`). Existing flattened Unreal
+surface/audio assets retain pools and root-first explicit-base resolution; that consumer lane
+remains a known divergence and is not migrated by the independent physics table packet.
+
+The full executable layout, signed lookups, numeric grammar, shadow row, source lifetime and
+constructor-material capture are recorded in `physics-interaction.md`, "Independent physics
+surface material producer". The dedicated whole-table deployment contract is
+`docs/contracts/seam_physics_surfaces.md`; it retains source bytes and all entry/key order.
 
 ## What names into the table
 

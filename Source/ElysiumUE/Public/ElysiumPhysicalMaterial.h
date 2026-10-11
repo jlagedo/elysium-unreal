@@ -14,9 +14,9 @@ class UElysiumSurfacePropertyProvenance;
  * One weapon class's row of VtMB's impact matrix: three ordered variation pools, one per damage
  * outcome (`docs/vtmb/surface_properties.md` → "Impacts — a weapon × outcome matrix").
  *
- * Each pool is a list because a key repeated inside one entry block is an alternate the engine
- * picks between at random, not an overriding assignment. Entries are `vtmb:sound:` asset IDs for
- * now; the sound slice flips them to hard `USoundWave` references.
+ * These pools are the older flattened Unreal asset representation. Retail SurfaceProps001
+ * overwrites one symbol on each repeated key (vphysics26015170); migration of audible consumers
+ * remains open. Entries here are `vtmb:sound:` asset IDs.
  */
 USTRUCT(BlueprintType)
 struct FElysiumImpactOutcomes
@@ -80,16 +80,16 @@ public:
 
 	// --- movement -------------------------------------------------------------------------------
 	/**
-	 * `maxspeedfactor`. Declared on `default` alone, and `default` is a childless root that no
-	 * entry bases on -- not an implicit parent -- so the other 62 entries never inherit it; they
-	 * keep this member initialiser, which is `default`'s own value.
+ * `maxspeedfactor`. Declared on `default` alone. Retail copies current default into every new
+ * row before parsing (26015170), even without an explicit base. This older flattened asset
+ * instead keeps the initializer where no explicit ancestor declared it.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float MaxSpeedFactor = 1.0f;
-	/** `jumpfactor`. Same as `MaxSpeedFactor`: `default` declares it alone and inherits to no one. */
+	/** `jumpfactor`. Retail copies default implicitly; this asset follows the older explicit chain. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float JumpFactor = 1.0f;
 	/**
-	 * `climbable`. Declared on `default` alone; no entry bases on `default`, so no shipped surface
-	 * carries a declared `true` and every surface keeps this member initialiser.
+	 * `climbable`. Declared false on `default` alone. Retail copies that default implicitly;
+	 * this older explicit-chain asset instead keeps its false initializer when absent.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") bool bClimbable = false;
 

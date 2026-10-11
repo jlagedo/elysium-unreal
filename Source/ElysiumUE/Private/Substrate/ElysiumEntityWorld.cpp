@@ -11,6 +11,7 @@
 #include "ElysiumMapCollisionPayload.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumPhysicsSurfaceProps.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
 #include "ElysiumTransitionState.h" // L0-r030: DispatchSpawn's globalname arm
@@ -133,6 +134,13 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsyst
 	, WorldServices(InServices)
 	, Epoch(GElysiumNextWorldEpoch++)
 {
+	// CPhysicsHook::Init1002d7d0: source table and its material identities precede bodies.
+	FElysiumPhysicsSurfaceProps& PhysicsMaterials = FElysiumPhysicsSurfaceProps::ProcessService();
+	if (PhysicsMaterials.SurfaceCount() == 0)
+	{
+		FString SurfaceError;
+		if (!PhysicsMaterials.LoadDeployed(SurfaceError)) UE_LOG(LogElysiumWorld, Error, TEXT("%s"), *SurfaceError);
+	}
 	if (!GameState) HeadlessTeamRegistry = MakeUnique<FElysiumTeamRegistry>(); // 0x10230750
  GameSoundBus = MakeUnique<FElysiumGameSoundBus>();
 	// The law-record store, built beside the sound bus it is modelled on.
@@ -156,6 +164,11 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsyst
 	AttackCoordinators[0] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Normal"), 2);
 	AttackCoordinators[1] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Player"), 2);
 	AttackCoordinators[2] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Boss"), 2);
+}
+
+FElysiumPhysicsSurfaceProps& FElysiumEntityWorld::PhysicsSurfaces() const
+{
+	return FElysiumPhysicsSurfaceProps::ProcessService();
 }
 
 FElysiumEntityWorld::~FElysiumEntityWorld()

@@ -6,6 +6,32 @@ consecutive slices of one subsystem up to ~1.5 KB of retail code or 8 functions.
 
 ## Active dependency correction (2026-10-10)
 
+Owner ownership correction (2026-10-10, superseding the mechanical-IVP prerequisites below):
+Unreal services own solving, collision geometry, broadphase/contact mechanics and rigid-body
+scheduling. Source/IVP addresses remain oracle evidence, not cloning requirements. First repair
+this plan, then finish the current authored surface packet with typed semantics and BYOG-safe
+derived verification data. Next fresh worker removes the compact box reconstruction whose
+only consumers are tests. Subsequent packets implement the Chaos adapter seams in the targeted
+producer walk: authored body inputs/lifetime/timing, ordered filtering/contact notifications,
+shadow targets/blocked feedback, NPC sample-think-submit order, then bounds/partition/cache.
+No packed topology, support tree, allocator or IVP scheduler is a prerequisite absent a named
+authored observer. r022a stays last/deferred; layer closing gates remain unchanged.
+
+Independent authored surface packet (coordinator reviewed and gated):
+SurfaceProps001 parser26015170, shared symbol/default/order/copy behavior and signed#3/#10
+lookup supply typed fields/indices/names. Retail template26018ba0 consumes the selected material;
+its native layout/identity capture is oracle evidence, not a runtime packing requirement.
+Compiled public tests compare13 floats,28 sound names and two game flags across64 deployed plus12
+project-authored cases. Shipped expectations are generated into ignored artifacts; tracked tests
+contain only authored cases. Whole raw source is published/deployed through public physics-surfaces
+commands and loaded before entities by the process service. Narrow physics UFS staging is declared,
+without a packaged cook claim. Existing flattened audible/material divergence remains documented.
+Worker final build/touched2/2 and pipeline5/5 pass. Coordinator build/default175/175,
+selected motor/sight6/6 and bounded arena18/18 pass; JSON evidence is in progress.md.
+No original run closes (23/88), no broad body/trace/cache row closes. After the next
+fresh worker removes the unnecessary compact reconstruction, the next implementation boundary is
+authored body inputs -> Chaos adapter identity/create/destroy/activity and ordered physical timing.
+
 Independent box-construction packet (coordinator reviewed and gated): Collision007#19
 `2600a310`, exact cache2600a480, seed2600a1a0, clone2600a050, surface construction26009fd0,
 append2600a3e0 and explicit geometry destruction2600a520 are implemented as a complete

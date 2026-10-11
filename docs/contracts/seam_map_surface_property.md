@@ -3,6 +3,13 @@
 This document defines one binary glTF 2.0 unit for one named VtMB surface-property record. Format
 facts remain owned by `docs/vtmb/surface_properties.md`.
 
+Executable recovery (2026-10-10) establishes this existing flattened asset/audio lane as a
+divergence: retail copies current default before each entry, applies base copies at token
+position, keeps one symbol per repeated sound key and uses case-sensitive ordinary lookups.
+This seam's older pools/root-first closure are retained for current Unreal consumers pending
+their migration. Actual physics construction consumes the separate unchanged whole-table
+input documented in `seam_physics_surfaces.md`; this named-unit seam cannot replace it.
+
 ## Unit identity
 
 ```text

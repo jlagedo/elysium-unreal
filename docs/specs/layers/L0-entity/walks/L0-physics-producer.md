@@ -13,6 +13,56 @@ means missing Ghidra boundaries, not absent implementation. Reads used `vtmb_cod
 `E:/elysium-work/codex/l0-physics-producer-20261010/pe_read.py`. No corpus or Ghidra project writes.
 All `0x100...` addresses below are **vampire.dll**, all `0x260...` are **vphysics.dll**.
 
+## Owner-approved engine ownership and revised dependency plan (2026-10-10)
+
+This plan supersedes the earlier requirement to clone the IVP construction/core/shape chain.
+The owner explicitly applies `docs/vision.md`'s ownership test: Unreal owns geometry, rigid-body
+mechanics, broadphase/contact solving and internal scheduling. Retail remains the oracle for
+authored inputs, game-visible rules, lifecycle and event order. No packed topology, feature ID,
+support tree, allocator or IVP core scheduler is required without a named authored observer.
+The compact box reconstruction has only implementation/test consumers; remove it in the next
+fresh worker packet, not as part of the current authored surface correction.
+
+1. **Body adapter inputs and lifetime.** Actual callers100a6150/100a5d80/1002dfe0/1002e3a0
+   supply authored bbox/model geometry, pose, mass/damping/inertia/material parameters and body
+   flags. Feed these to Chaos-owned shape/body services; retain substrate body identity, entity
+   registration/swap, activity queries, deferred removal and ordered publication. Missing inputs
+   are exact authored parameter conversion, existing baked model collision availability and
+   adapter create/destroy/query outputs; IVP shape/core construction is not an input gap.
+2. **Query/contact rule seam.** Preserve group/pass-entity/owner predicates, GetDamageType/rules
+   hull choice, bilateral veto priority and ignored-pair mutation notifications. Chaos owns
+   candidate generation and mechanical contacts. Map Chaos results to game-visible callbacks
+   in retail order; no Source broadphase/hash mechanism is required to find those candidates.
+3. **Shadow controls.** Store submitted targets separately from solved pose; preserve permission
+   flags, maximum speeds, thresholds, gravity modes, timing and blocked feedback. Chaos supplies
+   the motion mechanism. Solve/publication clocks and activity/deletion lifecycle must be wired
+   through an explicit adapter; an immediate UE teleport is not the submitted-target contract.
+4. **Game simulation order.** ActualPhysFrame is post-think. NPC shadow slot47 samples before
+   STEP trace/movement; think type2 then1 precedes slot46 target submission. Base inherited slot
+   229 is empty. Preserve pusher transaction/output order against Chaos query/motion results;
+   any still-unknown cvar/timer producer remains a named rule gap, not an invented internal loop.
+5. **Bounds/partition/cache last.** Consume real backend shape and solved pose, preserve the
+   game-level dirty/relink lifecycle, and call query callbacks before their mask gate. Only then
+   resume r022a cache/parent frame and remaining absolute setters; localSetOrigin invalidates.
+
+The current surface packet qualifies because authored MDL/VMT surface names select it, authored
+friction/elasticity/density/thickness/damping affect physical feel/body parameters, movement and
+gamematerial flags feed game rules, and sound slots/matrix choose audible authored events.
+Implicit defaults, base position and repeated keys govern interpretation of those authored
+inputs. Keep these as typed fields/names/indices, not an IVP memory-layout API. Existing audible
+consumers remain on the older divergent assets; body consumers are still unwired. Native row
+bytes/template pointers are research evidence only and do not establish full material/body
+closure. Shipped expected data must be generated into ignored deployed artifacts; tracked tests
+contain only project-authored boundary inputs and code.
+
+The known retail consumers are concrete: MDL `SurfacePropIndex@392` and VMT `$surfaceprop`
+name the row (format contracts `mdl_v2531.md`/`texture_format.md`); constructor template26018ba0
+selects its material, whose26015b20/26015b30/26015b60 read friction/elasticity/dampening.
+NPC1026d460 caches surfacedata for steps, and player `UpdateStepSound1011e940` reads
+gamematerial for dry-step volume. `CGameMovement101234d0` reads climbable, though shipped movement
+does not reach its ladder arm. Remaining movement/matrix/audio factor consumers are unwired or
+need their own later game-rule walk; no audible or Chaos material adapter closure is claimed here.
+
 ## Factory, environment and exact service identity
 
 `CPhysicsHook::Init 0x1002d7d0` obtains the factory and requests `VPhysics030` into
@@ -289,11 +339,54 @@ construction". Durable16-output goldens and the public operation/cache lifetime 
 are production witnesses for this independent constructor. There is no internal helper arena
 action and no new entity/body construction record: the actual upper caller is still absent.
 
-This prerequisite may precede body callers because all its own producers are complete.
+Historical prerequisite assessment before the owner corrected engine ownership:
 It does **not** close vampire1002dfe0/100a5d80, their surface/default/callback/body arms,
-Collision007#18 world AABB, geometry query, group recheck or ignored-pair mutation. Next:
-260104f0 ->260189f0 template26018ba0, shape26009a00, IVP260397c0/core26030f20,
-wrapper260168e0/init26016930 with actual materials/parameters, followed by the real
-broadphase26048b00 candidate refresh and reverse obsolete-pair/insertion notifications.
-Owned activity/deletion/clock and shadow controller remain part of the body service frontier.
+Collision007#18 world AABB, geometry query, group recheck or ignored-pair mutation. The old
+IVP constructor/core/shape chain remains oracle evidence only. No production consumer requires
+the compact representation; its removal belongs to the next fresh packet. The revised plan above
+instead requires authored body inputs, Chaos identity/lifecycle/activity, ordered contact events
+and shadow target/solved-state feedback with the retail game rules preserved.
 The saved r022a frame/cache packet remains deferred and original run counts stay23/88.
+
+## Independent constructor material input (2026-10-10)
+
+Template26018ba0's SurfaceProps001#3/#10 dependency establishes an authored material observer.
+Its parser/lookup input is now implemented with typed semantics, using the whole deployed
+`scripts/surfaceproperties.txt` unchanged.
+Factory26014be0 singleton260f0f40/table260c9c30, parser26015170, lookup26014ed0/260150e0,
+copy26015140 and material row/vtable260c9d04 were recovered through corpus plus read-only PE.
+The matching oracle section in physics-interaction.md records every ordered field write,
+retail row layout as research evidence and scalar/sound/numeric inputs; surface_properties.md corrects the older
+implicit-default/root-first/pool claims. Existing flattened audio/Chaos assets remain divergent
+and are not accepted as the constructor input.
+
+Filename/name/sound share a case-sensitive symbol table, though pair26024fd0 lowercases authored
+key and value. Default copies occur at row entry; base copies occur exactly at token position.
+Repeated sounds overwrite one symbol, duplicate definitions still intern but first row wins,
+forward base leaves values unchanged, and first parse appends one shadow row even on empty text.
+Ordinary lookup unknown=-1; #10 negative=null, >127->row0 except reserved0xf000->shadow.
+Tokenizer selector260e4d11 has no writes and selects colon-enabled tableB; atof/atoi were checked
+against actual vphysics VC6 helpers rather than assumed interchangeable with KvReader strtol.
+
+`FElysiumEntityWorld` initializes the process service from project-resident deployed bytes before
+entity creation and exposes its actual `PhysicsSurfaces()` service. GLB export/import preserves
+the entire ordered raw source, including duplicate names/repeats/copy position. Source storage is
+released after parse; table owns strings/rows, later parse may relocate borrowed rows, process
+singleton survives world teardown. UFS staging is declared for only ElysiumCorpus/physics;
+the relativeContent/IFileManager path was statically reviewed, without a packaged cook claim.
+
+Read-only native DLL capture identifies the real template26018ba0 material consumption and
+produces named semantic verification rows. Both compiledUE public production tests compare
+all13 float fields,28 sound names, gamematerial and climbable for64 deployed plus12 project-authored
+boundary rows, including lifetime behavior. Generated shipped expectations remain ignored;
+tracked cases contain no shipped content. Pipeline focused5/5 and earlier bounded4 existing arena
+regressions pass. Evidence/provenance is in the oracle and progress checkpoint. No helper-only
+arena action or absent body fixture was added.
+
+This completes an independent authored surface parser input, not the Chaos material/body adapter
+or audible consumers. Next, after compact reconstruction removal, recover/implement the concrete
+entity callback and authored geometry/pose/mass/damping/inertia/material inputs to Chaos body
+identity/create/destroy/activity and ordered postthink timing. Contact filtering/notifications,
+shadow feedback and NPC sample-think-submit follow in the revised plan. IVP core/scheduler,
+support-tree topology and packed IDs are not prerequisites without an authored observer.
+Original runs remain23/88, broad audit rows remain partial and r022a remains deferred.

@@ -13,12 +13,34 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Owner steering (2026-10-10) supersedes the earlier IVP reconstruction frontier. Read
+  `docs/vision.md` ownership test: Unreal owns rigid mechanics, geometry, broadphase/contact
+  solving and internal scheduling. The substrate retains authored values, named rules, lifecycle
+  and observable event order. Record/repair this plan before further runtime work. Compact box
+  implementation currently has tests as its only consumers; its unnecessary internal topology
+  reconstruction is scheduled for removal by the next fresh worker, outside the surface packet.
+  Surface work may finish only as typed authored semantics; shipped payload goldens must stay
+  in ignored derived artifacts, never tracked game content. Revised seams are in the producer
+  walk and runs checkpoint below. No original layer run closes (23/88).
+
+- Independent authored surface prerequisite (2026-10-10, coordinator reviewed and gated):
+  SurfaceProps001 parser/default/order/copy/symbol/signed lookup now
+  supplies typed authored fields, indices and names from unchanged whole deployed source.
+  Native template26018ba0 consumption establishes the mechanical-input observer; packed retail
+  rows remain research evidence only. Compiled public production tests compare13 float fields,
+  28 sound names, gamematerial and climbable for64 deployed plus12 project-authored boundary rows.
+  Shipped expected semantics are generated into ignored deployed artifacts; tracked tests contain
+  only project-authored cases. Body create/lifecycle, entity callbacks and Chaos parameter wiring
+  remain open. Existing flattened audible/material assets remain a documented divergence.
+  No original run/broadbody row closes;23/88 remains unchanged. Narrow physics UFS staging is
+  declared; no packaged cook validated. The revised Chaos seam plan precedes further work.
+
 - Independent complete box geometry prerequisite (2026-10-10): Collision007#19 construction
   and borrowed-cache lifetime are implemented with complete native compact surface geometry;
   read-only retail execution yielded36/36 matching full412-byte outputs. Coordinator-reviewed UE
   goldens/lifetime tests, build/default and bounded regression gates pass below. No caller/body/contact,
-  bounds-query or original run closes;23/88 remains unchanged. The recovered exact next
-  environment/core/broadphase frontier is recorded in the targeted producer walk and oracle.
+  bounds-query or original run closes;23/88 remains unchanged. Its historical internal frontier
+  is superseded by the ownership correction above; removal is the next fresh worker packet.
 - Start: `47b6f780`, clean `main`; r001-r021, r029, r030 landed (23/88).
 - r022 deferred before runtime edits: its absolute-origin partition walk needs the unfinished
   bounds/physics/partition lifecycle. Docs-only recovery checkpoint; no code gate or new record.
@@ -52,7 +74,49 @@ evidence, not new validation or acceptance of the layer closing gate.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
 
-### Independent box geometry coordinator gates (2026-10-10)
+### Authored surface coordinator gates (2026-10-10)
+
+Reviewed typed public parser, process lifetime and real project-resident load; the authored
+source import seam preserves whole source ordering. Tracked expectations contain only project
+authored cases; both deployed source and semantic verification artifacts are gitignored.
+Narrow UFS staging was checked against UE5.8 Content-relative staging and platform file APIs;
+packaged cook remains untested. Compact reconstruction has no production consumer and is the
+next separate removal packet; body/contact/Chaos wiring and original runs remain open (23/88).
+
+Independent coordinator build succeeded:
+`E:/elysium-work/logs/20261011T000141.698553Z-build.json`.
+Default175/175 Success, failed/notRun0; both new surface tests have zero errors/warnings:
+`E:/elysium-work/reports/tests/20261011T000146.504813Z-elysium-session-elysium-substrate/index.json`.
+Selected motor/sight regressions6/6 Success, zero errors:
+`E:/elysium-work/reports/tests/20261011T000324.901312Z-elysium-arm-npckernelmotor-tracefiltersh-f82e91bc/index.json`.
+Bounded arena18/18 pass across arena and sm_hub_1 hosts, both exit0:
+`E:/elysium-work/reports/arena/20261011T000419.666126Z/index.json`.
+Merged and both host JSONs were read. Ordinary first_unmet values are null; two expect-fail
+harness selftests pass by expected inversion. Existing Engine Python AgentSkill startup errors
+and NPC/stub warnings remain in logs; no body/contact closure is inferred. No full-arm,
+full-arena, three-order layer close or packaged cook gate ran. Source was frozen before gates.
+
+### Authored surface worker evidence (2026-10-10)
+
+Final typed runtime build succeeded, exit0:
+`E:/elysium-work/logs/20261010T235712.126500Z-build.json`.
+Touched public production tests2/2 Success, zero errors/warnings:
+`E:/elysium-work/reports/tests/20261010T235831.476345Z-elysium-substrate-physicssurface/index.json`.
+Focused pipeline `uv run pytest pipeline/tests/test_physics_surfaces.py -q` passed5/5.
+Export/import reports:
+`E:/elysium-work/logs/20261010T235438.709391Z-export-v2-physics-surfaces-glb.json` and
+`E:/elysium-work/logs/20261010T235628.534573Z-import-physics-surfaces.json` (no failures;
+two files verified). Raw source/deployment SHA256 remains
+`3219d190cfb3eadb65159a4f48373c5ac3bd5f999cb960262abc87a6e09c4570`.
+Independent decoder/native semantic comparison matched64+12 complete typed rows:
+`E:/elysium-work/research/vphysics-surfaces/semantic-comparison-20261010.json`.
+Bounded existing arena records4/4 pass, no first_unmet:
+`E:/elysium-work/reports/arena/20261010T234536.858732Z/arena/index.json`.
+That bounded regression gate preceded the typed correction; it is not a body/contact witness.
+No default/full-arm/full-arena or packaged cook gate was run by this worker. Earlier116-byte
+compiled tests are historical pre-correction evidence, not the current implementation mandate.
+
+### Independent box geometry coordinator gates (2026-10-10; historical ownership boundary)
 
 Reviewed the constructor/cache/lifetime against the recovered retail chain and executable
 outputs. Full packed topology and arithmetic/store ordering are preserved; the 16 golden

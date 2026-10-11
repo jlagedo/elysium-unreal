@@ -1,0 +1,30 @@
+// Real public ParseSurfaceData inputs: entry order, copy position, numeric and symbol writes.
+before { friction 9 base future density 3 }
+default {
+ friction 0.8 elasticity 0.5 density 2000 thickness -2 dampening 1.25
+ maxspeedfactor 1 jumpfactor 1 climbable 257 gamematerial c
+ audioreflectivity .5 audiohardnessfactor 2 audioroughnessfactor 3
+ scraperoughthreshold 4 impacthardthreshold 5 audiohardminvelocity 6
+ stepleft "Left" stepright Right impact first impact last
+ impactsoft soft impacthard hard scrape scrape scrapesmooth smooth scraperough rough
+ bulletimpact bullet rolling roll
+ metal_norm_impact mn metal_soak_impact ms metal_crit_impact mc
+ wood_norm_impact wn wood_soak_impact ws wood_crit_impact wc
+ blade_norm_impact bn blade_soak_impact bs blade_crit_impact bc
+ fist_norm_impact fn fist_soak_impact fs fist_crit_impact fc
+ bullet_norm_impact un bullet_soak_impact us bullet_crit_impact uc
+ claw_norm_impact cn claw_soak_impact cs claw_crit_impact cc
+}
+future { density 10 }
+latebase { friction 7 impact abandoned base future elasticity 0.25 }
+earlybase { base future friction 7 impact replacement }
+duplicate { friction 2 impact original }
+duplicate { friction 3 impact discarded }
+afterduplicate { impact after }
+numbers { friction 1D+2 density -0 elasticity nan thickness inf dampening 0x1p4
+ gamematerial 4294967363 climbable 4294967297 }
+invalid { base absent unknown_key kept friction 1e+ gamematerial 0x43 climbable -257 }
+spelling { "FRICTION" 2 "IMPACT" "UPPER.Sound" }
+grammar { /* skipped block */ friction 3:ignored impact "a:b" stepleft "Mix\"Quote" }
+// Incomplete entry must not publish, but the parsed sound still interns.
+incomplete { impact incomplete

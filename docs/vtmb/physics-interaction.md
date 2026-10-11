@@ -628,3 +628,121 @@ mask `0x46004003` reaches the rules consumer before bypassing the unfinished bil
 `l0_physics_damage_type` calls the actual slot 189 on three live registered receivers; it
 does not call an internal filter helper or invent a hull hit. No body, controller, partition,
 cache, query or complete filter closure follows; no modernization was accepted.
+
+## Independent physics surface material producer (2026-10-10)
+
+Actual body construction `260104f0 ->260189f0` calls template initializer `26018ba0`.
+Its material input is SurfaceProps001, not a UPhysicalMaterial: negative requested index first
+looks up `default` through interface#3, then #10 returns the material row; the pointer is stored
+at template+0x18. `26014be0` returns process singleton260f0f40, ctor26014c10 installs
+table260c9c30. Interface#1 parser26015170 is outside a Ghidra function boundary; the read-only
+PE disassembly, small lookup bodies and executable capture establish the following contract.
+
+Parser filename registration26014df0 happens before reading any text; exact repeated filename
+returns0 without further token/symbol writes. Filenames, row names and sound values share the
+same symbol table. It initially interns the empty string as symbol0. Ctor260228e0 selects
+case-sensitive byte comparator260227b0; insertion26022b40/260229d0 uses stable16-bit IDs.
+Pair reader26024fd0 calls tokenizer26001850 and lowercases both key and value (C locale
+__strlwr260c6620). Parsed entry names therefore become lowercase, while ordinary lookup#3
+26014ed0 is case-sensitive. Unknown ordinary names return-1. Only reserved
+`$MATERIAL_INDEX_SHADOW` uses strcmpi260150b0 and returns0xf000.
+
+Tokenizer26001850 reads selector260e4d11 at26001873. It is zero-initialized BSS with one
+reader and no writer, so tableB260e4c10 is live. Initializer26001970 builds tableA from
+260cf158 (`{}()'`) and B from260cf150 (`{}()':`), verified directly in the PE. Signed-byte
+whitespace, // and /* */ comments, raw quoted contents/escaped quote and delimiter order match
+the already recovered `ElysiumKeyValues::NextToken` byte grammar; only the pair wrapper differs.
+`}` consumes one token and clears the value. Both tokens otherwise consume in source order.
+The same bounded end-of-buffer representation as that lexer applies to malformed unterminated
+quotes; retail reading beyond its allocation is not treated as a valid source contract.
+
+Each entry zeros its116-byte payload, interns its name, then copies the currently stored
+default payload if present. Every key is applied immediately. `base`26015282 ->26015140 copies
+the entire116-byte payload from an already stored row at that token position; invalid/forward
+base has no effect. Later base overwrites earlier fields, including sound symbols. Every repeated
+scalar/sound assignment overwrites its slot. A duplicate entry parses/interns its whole block,
+but the first stored row wins26015917. Missing closing brace never inserts the unfinished row.
+Unknown keys diagnose `Bad surfaceprop key %s (%s)\n` (260d021c), then continue.
+
+First parser call, even empty input, appends the special shadow row once2601598c: copy current
+default, override friction=.8/elasticity=0, retain uppercase interned constant name, save index
+at service+168 and gate at+164. Later parser calls never refresh/reinsert it. Successful new
+filename parse returns total stored count (#2 26014de0); repeated filename returns0 instead.
+
+The physical row is0x84bytes: material prefix0x10 then surfacedata payload0x74. The row's
+identity is the IVP material identity. Payload-relative fields (all stores include padding):
+
+| Offset | Fields/type |
+|---|---|
+| 0,4,8,12,16 | float friction,elasticity,density,thickness,dampening |
+| 20,24,28,32,36,40 | float audioreflectivity,audiohardnessfactor,audioroughnessfactor,scraperoughthreshold,impacthardthreshold,audiohardminvelocity |
+| 44,46,48,50,52,54 | uint16 stepleft,stepright,impact,impactsoft,impacthard,scrape |
+| 56 | untouched zero padding/slot |
+| 58,60,62,64 | uint16 scrapesmooth,scraperough,bulletimpact,rolling |
+| 66..101 | 18 uint16 sound symbols: metal,wood,blade,fist,bullet,claw × norm,soak,crit |
+| 102..103 | zero padding |
+| 104,108 | float maxspeedfactor,jumpfactor |
+| 112,114,115 | uint16 gamematerial,uint8 climbable,zero padding |
+
+Float conversion `_atof260b55f7` skips all six C whitespace bytes then __fltin260b99b4 ->
+___strgtold12 260c0525. This is VC6 decimal/D-or-E exponent grammar, with no hex/inf/nan state;
+the result is stored asfloat without clamping. `_atoi260b5532 ->_atol260b54a7` accepts signed
+decimal and wraps its32-bit accumulator rather than strtol's overflow clamp. Climbable truncates
+to byte; gamematerial is one non-digit character uppercased, otherwise atoi truncated to ushort.
+The compiler's FSTP occurs before the caller removes the atof argument; payload offsets above
+are derived from that actual stack position, not the apparent decompiler locals.
+
+Lookup#10 260150e0 ->26014f60 preserves signed negatives as invalid/null. Any index>127 remaps
+to row0 except0xf000, which selects the saved shadow index; normal table bounds then apply.
+There is no auto-default for an unknown ordinary lookup. Name#7 26014f30 resolves the selected
+row name, string#6 26015060 ->26022d10 resolves symbol0xffff to empty. Material table260c9d04
+#1 26015b20 and#3 26015b30 read row+0x10/+0x14 raw friction/elasticity; #4 26015b60 reads
+row+0x20 dampening; #2/#5 26015b40/26015b50 return constantdoublezero260c92d0.
+
+`FElysiumPhysicsSurfaceProps` implements the authored parser/lookup input as typed float fields,
+sound symbols, names and game flags. Retail packed rows and internal material-interface constants
+are research facts, not runtime requirements under the owner-approved Unreal/Chaos boundary.
+`FElysiumEntityWorld` loads the real deployed whole source through `LoadDeployed` before entities,
+using the singleton exposed by `PhysicsSurfaces()`. Source bytes are copied to Latin-1-valued
+characters only for tokenizer replay; names/values/symbols/rows are owned after input release.
+Rows borrow the service vector and may relocate on a later parse; service teardown destroys its
+rows/strings, while the process service survives world/level teardown. No external install/export
+path is opened by the game. The dedicated GLB/import input and packaging path are documented in
+`docs/contracts/seam_physics_surfaces.md`. Existing flattened material/audio pools, recursive
+explicit-base resolution and Chaos clamps remain a documented separate consumer divergence.
+
+Read-only executable research `uv run elysium research vphysics_surfaces --source <file>` loads
+the retail DLL, calls actual factory/parser/#3/#10/#7, captures every116 payload byte and actual
+material vtable friction/elasticity, then calls real template ctor26041d30/init26018ba0/dtor26041da0
+and verifies template+0x18 is that same row. All64 shipped rows and12 bounded parser rows returned
+identity1. Shipped sourceSHA2563219d190cfb3eadb65159a4f48373c5ac3bd5f999cb960262abc87a6e09c4570;
+DLLSHA256b8bbbf306b939055ce49548ace707cabc719783026d4044950b204de73d3ae10.
+Captures: `E:/elysium-work/research/vphysics-surfaces/20261010T234033.156388Z/surfaces.tsv`
+(SHAf82172fbd53cd9314f4207ca947432f700419f099a80e6a9c2862dfb6d756de7) and
+`E:/elysium-work/research/vphysics-surfaces/20261010T234436.375345Z/surfaces.tsv`
+(SHAc9c69e4a168255e345c5dfcaf989067daa22b5458ccec3f5024d7f47412cf56d).
+
+Current compiled public production tests `Elysium.Substrate.PhysicsSurface.Deployed/Parser` compare
+13 float fields,28 sound names, gamematerial and climbable for64 deployed plus12 authored rows.
+Shipped expected semantics are generated into ignored deployed artifacts by the public import;
+tracked tests retain only project-authored boundary cases. Cases cover default timing, forward/invalid/late base,
+duplicate rows/sound writes and symbol ordering, all sound matrix slots, signed/reserved lookups,
+filename case/dedupe, empty first parse, shadow once-only lifetime, numeric grammar/wrap,
+colon selector/comments/escaped quote and world recreation. Both passed in
+`E:/elysium-work/reports/tests/20261010T235831.476345Z-elysium-substrate-physicssurface/index.json`
+(2/2 Success, no errors/warnings). The earlier234509 full-byte gate preceded the owner correction
+and is historical research evidence only.
+
+Fresh native named semantic captures are
+`E:/elysium-work/research/vphysics-surfaces/20261010T235435.508436Z/semantics.json` (12 authored)
+and `E:/elysium-work/research/vphysics-surfaces/20261010T235546.180950Z/semantics.json` (64 shipped).
+The independent pipeline decoder matches every semantic value/name in both:
+`E:/elysium-work/research/vphysics-surfaces/semantic-comparison-20261010.json`.
+
+Only the authored surface parser input is complete. Chaos material wiring and existing audible
+consumers remain unwired/divergent. The revised frontier is entity callbacks and authored body
+geometry/pose/mass/damping/inertia/material inputs -> Chaos identity/create/destroy/activity and
+ordered physical timing, followed by contact filtering/notifications and shadow feedback.
+Internal IVP shape/core/scheduler/packed topology is not a requirement absent an authored observer.
+The known named observers and staged seams are in the producer walk. No original run or broad
+entity/body/trace row closes, and the saved r022a frame/cache candidate stays deferred.

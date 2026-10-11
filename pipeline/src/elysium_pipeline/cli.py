@@ -2622,6 +2622,25 @@ def import_scripts(ctx: typer.Context) -> None:
     _execute(_state(ctx), "import scripts", ExitCode.OFFLINE_EXPORT, action, require_work=False)
 
 
+@import_app.command("physics-surfaces")
+def import_physics_surfaces(ctx: typer.Context) -> None:
+    """Deploy the complete physics material source table into Content/ElysiumCorpus."""
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import physics_surfaces as importer
+        _run_corpus_lane(config, importer.import_physics_surfaces, "physics-surfaces")
+    _execute(_state(ctx), "import physics-surfaces", ExitCode.OFFLINE_EXPORT, action, require_work=False)
+
+
+@export_v2_app.command("physics-surfaces-glb")
+def export_v2_physics_surfaces_glb(ctx: typer.Context) -> None:
+    """Capsule the whole surface table without changing parser input ordering."""
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.exporters import physics_surfaces_glb
+        console.print(physics_surfaces_glb.export_table(config.export_v2_root))
+    _execute(_state(ctx), "export_v2 physics-surfaces-glb", ExitCode.OFFLINE_EXPORT,
+             action, require_game=True, activity=True)
+
+
 @import_app.command("ai-schedules")
 def import_ai_schedules(ctx: typer.Context) -> None:
     """Deploy the NPC schedule texts and id spaces into Content/ElysiumCorpus/ai/schedules."""
