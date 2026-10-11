@@ -113,6 +113,12 @@ namespace ElysiumModelPhysics
 	};
 	TArray<FShadowEventSample> ShadowEvents(void* Actor); //completed, incarnation-fenced PT observations
 	void ObservePostSolve(UWorld& World); //diagnostic opt-in at next Prepare, automatically retired with world
+	struct FPairMaterialSample
+	{
+		const void* Partner = nullptr; double Time = 0.;
+		double StaticFriction = 0., DynamicFriction = 0., Restitution = 0.;
+	};
+	TArray<FPairMaterialSample> PairMaterials(void* Actor); //completed modifier POD, opt-in and incarnation-fenced
 	// Called by the production Gameplay tick after thinks, before UE StartPhysics.
 	// Unreal owns the scene, scheduling, contacts and solve; substrate owns retail dt/controller.
 	float PreparePhysicsFrame(UWorld& World, float FrameSeconds, float TimeScale, bool bSimulating);

@@ -11,6 +11,8 @@
 #include "ElysiumWorldCollisionActor.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPhysicalMaterial.h"
+#include "ElysiumPhysicsSurfaceProps.h"
+#include "ElysiumPhysicsPropComponent.h"
 #include "Substrate/ElysiumLockable.h"
 #include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumModelPhysics.h"
@@ -664,7 +666,15 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 			// The paired public wall uses the same authored default surface as the brushes.
 			// Give the ordinary native static box that actual material instead of UE's default.
 			FBodyInstance* SubjectNativeBody=ElysiumModelPhysics::Identity(Subject->Body);
-			Wall->SetPhysMaterialOverride(SubjectNativeBody->GetSimplePhysicalMaterial());
+			//The public replay wall is ordinary default, independent of the subject's new reserved selection.
+			const auto* WallSurface=World.PhysicsSurfaces().GetSurfaceData(World.PhysicsSurfaces().GetSurfaceIndex(TEXT("default")));
+			if (!WallSurface) return false;
+			auto* WallMaterial=NewObject<UElysiumPhysicalMaterial>(Wall);
+			WallMaterial->SourceName=TEXT("default"); WallMaterial->Friction=WallSurface->Friction(); WallMaterial->StaticFriction=WallSurface->Friction();
+			WallMaterial->RawElasticity=WallSurface->Elasticity(); WallMaterial->Restitution=WallSurface->Elasticity();
+			WallMaterial->bOverrideFrictionCombineMode=true; WallMaterial->FrictionCombineMode=EFrictionCombineMode::Multiply;
+			WallMaterial->bOverrideRestitutionCombineMode=true; WallMaterial->RestitutionCombineMode=EFrictionCombineMode::Multiply;
+			Wall->SetPhysMaterialOverride(WallMaterial);
 			for (FElysiumEntity* MovingBody : {Subject,Blocker,static_cast<FElysiumEntity*>(Peer)})
 			{
 				FVector InitialPosition; FQuat InitialRotation;
@@ -680,7 +690,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 					MovingBody==Subject?TEXT("subject"):MovingBody==Blocker?TEXT("blocker"):TEXT("peer"),CreationShadow->SavedMassKg,
 					CreationShadow->SavedInertia.X/10000.,CreationShadow->SavedInertia.Y/10000.,CreationShadow->SavedInertia.Z/10000.,CreationShadow->bSavedGravity));
 				const auto* NativeMaterial=Cast<UElysiumPhysicalMaterial>(ElysiumModelPhysics::Identity(MovingBody->Body)->GetSimplePhysicalMaterial());
-				TestTrue(TEXT("moving native body retains authored default material"),NativeMaterial && NativeMaterial->SourceName==TEXT("default"));
+				TestTrue(TEXT("moving native body selects reserved shadow material"),NativeMaterial && NativeMaterial->SourceName==TEXT("$MATERIAL_INDEX_SHADOW"));
 				TestTrue(TEXT("moving native body retains forbidden movement/rotation permissions"),CreationShadow && !CreationShadow->bAllowMovement && !CreationShadow->bAllowRotation && !CreationShadow->bGravityMode && CreationShadow->TeleportDistanceCm==0.f);
 				AddInfo(FString::Printf(TEXT("MOVING_PARAMETERS,%s,mass=%.9g,damping=%.9g,angularDamping=%.9g,gravity=%d,inertia=%s,friction=%.9g,elasticity=%.9g"),
 					MovingBody==Subject?TEXT("subject"):MovingBody==Blocker?TEXT("blocker"):TEXT("peer"),ElysiumModelPhysics::Identity(MovingBody->Body)->GetBodyMass(),
@@ -960,6 +970,14 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 			FElysiumSavedPhysicsBody OriginalMechanics; ElysiumModelPhysics::Capture(PeerObject,OriginalMechanics);
 			ElysiumModelPhysics::SetShadow(PeerObject,10000.f,10000.f,false,false);
 			FElysiumSavedPhysicsBody ForbiddenMechanics; ElysiumModelPhysics::Capture(PeerObject,ForbiddenMechanics);
+			const auto BeforeRepeatedShadow=*ElysiumModelPhysics::ShadowFor(PeerObject);
+			ElysiumModelPhysics::SetShadow(PeerObject,5000.f,4000.f,true,true);
+			FElysiumSavedPhysicsBody RepeatedMechanics; ElysiumModelPhysics::Capture(PeerObject,RepeatedMechanics);
+			TestEqual(TEXT("repeated45 retains reserved material selection"),RepeatedMechanics.CurrentSurface,ForbiddenMechanics.CurrentSurface);
+			TestTrue(TEXT("repeated45 retains permissions/originals and selected native mechanics"),!RepeatedMechanics.Shadow.bAllowMovement && !RepeatedMechanics.Shadow.bAllowRotation
+				&& RepeatedMechanics.Shadow.SavedMassKg==BeforeRepeatedShadow.SavedMassKg && RepeatedMechanics.Shadow.SavedInertia==BeforeRepeatedShadow.SavedInertia
+				&& RepeatedMechanics.CurrentMassKg==ForbiddenMechanics.CurrentMassKg && RepeatedMechanics.CurrentInertia==ForbiddenMechanics.CurrentInertia
+				&& RepeatedMechanics.CurrentInverseInertia==ForbiddenMechanics.CurrentInverseInertia && RepeatedMechanics.CurrentMassFrame.Equals(ForbiddenMechanics.CurrentMassFrame,0.));
 			TestTrue(TEXT("forbidden rotation uses positive finite native I and InvI"),ForbiddenMechanics.CurrentInertia.GetMin()>0. && ForbiddenMechanics.CurrentInverseInertia.GetMin()>0.);
 			TestTrue(TEXT("finite forbidden tensor reciprocal is consistent in native units"),FMath::Abs(ForbiddenMechanics.CurrentInertia.X*ForbiddenMechanics.CurrentInverseInertia.X-1.)<1.e-6);
 			TestTrue(TEXT("attachment mass override preserves original mass frame"),ForbiddenMechanics.CurrentMassFrame.Equals(OriginalMechanics.CurrentMassFrame,1.e-6));
@@ -974,6 +992,8 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("finite forbidden inertia suppresses angular impulse in actual solve"),ForbiddenSpeed<1.e-8);
 			ElysiumModelPhysics::RemoveShadow(PeerObject);
 			FElysiumSavedPhysicsBody RemovedMechanics; ElysiumModelPhysics::Capture(PeerObject,RemovedMechanics);
+			TestEqual(TEXT("actual51 restores mechanics while retaining reserved material"),RemovedMechanics.CurrentSurface,ForbiddenMechanics.CurrentSurface);
+			TestFalse(TEXT("retained reserved material after51 implies no controller"),RemovedMechanics.Shadow.bInstalled);
 			TestTrue(TEXT("removal restores native paired original inertia and mass frame"),RemovedMechanics.CurrentInertia==OriginalMechanics.CurrentInertia && RemovedMechanics.CurrentInverseInertia==OriginalMechanics.CurrentInverseInertia && RemovedMechanics.CurrentMassFrame.Equals(OriginalMechanics.CurrentMassFrame,1.e-6));
 			PeerNative->SetAngularVelocityInRadians(FVector::ZeroVector,false);
 			PeerNative->AddAngularImpulseInRadians(AngularImpulse,false);
@@ -2586,4 +2606,101 @@ bool FElysiumDoorNearestKnobSelectionTest::RunTest(const FString&)
 }
 #endif // ELYSIUM_WITH_ARM_TESTS
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeMaterialEffectTest, "Elysium.Substrate.Mover.NativeMaterialEffect", GElysiumMoverTestFlags)
+bool FElysiumNativeMaterialEffectTest::RunTest(const FString&)
+{
+	for (bool bTangential : {false,true})
+	{
+	FVector ReservedImpact = FVector::ZeroVector, OrdinaryImpact = FVector::ZeroVector;
+	FElysiumSavedPhysicsBody ReservedInitial;
+	for (int32 Mode : {0,1,2,3})
+	{
+		const bool bReserved=Mode==1;
+		FTestWorldWrapper Fixture;
+		if (!ElysiumDoorCaseTests::OpenEngineWorld(Fixture,this)) return false;
+		UWorld* EngineWorld=Fixture.GetTestWorld();
+		auto* Owner=EngineWorld->SpawnActor<AActor>();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(Owner,nullptr,Services.Bundle());
+		FElysiumEntityDefs Defs; Defs.MapName=TEXT("__native_material_effect__"); World.Load(MoveTemp(Defs));
+		FElysiumEntityDef Def; Def.Classname=TEXT("info_target");
+		auto* Dynamic=World.Resolve(World.SpawnRuntimeEntity(Def));
+		auto* FloorEntity=World.Resolve(World.SpawnRuntimeEntity(Def));
+		FElysiumPhysicsSurfaceProps Surfaces;
+		Surfaces.ParseSurfaceData(TEXT("unequal-authored-materials"),TEXT("default { friction 0.6 elasticity 1 density 1000 } floor { friction 0.4 elasticity 0.5 density 3000 } zero { friction 0.8 elasticity 0 density 1000 } slick { friction 0 elasticity 0 density 1000 }"));
+		auto* Body=NewObject<UElysiumPhysicsPropComponent>(Owner); Owner->AddInstanceComponent(Body); Body->RegisterComponent();
+		auto* Floor=NewObject<UElysiumPhysicsPropComponent>(Owner); Owner->AddInstanceComponent(Floor); Floor->RegisterComponent();
+		Body->SetWorldLocation(FVector(0,0,50));
+		FElysiumPhysicsBodyRecipe Recipe; Recipe.Kind=EElysiumPhysicsRecipeKind::Bbox;
+		Recipe.BboxMin=FVector(-10); Recipe.BboxMax=FVector(10); Recipe.MassKg=1.f;
+		Recipe.LinearDamping=0.f; Recipe.AngularDamping=0.f;
+		if (Mode==2) Recipe.Surface=TEXT("zero");
+		if (Mode==3) Recipe.Surface=TEXT("slick");
+		FString Error;
+		if (!TestTrue(TEXT("material effect actual native dynamic bbox creation"),ElysiumModelPhysics::CreateBbox(Body,Surfaces,Recipe,false,Error))) return false;
+		Recipe.bStatic=true; Recipe.Surface=TEXT("floor"); Recipe.BboxMin=FVector(-100,-100,-5); Recipe.BboxMax=FVector(100,100,5);
+		if (!TestTrue(TEXT("material effect actual native static floor creation"),ElysiumModelPhysics::CreateBbox(Floor,Surfaces,Recipe,false,Error))) return false;
+		void* Actor=ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor=ElysiumModelPhysics::ActorIdentity(Floor);
+		ElysiumModelPhysics::SetGameData(Actor,*Dynamic); ElysiumModelPhysics::SetGameData(FloorActor,*FloorEntity);
+		Dynamic->VPhysicsSetObject(Actor); FloorEntity->VPhysicsSetObject(FloorActor);
+		Body->SetEnableGravity(false);
+		if (bReserved)
+		{
+			if (!TestTrue(TEXT("material effect actual false,false production shadow attachment"),ElysiumModelPhysics::SetShadow(Actor,10000.f,10000.f,false,false))) return false;
+			ElysiumModelPhysics::RemoveShadow(Actor);
+		}
+		ElysiumModelPhysics::Identity(Body)->SetLinearVelocity(FVector(bTangential?300.:0.,0,-600),false);
+		FElysiumSavedPhysicsBody Initial;
+		if (!TestTrue(TEXT("capture live mechanical stimulus before material solve"),ElysiumModelPhysics::Capture(Actor,Initial))) return false;
+		if (Mode==1) ReservedInitial=Initial;
+		if (Mode>=2)
+		{
+			TestEqual(TEXT("independent material control matches initial mass"),Initial.CurrentMassKg,ReservedInitial.CurrentMassKg);
+			TestTrue(TEXT("independent material control matches inertia and inverse inertia"),Initial.CurrentInertia==ReservedInitial.CurrentInertia && Initial.CurrentInverseInertia==ReservedInitial.CurrentInverseInertia);
+			TestTrue(TEXT("independent material control matches principal frame and pose"),Initial.CurrentMassFrame.Equals(ReservedInitial.CurrentMassFrame,0.) && Initial.Pose.Equals(ReservedInitial.Pose,0.));
+			TestEqual(TEXT("independent material control matches gravity"),Initial.bGravity,ReservedInitial.bGravity);
+			TestEqual(TEXT("independent material control matches sleep"),Initial.bAsleep,ReservedInitial.bAsleep);
+			TestEqual(TEXT("independent material control matches linear damping"),Initial.CurrentLinearDamping,ReservedInitial.CurrentLinearDamping);
+			TestEqual(TEXT("independent material control matches angular damping"),Initial.CurrentAngularDamping,ReservedInitial.CurrentAngularDamping);
+			TestTrue(TEXT("independent material control matches linear and angular stimulus"),Initial.LinearVelocity==ReservedInitial.LinearVelocity && Initial.AngularVelocityRadians==ReservedInitial.AngularVelocityRadians);
+		}
+		ElysiumModelPhysics::ObservePostSolve(*EngineWorld);
+		bool bReached=false;
+		bool bImpact=false;
+		double LastPairTime=-1.;
+		for (int32 Frame=1; Frame<=10; ++Frame)
+		{
+			World.BeginNativePhysicsFrame(Frame/60.,1./60.);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,1.f/60.f,1.f,true); Fixture.TickTestWorld(1.f/60.f);
+			const FVector Velocity=ElysiumModelPhysics::Identity(Body)->GetUnrealWorldVelocity();
+			for (const auto& Pair:ElysiumModelPhysics::PairMaterials(Actor))
+				if (Pair.Partner==FloorActor && Pair.Time>LastPairTime)
+				{
+					LastPairTime=Pair.Time;
+					bReached=true;
+					const double ExpectedFriction=static_cast<double>(Mode==0?.6f:Mode==3?0.f:.8f)*static_cast<double>(.4f);
+					TestEqual(TEXT("actual modifier static friction uses authored pair product after native float storage"),Pair.StaticFriction,static_cast<double>(static_cast<float>(ExpectedFriction)));
+					TestEqual(TEXT("actual modifier dynamic friction uses authored pair product"),Pair.DynamicFriction,static_cast<double>(static_cast<float>(ExpectedFriction)));
+					TestEqual(TEXT("actual modifier elasticity uses authored pair product"),Pair.Restitution,Mode==0?.5:0.);
+					TestTrue(TEXT("completed material observer belongs to just-completed native frame"),Pair.Time>=(Frame-1)/60.-1.e-7 && Pair.Time<Frame/60.);
+					AddInfo(FString::Printf(TEXT("MATERIAL_EFFECT,tangent=%d,mode=%d,frame=%d,pairTime=%.17g,friction=%.17g/%.17g,restitution=%.17g,velocity=%.17g/%.17g/%.17g"),bTangential,Mode,Frame,Pair.Time,Pair.StaticFriction,Pair.DynamicFriction,Pair.Restitution,Velocity.X,Velocity.Y,Velocity.Z));
+					if (!bImpact && Velocity.Z>=0.)
+					{
+						bImpact=true;
+						if (Mode==0) OrdinaryImpact=Velocity;
+						else if (Mode==1) ReservedImpact=Velocity;
+						else if (Mode==2) TestTrue(TEXT("detached reserved material produces identical solved contact effect to independent authored .8/0 counterpart"),Velocity==ReservedImpact);
+						else if (bTangential) TestTrue(TEXT("actual reserved friction reduces tangential velocity relative to matched authored frictionless control"),Velocity.X>ReservedImpact.X+1.);
+					}
+				}
+			World.FinishNativePhysicsFrame();
+		}
+		TestTrue(TEXT("material fixture reaches real modifier callback for authored native pair"),bReached);
+		TestTrue(TEXT("material fixture reaches completed actual native collision response"),bImpact);
+		if (Mode==1) TestTrue(TEXT("zero elasticity removes ordinary positive-restitution rebound in actual solve"),ReservedImpact.Z<OrdinaryImpact.Z/10. && OrdinaryImpact.Z>200.);
+		ElysiumModelPhysics::Destroy(Body); ElysiumModelPhysics::Destroy(Floor);
+	}
+	}
+	return true;
+}
 #endif // WITH_DEV_AUTOMATION_TESTS

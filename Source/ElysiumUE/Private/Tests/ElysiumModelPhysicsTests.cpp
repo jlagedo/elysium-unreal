@@ -89,6 +89,20 @@ bool FElysiumModelPhysicsNativeTest::RunTest(const FString&)
 	TestEqual(TEXT("native body material friction"), Material->Friction, .4f);
 	TestEqual(TEXT("native body material restitution input"), Material->Restitution, .7f);
 	TestEqual(TEXT("material density native conversion"), Material->Density, 7.8f);
+	FElysiumSavedPhysicsBody BeforeMaterial, AfterMaterial;
+	void* MaterialActor=ElysiumModelPhysics::ActorIdentity(Component);
+	if (!TestTrue(TEXT("capture ordinary metal mechanics"),ElysiumModelPhysics::Capture(MaterialActor,BeforeMaterial))) return false;
+	if (!TestTrue(TEXT("ordinary metal attaches normal shadow"),ElysiumModelPhysics::SetShadow(MaterialActor,10000.f,10000.f,false,false))) return false;
+	const auto* ReservedMaterial=Cast<UElysiumPhysicalMaterial>(Body->GetSimplePhysicalMaterial());
+	if (!TestNotNull(TEXT("normal shadow selects typed reserved row"),ReservedMaterial)) return false;
+	TestEqual(TEXT("reserved row inherits first default density independently of ordinary metal recipe"),ReservedMaterial->RawDensity,1000.f);
+	TestEqual(TEXT("reserved row overrides friction"),ReservedMaterial->Friction,.8f);
+	TestEqual(TEXT("reserved row overrides elasticity"),ReservedMaterial->RawElasticity,0.f);
+	ElysiumModelPhysics::RemoveShadow(MaterialActor);
+	if (!TestTrue(TEXT("capture removed normal shadow"),ElysiumModelPhysics::Capture(MaterialActor,AfterMaterial))) return false;
+	TestEqual(TEXT("material switch retains authored ordinary recipe"),AfterMaterial.Recipe.Surface,FString(TEXT("metal")));
+	TestEqual(TEXT("material removal retains reserved current identity"),AfterMaterial.CurrentSurface,FString(TEXT("$MATERIAL_INDEX_SHADOW")));
+	TestTrue(TEXT("material setter and removal preserve original native mass inertia and frame"),AfterMaterial.CurrentMassKg==BeforeMaterial.CurrentMassKg && AfterMaterial.CurrentInertia==BeforeMaterial.CurrentInertia && AfterMaterial.CurrentInverseInertia==BeforeMaterial.CurrentInverseInertia && AfterMaterial.CurrentMassFrame.Equals(BeforeMaterial.CurrentMassFrame,0.));
 	UElysiumModelPhysicsInputs::ApplyJson(Mesh, Json.Replace(TEXT("\"inertia\",\"value\":\"1\""), TEXT("\"inertia\",\"value\":\"2\"")), bOk, Error);
 	TestTrue(TEXT("recreate selected native body"), ElysiumModelPhysics::Create(Component, Surfaces, 2.f, 0.f, false, Error));
 	TestTrue(TEXT("native tensor preserves authored linear inertia multiplier"), ElysiumModelPhysics::Identity(Component)->GetBodyInertiaTensor().Equals(BaseInertia * 2.f, .1));
@@ -303,6 +317,9 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	ElysiumModelPhysics::RemoveShadow(Moving->VPhysicsGetObject());
 	FElysiumSavedPhysicsBody AfterController;
 	if (!ElysiumModelPhysics::Capture(Moving->VPhysicsGetObject(),AfterController)) return false;
+	TestEqual(TEXT("removed controller retains reserved current material"),AfterController.CurrentSurface,FString(TEXT("$MATERIAL_INDEX_SHADOW")));
+	TestFalse(TEXT("reserved current material does not infer installed controller"),AfterController.Shadow.bInstalled);
+	TestEqual(TEXT("material switch retains authored recipe spelling"),AfterController.Recipe.Surface,BeforeController.Recipe.Surface);
 	TestTrue(TEXT("removed-controller save producer retains original Chaos pair and mass frame"),
 		AfterController.CurrentInertia==BeforeController.CurrentInertia && AfterController.CurrentInverseInertia==BeforeController.CurrentInverseInertia &&
 		AfterController.CurrentMassFrame.Equals(BeforeController.CurrentMassFrame,1.e-6));
@@ -388,6 +405,8 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 		RestoredState.CurrentInertia == NativeState.CurrentInertia && RestoredState.CurrentInverseInertia == NativeState.CurrentInverseInertia &&
 		RestoredState.CurrentMassFrame.Equals(NativeState.CurrentMassFrame, 1.e-6));
 	TestFalse(TEXT("gravity state persisted"), RestoredState.bGravity);
+	TestEqual(TEXT("actual Physics stream reconstructs detached current reserved material"),RestoredState.CurrentSurface,NativeState.CurrentSurface);
+	TestFalse(TEXT("detached reserved restore creates no controller"),RestoredState.Shadow.bInstalled);
 	TestEqual(TEXT("current runtime damping persisted independently from creation recipe"), RestoredState.CurrentLinearDamping, .75f);
 	TestFalse(TEXT("awake state persisted"), RestoredState.bAsleep);
 	TestFalse(TEXT("sleeping identity retained"), ElysiumModelPhysics::IsActive(RestoredSleep->Visual));
@@ -401,6 +420,8 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestTrue(TEXT("base reconstructed output registered"), ElysiumModelPhysics::Capture(RestoredAlias->VPhysicsGetObject(), AliasState));
 	TestTrue(TEXT("base alias native pose persists"), AliasState.Pose.Equals(NativeState.Pose, .001));
 	TestTrue(TEXT("base alias native velocity persists"), AliasState.LinearVelocity.Equals(NativeState.LinearVelocity, .001));
+	TestEqual(TEXT("alias independent reconstruction retains current material"),AliasState.CurrentSurface,NativeState.CurrentSurface);
+	TestFalse(TEXT("reserved alias restore does not infer shadow controller"),AliasState.Shadow.bInstalled);
 	TestEqual(TEXT("base alias native collision profile persists"), AliasState.CollisionProfile, NativeState.CollisionProfile);
 	UPrimitiveComponent* AliasComponent = ElysiumModelPhysics::ComponentFor(RestoredAlias->VPhysicsGetObject());
 	TestFalse(TEXT("reconstructed alias service duplicates no rendered art"), AliasComponent->IsVisible());
@@ -468,6 +489,15 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestNull(TEXT("failed packet retires earlier reconstructed model actor"), PreviouslyRestored->VPhysicsGetObject());
 	TestNull(TEXT("failed packet retires earlier reconstructed base actor"), PreviouslyRestoredAlias->VPhysicsGetObject());
 	FailedDestination.Teardown();
+	auto* InvalidComponent = NewObject<UElysiumPhysicsPropComponent>(Map);
+	Map->AddInstanceComponent(InvalidComponent); InvalidComponent->RegisterComponent();
+	for (const FString& InvalidName : {FString(),FString(TEXT("unknown-current-semantic-material"))})
+	{
+		FElysiumSavedPhysicsBody InvalidMaterial = NativeState; InvalidMaterial.CurrentSurface = InvalidName;
+		TestFalse(TEXT("malformed current semantic name refuses native reconstruction"),ElysiumModelPhysics::Restore(InvalidComponent,Destination.PhysicsSurfaces(),InvalidMaterial,Error));
+		TestNull(TEXT("invalid semantic name fails before any native actor creation"),ElysiumModelPhysics::ActorIdentity(InvalidComponent));
+		TestNull(TEXT("invalid semantic name creates no recipe"),ElysiumModelPhysics::RecipeFor(ElysiumModelPhysics::ActorIdentity(InvalidComponent)));
+	}
 	ElysiumPreparedProps::Release(Map);
 	return true;
 }
@@ -1119,6 +1149,8 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
 	TestTrue(TEXT("actual Physics reconstruction retains originals independently of current zero inputs"),State && State->SavedLinearDamping==PersistedOriginalLinearDamping && State->SavedAngularDamping==PersistedOriginalAngularDamping);
 	FElysiumSavedPhysicsBody RestoredMechanics;
 	TestTrue(TEXT("restored shadow captures actual native mechanics producers"), ElysiumModelPhysics::Capture(Object,RestoredMechanics));
+	TestEqual(TEXT("installed shadow roundtrip restores reserved current identity before first event"),RestoredMechanics.CurrentSurface,FString(TEXT("$MATERIAL_INDEX_SHADOW")));
+	TestTrue(TEXT("installed shadow roundtrip restores controller independently"),RestoredMechanics.Shadow.bInstalled);
 	TestTrue(TEXT("restored shadow retains finite current I and reciprocal separately from originals"),
 		RestoredMechanics.CurrentInertia == SavedMechanics.CurrentInertia && RestoredMechanics.CurrentInverseInertia == SavedMechanics.CurrentInverseInertia &&
 		RestoredMechanics.CurrentMassFrame.Equals(SavedMechanics.CurrentMassFrame,1.e-6));
@@ -1137,6 +1169,9 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  Alias = World->Resolve(FElysiumEntityHandle(AliasIndex, World->GetEpoch()));
  TestTrue(TEXT("saved alias reconstructs independent controller without owner membership"), Alias && Alias->VPhysicsGetObject() != Object &&
   ElysiumModelPhysics::ShadowFor(Alias->VPhysicsGetObject()) && !World->PhysicsShadows().Contains(Alias->Handle));
+	FElysiumSavedPhysicsBody InstalledAlias;
+	TestTrue(TEXT("installed alias captures reconstructed current material"),Alias && ElysiumModelPhysics::Capture(Alias->VPhysicsGetObject(),InstalledAlias));
+	TestTrue(TEXT("installed alias retains reserved current material and independent controller"),InstalledAlias.CurrentSurface==TEXT("$MATERIAL_INDEX_SHADOW") && InstalledAlias.Shadow.bInstalled);
  Component = ElysiumModelPhysics::ComponentFor(Object);
  FBodyInstance* RetiringBody = ElysiumModelPhysics::Identity(Component);
  const float OriginalMass = State->SavedMassKg;
@@ -1157,6 +1192,8 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
   { RetiringInverse=FVector(ReadActor->GetGameThreadAPI().InvI()); }); //recipe retired; native handle is still live before release
   TestTrue(TEXT("controller teardown restores original paired inverse and principal frame before release"),
    RetiringInverse==OriginalInverseInertia && RetiringBody->GetMassSpaceLocal().Equals(OriginalMassFrame,1.e-6));
+	 const auto* RetiringMaterial=Cast<UElysiumPhysicalMaterial>(RetiringBody->GetSimplePhysicalMaterial()); //GT UObject remains owned while native release is pending
+	 TestTrue(TEXT("225 retains reserved current material before native release"),RetiringMaterial && RetiringMaterial->SourceName==TEXT("$MATERIAL_INDEX_SHADOW"));
 	 TestEqual(TEXT("persisted shadow teardown restores original linear damping"),Component->GetLinearDamping(),OriginalLinearDamping);
 	 TestEqual(TEXT("persisted shadow teardown restores original angular damping"),Component->GetAngularDamping(),OriginalAngularDamping);
  });

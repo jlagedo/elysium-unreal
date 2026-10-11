@@ -1,5 +1,36 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Reserved material packet contract and boundary (2026-10-11)
+
+The durable pre-code contract, reviewed before functional edits, is
+E:/elysium-work/codex/l0-material-contract-20261011/precode-contract.md.
+Normal false,false45/26018520 ->2601a7e0 selects0xf000; parser2601598c copies
+first default and overrides friction.8/elasticity0. Repeated45 retains it, and
+51/26018600 ->2601a920 restores mechanics while retaining material. Actual pair
+consumer2604ec00 ->26015bd0/26041a70 and26041aa0 multiplies authored friction
+and elasticity. Full recovery, public UE5.8 API signatures/thread/lifetime and
+producer inventory are recorded in physics-interaction.md's reserved-material section.
+
+Typed Model/Bbox/Brush producer coverage is bounded: ordinary semantics are retained,
+the reserved copy is owned independently, supported material writes preserve native
+M/InvM/I/InvI/frame, and schema/floor51 saves current material independently of
+ordinary recipe/controller. Real native unequal pair contacts preceded assertions.
+Independent .8/0 controls with matched mechanics reproduce reserved rebound and
+sliding; positive restitution and frictionless controls establish both solved effects.
+PT public modifier outputs precede GT completed-frame observations under existing
+generation/retirement fences. Installed/removed/alias restore, repeated caps and225
+pre-release retention pass with original event/order assertions retained.
+
+This is a prerequisite contract inside open packages, not general shadow-world
+contact closure. World/per-face authored physical material producer/binding is absent
+and is a required same/lower dependency of actual226/100a55b0/44/178, a planning
+fault to resolve before claiming its closure. The baked FromJson restitution clamp
+versus raw authored elasticity also needs its reached observer recovered. Special
+26015bd0/2601bc60 player-controller admission remains a higher-owner hook inventory
+obligation; normal object+c shadow evidence excludes object+b0 player controller.
+No hook/audit row is silently closed. Moving first44/178 encounter timing remains
+OPEN; no margin/cadence/threshold/order or Source geometry/solver algorithm changes.
+
 ## Forbidden-rotation inertia packet contract before code (2026-10-11)
 
 Actual callers remain Pusher617/Prop815 SetShadow(10000,10000,false,false).

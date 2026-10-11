@@ -32,6 +32,8 @@ namespace
 		UPrimitiveComponent* Producer = nullptr; // equality only, valid also during component destruction
 		TWeakObjectPtr<UPrimitiveComponent> Component;
 		FElysiumPhysicsBodyRecipe Recipe;
+		FElysiumPhysicsSurfaceParameters ShadowParameters; //owned first-parser default copy; no borrowed table lifetime
+		FString ShadowName;
 	};
 	// Semantic manager#2/model and manager#1/bbox associations (10044db0/10044f60).
 	// No Source hash/tree layout; identity is the actual successful Chaos incarnation.
@@ -83,6 +85,8 @@ namespace
 		bool bInitial;
 		double ObservedSeparation = TNumericLimits<double>::Max();
 		FVector ObservedPose[2] = {FVector::ZeroVector,FVector::ZeroVector};
+		bool bMaterialObserved = false;
+		double StaticFriction = 0., DynamicFriction = 0., Restitution = 0.;
 	};
 	struct FSolveFilterOutput : Chaos::FSimCallbackOutput
 	{
@@ -256,6 +260,8 @@ namespace
 				if (Input->bObservePostSolve)
 				{
 					auto& Observation = Output.Contacts.Last();
+					Observation.bMaterialObserved = true;
+					Observation.StaticFriction = Pair.GetStaticFriction(); Observation.DynamicFriction = Pair.GetDynamicFriction(); Observation.Restitution = Pair.GetRestitution();
 					Observation.ObservedPose[0] = Pair.GetShapeToWorld(0).GetLocation(); Observation.ObservedPose[1] = Pair.GetShapeToWorld(1).GetLocation();
 					for (int32 PointIndex = 0; PointIndex < Pair.GetNumContacts(); ++PointIndex)
 						Observation.ObservedSeparation = FMath::Min(Observation.ObservedSeparation,static_cast<double>(Pair.GetSeparation(PointIndex)));
@@ -484,6 +490,33 @@ namespace
 		const FVector Tensor(static_cast<double>(RetailMoment) * 10000.); //native kg cm²
 		SetInertia(Body, Tensor, FVector(1. / Tensor.X));
 	}
+	UElysiumPhysicalMaterial* MakeSurfaceMaterial(UPrimitiveComponent& Component, const FString& Name,
+		const FElysiumPhysicsSurfaceParameters& Values)
+	{
+		auto* Material = NewObject<UElysiumPhysicalMaterial>(&Component);
+		Material->SourceName = Name; Material->AssetId = TEXT("vtmb:surface-property:") + Name;
+		Material->Friction = Values.Friction; Material->StaticFriction = Values.Friction;
+		Material->RawElasticity = Values.Elasticity; Material->Restitution = Values.Elasticity;
+		Material->RawDensity = Values.Density; Material->Density = Values.Density / 1000.f; Material->Thickness = Values.Thickness;
+		//2604ec00 ->26015bd0/26041a70 and26041aa0: authored pair products, not Chaos project defaults.
+		Material->bOverrideFrictionCombineMode = true; Material->FrictionCombineMode = EFrictionCombineMode::Multiply;
+		Material->bOverrideRestitutionCombineMode = true; Material->RestitutionCombineMode = EFrictionCombineMode::Multiply;
+		return Material;
+	}
+	void SetSurfaceMaterial(UPrimitiveComponent& Component, UElysiumPhysicalMaterial& Material)
+	{
+		FBodyInstance* Body = ElysiumModelPhysics::Identity(&Component);
+		FVector Tensor, Inverse; ReadInertia(*Body, Tensor, Inverse);
+		const FTransform Frame = Body->GetMassSpaceLocal();
+		float Mass = 0.f, InverseMass = 0.f;
+		FPhysicsCommand::ExecuteRead(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle& Handle)
+		{ Mass = Handle->GetGameThreadAPI().M(); InverseMass = Handle->GetGameThreadAPI().InvM(); });
+		//Public setter updates shape materials under its native lock but also recomputes mechanics.
+		Component.SetPhysMaterialOverride(&Material);
+		FPhysicsCommand::ExecuteWrite(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle& Handle)
+		{ Handle->GetGameThreadAPI().SetM(Mass); Handle->GetGameThreadAPI().SetInvM(InverseMass); });
+		Body->SetMassSpaceLocal(Frame); SetInertia(*Body, Tensor, Inverse);
+	}
 	bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError);
 }
@@ -513,6 +546,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	Ar << State.Pose << State.LinearVelocity << State.AngularVelocityRadians << State.bAsleep << State.bGravity;
 	Ar << State.CurrentMassKg << State.CurrentLinearDamping << State.CurrentAngularDamping;
 	Ar << State.CurrentInertia << State.CurrentInverseInertia << State.CurrentMassFrame;
+	Ar << State.CurrentSurface;
 	Ar << State.CollisionProfile << State.CollisionMask << State.CollisionResponses << State.BboxCollisionEnabled;
 	Ar << State.Shadow.bInstalled << State.Shadow.bActive << State.Shadow.bAllowMovement << State.Shadow.bAllowRotation << State.Shadow.bGravityMode;
 	Ar << State.Shadow.Target << State.Shadow.PredictedPosition << State.Shadow.RemainingSeconds;
@@ -529,6 +563,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	if (Ar.IsLoading() && State.bHasObject && (State.CurrentInertia.ContainsNaN() || State.CurrentInertia.GetMin() < 0.
 		|| State.CurrentInverseInertia.ContainsNaN() || State.CurrentInverseInertia.GetMin() < 0.
 		|| State.CurrentMassFrame.ContainsNaN() || !State.CurrentMassFrame.GetRotation().IsNormalized())) Ar.SetError();
+	if (Ar.IsLoading() && State.bHasObject && State.CurrentSurface.IsEmpty()) Ar.SetError();
 	return Ar;
 }
 
@@ -954,6 +989,9 @@ bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutStat
 	OutState.CurrentMassKg = Recipe->bStatic ? Recipe->MassKg : NativeBody->GetBodyMass();
 	ReadInertia(*NativeBody, OutState.CurrentInertia, OutState.CurrentInverseInertia);
 	OutState.CurrentMassFrame = NativeBody->GetMassSpaceLocal();
+	const auto* Material = Cast<UElysiumPhysicalMaterial>(NativeBody->GetSimplePhysicalMaterial());
+	if (!Material || Material->SourceName.IsEmpty()) return false; //supported owned semantic reconstruction only
+	OutState.CurrentSurface = Material->SourceName;
 	OutState.CurrentLinearDamping = NativeBody->LinearDamping;
 	OutState.CurrentAngularDamping = NativeBody->AngularDamping;
 	OutState.CollisionProfile = Component->GetCollisionProfileName();
@@ -988,6 +1026,22 @@ void ElysiumModelPhysics::ObservePostSolve(UWorld& World)
 {
 	EnsureSolveFilterCleanup(); //also retire an opt-in world that never reaches its first Prepare
 	PostSolveObservationWorlds.Add(&World); //retired at actual world cleanup; takes effect at Prepare
+}
+
+TArray<ElysiumModelPhysics::FPairMaterialSample> ElysiumModelPhysics::PairMaterials(void* Actor)
+{
+	TArray<FPairMaterialSample> Result;
+	UPrimitiveComponent* Component = ComponentFor(Actor); if (!Component) return Result;
+	ConsumeContactOutputs(Component->GetWorld());
+	const auto Identity = CaptureIdentity(Actor);
+	for (const auto& Entry : CompletedContactBirths)
+		if (Entry.World == Component->GetWorld() && Entry.Contact.bMaterialObserved)
+			for (int32 Side = 0; Side < 2; ++Side)
+				if (Entry.Contact.Proxies[Side] == Actor && Entry.Contact.Generations[Side] == Identity.Incarnation
+					&& Entry.Contact.UniqueIds[Side] == static_cast<Chaos::FSingleParticlePhysicsProxy*>(Actor)->GetGameThreadAPI().UniqueIdx()
+					&& !RetiredNativeActors.Contains(const_cast<void*>(Entry.Contact.Proxies[1-Side])))
+					Result.Add({Entry.Contact.Proxies[1-Side], Entry.OutputTime, Entry.Contact.StaticFriction, Entry.Contact.DynamicFriction, Entry.Contact.Restitution});
+	return Result;
 }
 
 void ElysiumModelPhysics::RemoveShadow(void* Actor)
@@ -1026,6 +1080,8 @@ bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float 
 	FShadowAssociation* Entry = FindShadow(Actor);
 	if (!Entry)
 	{
+		const auto* RecipeEntry = PhysicsRecipeAssociations.FindByPredicate([Actor](const auto& Item) { return Item.Actor == Actor; });
+		if (!RecipeEntry || RecipeEntry->ShadowName.IsEmpty()) return false;
 		Entry = &ShadowAssociations.AddDefaulted_GetRef(); Entry->Actor = Actor;
 		auto& State = Entry->State;
 		State.bInstalled = true; State.bAllowMovement = bAllowMovement; State.bAllowRotation = bAllowRotation;
@@ -1033,6 +1089,7 @@ bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float 
 		ReadInertia(*Body, State.SavedInertia, State.SavedInverseInertia);
 		State.SavedMassFrame = Body->GetMassSpaceLocal();
 		State.SavedLinearDamping = Component->GetLinearDamping(); State.SavedAngularDamping = Component->GetAngularDamping();
+		SetSurfaceMaterial(*Component, *MakeSurfaceMaterial(*Component, RecipeEntry->ShadowName, RecipeEntry->ShadowParameters)); //2601a7e0 selects0xf000 first
 		if (!bAllowMovement)
 		{
 			Component->SetMassOverrideInKg(NAME_None, 1.0e6f, true); Component->SetEnableGravity(false);
@@ -1368,16 +1425,7 @@ bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceP
 	if (SurfaceIndex < 0) SurfaceIndex = Surfaces.GetSurfaceIndex(TEXT("default")); // 26018ba0
 	const auto* Surface = Surfaces.GetSurfaceData(SurfaceIndex);
 	if (!Surface) { OutError = TEXT("source surface service has no default material"); return false; }
-	auto* Material = NewObject<UElysiumPhysicalMaterial>(Component);
-	Material->SourceName = Surfaces.GetSurfaceName(SurfaceIndex);
-	Material->AssetId = TEXT("vtmb:surface-property:") + Material->SourceName;
-	Material->Friction = Surface->Friction();
-	Material->StaticFriction = Surface->Friction();
-	Material->RawElasticity = Surface->Elasticity();
-	Material->Restitution = Surface->Elasticity();
-	Material->RawDensity = Surface->Density();
-	Material->Density = Surface->Density() / 1000.f;
-	Material->Thickness = Surface->Thickness();
+	auto* Material = MakeSurfaceMaterial(*Component, Surfaces.GetSurfaceName(SurfaceIndex), Surface->Values);
 	Component->SetPhysMaterialOverride(Material);
 	// Direct authored inputs. Chaos integrates the selected hulls and owns the tensor/motion.
 	const float Mass = Recipe.MassKg;
@@ -1425,6 +1473,8 @@ bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceP
 	Entry.Producer = Component;
 	Entry.Component = Component;
 	Entry.Recipe = Recipe; // 1002e3a0 success ->10012f12 ->10044db0; bbox success ->10044f60.
+	if (const auto* ShadowSurface = Surfaces.GetSurfaceData(0xf000))
+	{ Entry.ShadowParameters = ShadowSurface->Values; Entry.ShadowName = Surfaces.GetSurfaceName(0xf000); }
 	bSucceeded = true;
 	return true;
 }
@@ -1449,6 +1499,12 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 		|| State.CollisionResponses.ContainsByPredicate([](uint8 Response) { return Response > ECR_Block; })
 		|| (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox && State.BboxCollisionEnabled > ECollisionEnabled::QueryAndProbe))
 	{ OutError = TEXT("invalid saved native query filter state"); return false; }
+	const int32 CurrentSurfaceIndex = Surfaces.GetSurfaceIndex(State.CurrentSurface);
+	const auto* CurrentSurface = Surfaces.GetSurfaceData(CurrentSurfaceIndex);
+	if (State.CurrentSurface.IsEmpty() || CurrentSurfaceIndex < 0 || !CurrentSurface)
+	{ OutError = TEXT("invalid saved current semantic material"); return false; } //no ordinary creation-default fallback for saved current identity
+	const FElysiumPhysicsSurfaceParameters CurrentParameters = CurrentSurface->Values;
+	const FString CurrentName = Surfaces.GetSurfaceName(CurrentSurfaceIndex);
 	Component->SetMobility(EComponentMobility::Movable);
 	Component->SetWorldTransform(State.Pose, false, nullptr, ETeleportType::TeleportPhysics);
 	Component->SetEnableGravity(State.bGravity);
@@ -1460,6 +1516,7 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 		for (int32 Channel = 0; Channel < NativeResponseChannelCount; ++Channel)
 			Component->SetCollisionResponseToChannel(static_cast<ECollisionChannel>(Channel), static_cast<ECollisionResponse>(State.CollisionResponses[Channel]));
 	FBodyInstance* Body = Identity(Component);
+	SetSurfaceMaterial(*Component, *MakeSurfaceMaterial(*Component, CurrentName, CurrentParameters));
 	if (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox)
 		Body->SetShapeCollisionEnabled(0, static_cast<ECollisionEnabled::Type>(State.BboxCollisionEnabled));
 	Component->SetMassOverrideInKg(NAME_None, State.CurrentMassKg, true);

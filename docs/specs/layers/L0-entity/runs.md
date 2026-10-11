@@ -1,5 +1,42 @@
 # Worker runs — L0-entity
 
+## Reserved shadow material and typed pair response — 2026-10-11 (after f0e277c1)
+
+Pre-code contract recovered45/2601a7e0 reserved0xf000 first-default copy,
+Remove51/2601a920 retention and actual2604ec00 ->26015bd0/26041a70/26041aa0
+authored pair products. Installed public UE5.8 material writes retain native M/InvM,
+I/InvI/frame; common typed Model/Bbox/Brush materials select Multiply. Schema/floor51
+saves resolved current semantics separately from recipe/controller. Original rules,
+order, thresholds, geometry, integration and clocks remain unchanged.
+
+Actual native branch proof preceded mapping/assertions. Frozen final arm140113.462591Z
+exits0; original54+newMaterialEffect+SavePayload56 at140200.476292Z passes36clean/
+20warned/0failed, including9ModelPhysics17Mover clean. Independent authored.8/0 with
+matched mechanics reproduces reserved completed rebound and tangential effect; unequal
+ordinary and frictionless controls establish both effects. Installed/removed/alias
+restore, first event, repeated caps, original mechanics and pre-release225 retention pass.
+One invalid command prefix exits7 while actual3tests pass; exact pre-correction source,
+diff/hash and command receipts were preserved before using Elysium.Arm.SavePayload.
+
+Scenario140247.029634Z passes original2 with nullfirst_unmet/events290/81/hostexit0;
+wrapper140246.744828Z exits0, existing27startup errors29warnings separate. Common99
+prefix SHAaf9c86a... and physical public CSV409a4ab7... are unchanged; probe and paired
+retail replay are reused. Native44f20/178f32²1.0639106887965433 versus retail44f26/
+no178/f32².57965414909080337 remains OPEN. Complete receipt paths, frozen7 functional
+hashes/11 exact paths and retained copies are in progress.md and
+E:/elysium-work/codex/l0-material-contract-20261011/final-manifest.json.
+
+**0 original packages newly closed;23/88 complete,65 remaining.** Completed bounded
+typed material input/effect/lifecycle is a prerequisite inside open physics packages.
+Next consuming closure requires missing same/lower authored world/per-face material
+producer/binding and recovery of reached raw elasticity/native clamp semantics.
+That dependency is a planning fault for general226/100a55b0/44/178 closure.
+Special26015bd0/2601bc60 player-controller admission remains an unresolved higher-owner
+hook inventory obligation. Native independent controls do not prove retail solver or
+encounter timing equivalence. Higher movement/L4 and full r044/r045/L0 remain open.
+Coordinator owns default190/bounded19bothhosts/doctor/review/exact-path commit;
+worker ends without jobs/stage/commit/push/another packet.
+
 ## Finite forbidden-rotation inertia and native lifecycle — 2026-10-11 (after00539cb05)
 
 Precode confirmed oracle/API contract names45/2601a7e0 finite moment,26031710 mass
@@ -707,3 +744,17 @@ or five-variable trial substitutes for gameplay effect. Exactly nine paths commi
 only checkpoint bookkeeping follows freeze. No jobs/push/next worker, accepted gameplay
 divergence or equivalence claim. Native44f20/178f32 versus retail44f26/f32no178,
 original23/88 and all five full L0 closing requirements remain OPEN.
+Coordinator reviewed the complete eleven-path diff and independently verified all seven
+functional freeze hashes. Plain default190 at
+E:/elysium-work/reports/tests/20261011T140510.162259Z-elysium-session-elysium-substrate/index.json
+passes111clean79warned0failed/notRun/inProcess; wrapper140510.005591Z exits0.
+Original bounded19 at E:/elysium-work/reports/arena/20261011T140551.721702Z/index.json
+passes19 across arena and sm_hub_1, both hosts exit0. Aggregate and both host indexes
+were read: ordinary first_unmet null, two refusal selftests retain inverted passes.
+Wrapper140551.509641Z exits0; existing27startup errors535warnings remain separate.
+Doctor140709.775831Z exits0 with21 existing warnings; repo-only policy140723.247983Z
+passes with0 warnings. Retention-safe copies and original paths/hashes are indexed in
+final-manifest.json. Unchanged pipeline54 and preserved map2 evidence is reused after
+input inventory. Only checkpoint docs followed functional freeze. Exact eleven paths
+are committed by the coordinator; this one run terminates with no push or next worker.
+Original0 newly closed,23/88 complete65remaining and all full-L0 gates remain open.

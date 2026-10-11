@@ -1,5 +1,65 @@
 # L0 progress — the orchestrator's log
 
+## Reserved material semantics, pair effects and lifecycle checkpoint — 2026-10-11
+
+One bounded packet after f0e277c1 maps the recovered normal45/2601a7e0 reserved
+surface and2604ec00 authored friction/elasticity pair products for typed
+Model/Bbox/Brush bodies. Reserved data copies first default independently of ordinary
+recipe; repeated caps and Remove51 retain selection. The supported native material
+setter preserves exact M/InvM, I/InvI and principal frame. Disposable schema/floor51
+saves current semantic material independently of controller/recipe and restores
+ordinary, installed, removed and aliases; malformed names refuse before creation.
+The pre-code contract and scope approval preceded edits. Recovery/API/lifetime and
+producer coverage are in physics-interaction.md and the matching pusher walk.
+
+Production diagnostic134810.404256Z proved actual native modifier/solve before
+mapping and assertion expansion. Final functional source is frozen in
+E:/elysium-work/codex/l0-material-contract-20261011/functional-freeze/manifest.json.
+Final arm140113.462591Z exits0/32.4s. Original affected54 plus new material fixture
+and SavePayload56 at
+E:/elysium-work/reports/tests/20261011T140200.476292Z-elysium-substrate-modelphysics-elysium-s-6d3a2e53/index.json
+passes36clean20warned0failed/notRun/inProcess; all9 ModelPhysics/17 Mover clean.
+Wrapper E:/elysium-work/logs/20261011T140158.833010Z-test.json exits0/26.6s;
+14 runtime warnings remain separate. Unequal authored pair outputs are .24/.5 versus
+reserved .32/0 after native FLOAT storage. Independent authored.8/0 with matched
+mechanics exactly reproduces reserved completed rebound/sliding; frictionless.0/0
+retains X300 while reserved contact gives X111.8031005859375. Original order,
+thresholds, geometry, cadence and mechanics assertions remain valid.
+
+A mistyped new command used nonexistent Elysium.Session.SavePayload. Its wrapper
+135553.618303Z exits7 solely for the empty prefix; all3 selected real tests pass.
+Exact source/diff/hash before correction and original receipts are retained in
+invalid-save-prefix/manifest.json and receipts/invalid-save-prefix*. This was invalid
+command stimulus, with no runtime failure, rollback or weakened original assertion.
+
+Original scenario2
+E:/elysium-work/reports/arena/20261011T140247.029634Z/index.json and arena/index.json
+pass2/nullfirst_unmet/events290/81/hostexit0. Wrapper
+E:/elysium-work/logs/20261011T140246.744828Z-arena.json exits0/26.2s; existing
+27 startup errors29warnings remain separate. Common99 creation/input rows throughf32
+SHAaf9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515 and physical
+CSV409a4ab7ababe123c94905bb5b49ba67757b9ffa32152dab4a08d8162530edba are unchanged.
+The public probe files and paired133142.188960Z retail replay are reused after this
+input check. Native first44f20/178f32²1.0639106887965433 versus retail44f26/no178/
+f32².57965414909080337 remains OPEN; native controls do not establish retail solve parity.
+
+Eleven exact paths, seven frozen functional hashes, complete diff and receipt original/
+copy inventory are in E:/elysium-work/codex/l0-material-contract-20261011/final-manifest.json.
+Pipeline generators/annotations, maps/query payloads, content, corpus, goldens, audit,
+hooks and public probe inputs are unchanged. Pipeline54 annotation and map2 receipts
+are reused after that inventory. Coordinator owns serial default190/bounded19 both
+hosts/doctor/review/exact-path commit; worker stops without jobs/commit/push/next packet.
+
+Reconciliation: **0 original packages newly closed;23/88 complete,65 remaining**.
+The completed bounded contract is typed body material input/effect plus current material
+attachment/removal/Physics persistence inside still-open physics packages. General
+normal shadow-world contact closure requires the missing same/lower authored world/
+per-face physical material producer and binding, a planning fault rather than an empty
+seam. Baked FromJson raw elasticity versus native restitution clamp needs its reached
+observer recovered there. Special26015bd0/2601bc60 player-controller admission is an
+unresolved higher-owner hook inventory obligation. First44 candidate encounter/event
+equivalence, movement-allowed/L4 producers, full r044/r045 and full L0 remain OPEN.
+
 ## Finite forbidden-rotation inertia/lifecycle checkpoint — 2026-10-11
 
 One bounded packet after00539cb05 repairs the proved native I-only input divergence:
@@ -1530,3 +1590,17 @@ material lifecycle remain required evidence; pair-combine is separately queued u
 the reached branch requires it. No five-variable combined trial or Source mechanics
 clone. Coordinator commits exact paths and stops; no jobs, push or next worker.
 Original23/88 and all five full L0 closing requirements remain OPEN.
+Coordinator reviewed the complete eleven-path diff and independently verified all seven
+functional freeze hashes. Plain default190 at
+E:/elysium-work/reports/tests/20261011T140510.162259Z-elysium-session-elysium-substrate/index.json
+passes111clean79warned0failed/notRun/inProcess; wrapper140510.005591Z exits0.
+Original bounded19 at E:/elysium-work/reports/arena/20261011T140551.721702Z/index.json
+passes19 across arena and sm_hub_1, both hosts exit0. Aggregate and both host indexes
+were read: ordinary first_unmet null, two refusal selftests retain inverted passes.
+Wrapper140551.509641Z exits0; existing27startup errors535warnings remain separate.
+Doctor140709.775831Z exits0 with21 existing warnings; repo-only policy140723.247983Z
+passes with0 warnings. Retention-safe copies and original paths/hashes are indexed in
+final-manifest.json. Unchanged pipeline54 and preserved map2 evidence is reused after
+input inventory. Only checkpoint docs followed functional freeze. Exact eleven paths
+are committed by the coordinator; this one run terminates with no push or next worker.
+Original0 newly closed,23/88 complete65remaining and all full-L0 gates remain open.

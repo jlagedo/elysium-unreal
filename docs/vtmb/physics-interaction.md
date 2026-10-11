@@ -1,5 +1,82 @@
 # VtMB's rigid-body world — ragdolls, the physics hands, and the placed physics surface
 
+## Reserved shadow material and ordinary native pair response (2026-10-11)
+
+Normal Pusher.cpp617 / Prop.cpp815 call object45/26018520 with false,false.
+2601a7e0 selects material0xf000 before changing body mechanics. SurfaceProps001
+#4/26014fb0 reads its properties and #7/26014f30 reads its name through
+26014f60/260150f0. Parser2601598c creates the reserved row once from the first
+current default, then sets FLOAT friction.8 and elasticity0. It does not copy the
+object's ordinary material. Repeated45 changes caps only. Remove51/26018600 ->
+environment36 ->2601a920 restores mechanics and retains the selected material.
+The current material therefore does not identify an installed controller.
+
+The actual normal pair consumer is2604ec00: material-manager slot3 writes elasticity
+to native contact+68, and slot2 writes friction to the friction link+44. Manager
+260c9d20 slot2 ->26015bd0 ->26041a70 multiplies both material friction values;
+slot3 ->26041aa0 multiplies both elasticity values. Row vtable260c9d04 getters
+26015b20 and26015b30 read FLOAT offsets+10 and+14. This establishes authored
+ordinary-ordinary and reserved-ordinary products, including unequal coefficients.
+26015bd0 also has a special zero-friction arm querying player-controller state via
+2601bc60 (object+b0, controller+3c bit6) and partner core flags. Normal shadow uses
+object+c, so the proven false,false branch excludes that arm. The special player
+branch remains an unresolved higher-owner hook inventory obligation at those exact
+addresses; this packet neither implements nor claims its closure.
+
+The port's common Model/Bbox/Brush recipe producer creates typed authored materials
+with explicit Multiply friction and restitution modes. Empty Recipe.Surface still
+legitimately resolves default. Reserved parameters/name are owned copies in the
+recipe association, preserving first-default semantics without a borrowed service
+lifetime. Installed UE5.8 UPrimitiveComponent::SetPhysMaterialOverride delegates to
+FBodyInstance::UpdatePhysicalMaterials: it writes native shape materials under
+FPhysicsCommand::ExecuteWrite and also recomputes mass properties. The adapter
+retains exact locked native M/InvM, paired I/InvI and principal frame around that
+supported setter. Original damping, gravity, pose and sleep remain their own inputs.
+SetM/SetInvM and SetI/SetInvI dirty public native MassProps before the next solve.
+Chaos PBDCollisionConstraints ChooseCombineMode/CombineHelper consumes Multiply;
+Multiply takes precedence over the ordinary project Average counterpart. No
+shipped explicit-Max counterpart was established, so no broader producer claim is made.
+
+Disposable Physics schema/floor51 saves the resolved current semantic name separately
+from ordinary recipe and controller state. It restores ordinary, installed reserved,
+removed reserved and independent aliases; empty/unknown current names refuse before
+native creation. The saved reserved name resolves the actual0xf000 row. Repeated caps,
+original/current mechanics, first restored event and pre-release retirement retain
+their existing order. Capture is invalid after recipe retirement; the existing225
+observer reads its still-live native BodyInstance under the public lock and its
+GT-owned material before actual release.
+
+The opt-in PairMaterials observer copies public contact-modifier coefficients as
+POD on PT and consumes them after native completion. It uses the existing world,
+incarnation, UniqueIdx, partner retirement and owner epoch fences. ComponentFor and
+CaptureIdentity admit the live GT actor synchronously before its UniqueIdx read;
+world cleanup retires the callback and observation registration. No PT UObject
+dereference, retained native pointer, solver mutation or cadence change is introduced.
+
+Actual bbox/floor contacts prove modifier output and completed solve, rather than
+coefficient identity alone. Unequal ordinary.6/1 and floor.4/.5 yield native stored
+friction.24000000953674316 and restitution.5. Reserved.8/0 and floor yield
+.32000002264976501 and0. Independently authored.8/0 reproduces the reserved solved
+response with exactly matched initial mass/I/InvI/frame/pose/gravity/damping/sleep
+and velocity. Vertical first impact has Z307.24197387695312 for ordinary and
+Z3.6209745407104492 for both zero-elasticity controls. Tangential contact reduces
+X300 to111.8031005859375 for reserved/authored.8/0, while independently authored
+frictionless.0/0 retains X300. Both .8/0 trajectories agree; callback time belongs
+to the just-completed native frame. Nonzero residual Z is native correction and
+geometry response, not a claim that retail and Chaos solving are identical.
+
+This closes the bounded typed Model/Bbox/Brush material input/effect and lifecycle
+contract within still-open physics packages. General normal shadow-world contact
+closure is blocked by a required same/lower producer: ElysiumWorldCollisionActor
+and ElysiumMapCollision currently bind no authored per-face physical materials.
+UElysiumPhysicalMaterial::FromJson also clamps native restitution to[0,1] while
+retaining raw elasticity; its reached authored observer contract needs recovery.
+That missing world/per-face binding is a planning fault for the consuming
+226/100a55b0/44/178 closure, not an authorized empty seam or a speculative pipeline
+repair. Native first44f20/178f32 versus retail44f26/no178 throughf32 remains OPEN.
+The independent native controls establish authored input effects, not retail timing
+or cross-engine solver parity. Original23/88, remaining65 and full L0 stay OPEN.
+
 ## Finite forbidden-rotation inertia adapter and lifecycle (2026-10-11)
 
 The settled public45/26018520 ->2601a7e0 ->26031710 contract is finite FLOAT
