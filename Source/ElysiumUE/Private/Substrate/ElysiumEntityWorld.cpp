@@ -542,11 +542,14 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		{
 			Ent->bSpawnCalled = true;
 			Ent->Spawn();
+			if (Ent->IsDead()) continue; // 101d1280: removed Spawn never reaches100aaf30.
 			Ent->EnsurePlacedModelBody();
 			if (bBuildBodies)
 			{
 				BuildBrushBody(*Ent);
 			}
+			// These helpers complete the port's Spawn body production before100aaf30.
+			Ent->DispatchSpawnHiddenArm();
 		}
 	}
 
@@ -903,11 +906,13 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	// Spawn() is the leaf's own wiring (the FElysiumNpc leaf stands its body/visual here); then attach a
 	// brush body if this runtime entity is a brush (point NPCs/props/items early-out of BuildBrushBody).
 	Ent.Spawn();
+	if (Ent.IsDead()) return; // 101d1280: dead Spawn skips base PostSpawn and activation.
 	Ent.EnsurePlacedModelBody();
 	if (CVarBrushBodies.GetValueOnGameThread() != 0)
 	{
 		BuildBrushBody(Ent);
 	}
+	Ent.DispatchSpawnHiddenArm(); //100aaf30 captures completed Spawn body words and callback.
 	// A runtime-spawned entity has no "all entities" barrier to wait on; its attach targets (if any)
 	// already exist, so run its second-phase init immediately after Spawn().
 	Ent.PostSpawn();

@@ -1,29 +1,26 @@
-# Next bounded packet — reconcile remaining P1 body requirements
+# Next bounded packet — remaining P1 observed body flags and callers
 
-Read goal.md/checkpoint.md and the accepted model-shadow receipt at
-E:/elysium-work/codex/l0-p1-model-shadow-20261011/acceptance-checkpoint.json.
-P1 stays active. Reuse confirmed velocity/static/model-shadow recovery and real producers.
+Read goal.md/checkpoint.md, delivery-plan.md and service-contract-map.tsv. Accepted hidden
+body receipt: E:/elysium-work/codex/l0-p1-remaining-bodies-20261011/acceptance-checkpoint.json.
+P1 remains active. Reuse accepted velocity/static/model-shadow/hidden native walks and tests.
 
-Return a compact precode packet for the first remaining observable P1 requirement in
-physics-object-contract-1/-6 and P1 service rows. Compare current production callers and
-required core/witness inputs with accepted tests; distinguish generic type1 failure arms,
-body flags and missing metadata from already accepted studio3/no-binary behavior. Name the
-actual authored/script/save/gameplay observer, required same/lower producer and exact missing
-arm. Internal IVP mechanisms are not dependencies. If no remaining implementation gap exists
-in a reviewed requirement, record concrete evidence and move to its integrated P1 witness.
+Return a compact precode packet for the first missing observable P1 requirement in
+physics-object-contract-1/-6: generic type1 failure/debug/removal and observed body game flags,
+especially10191510 DamageType==1 through the actual flag consumer. Compare existing writers,
+native semantic saved state and real callers. Name the shipped/authored/script/gameplay observer,
+required same/lower producer, precise missing arm and intended acceptance witness. An internal
+flag without a reachable observer is not a dependency. Verify installed public APIs before coding.
 
-Review core/witness selected metadata coverage through actual prepared asset paths before
-proposing bounded public imports; six refreshed models plus CopCar do not prove coverage.
-No whole-corpus refresh, arbitrary fixture, invented generic fallback or higher gameplay.
-Do not reopen sound/velocity, duplicate accepted walks or perform broad cross-engine experiments.
-Retained rows100a5bb0/100a6150/1002e3a0/101907e0 remain partial; no full initializer closure.
+Other36 core model metadata rows remain unclosed. Review exact prepared paths/native admission
+before proposing a bounded public import; eighteen refreshed packages do not prove coverage.
+No whole-corpus refresh, arbitrary fallback, IVP mechanisms or higher gameplay prerequisite.
+Do not rewalk accepted contracts or broaden into P2/P3 absent a concrete required P1 producer.
+If a requirement is already fulfilled, retain concrete evidence and proceed to integrated P1
+reconciliation. Keep generic initializer rows partial until all reached arms have joined evidence.
 
-Name mapped briefs/service rows, real callers, units/frames/order/failure/lifetime/save state,
-API declarations, exact unknowns, permitted files and positive/negative/lifecycle witnesses.
-Only recover material unknowns. Preserve logical/target/solved pose separation and existing
-actual geometry/clock producers. P2 query/contact and integrated P3 remain their own milestones
-unless a specific P1 observer proves a required producer. No owner decision currently pending.
-
-One fresh Sol High worker, one run, fork none, no nested workers/staging/commit/push. Precode
-review before implementation; focused gates/freeze then main independent review/build/default/
-affected arena, exact-path local commit/checkpoint before another run.
+Name mapped rows, consumers/producers, units/frames/clocks/order/failure/lifetime/native save,
+exact unknowns, permitted files and positive/negative/lifecycle tests. Recover only missing facts.
+One fresh Sol High worker, one run, fork none, no nested agents/staging/commit/push. Precode
+review before implementation; focused checks/freeze then main review/build/default/affected
+arena and required checks, exact-path local commit/checkpoint before another run.
+No owner decision pending. Maker-child StartHidden comment/omission is queued to L4 handoff.

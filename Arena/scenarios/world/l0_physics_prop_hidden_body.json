@@ -1,0 +1,1417 @@
+{
+  "name": "l0_physics_prop_hidden_body",
+  "about": "Bounded D02/P1 supported PhysProp hide/native lifetime and Physics archive. Authentic tutorial authored StartHidden plate5 and two-hull core chairoffice, independently reconstructed hidden base and PhysProp fields, explicit225 count0 and genuine source-no-binary negative. Host writes/reads/applies native save before first think. Native family proves identity, current mechanics, real awake hidden motion, mixed per-hull restored flags, public callbacks and true transition. Shape eligibility does not stop particle dynamics; fullP1/P2/P3 and remaining core metadata stay open.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12,
+  "player": {
+    "at": "start"
+  },
+  "rows": [
+    {
+      "classname": "prop_physics",
+      "name": "plus_food",
+      "at": [
+        5000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/misc/plates/plate5.mdl",
+        "spawnflags": "1",
+        "override_mass": "-1",
+        "StartHidden": "1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "chair",
+      "at": [
+        8000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/misc/chairoffice/chairoffice.mdl",
+        "spawnflags": "1",
+        "override_mass": "-1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "prop_alias",
+      "at": [
+        11000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/misc/chairoffice/chairoffice.mdl",
+        "spawnflags": "1",
+        "override_mass": "-1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "retired",
+      "at": [
+        14000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/misc/chairoffice/chairoffice.mdl",
+        "spawnflags": "1",
+        "override_mass": "-1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "no_binary",
+      "at": [
+        17000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/structural/society/chair.mdl",
+        "spawnflags": "1",
+        "override_mass": "-1"
+      }
+    },
+    {
+      "classname": "info_target",
+      "name": "base_alias",
+      "at": [
+        20000,
+        5000,
+        3000
+      ]
+    }
+  ],
+  "script": [
+    {
+      "t": 0.1,
+      "do": "fire",
+      "target": "chair",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.15,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "chair"
+      ]
+    },
+    {
+      "t": 0.17,
+      "do": "entity_call",
+      "target": "prop_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        null
+      ]
+    },
+    {
+      "t": 0.18,
+      "do": "entity_call",
+      "target": "prop_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "chair"
+      ]
+    },
+    {
+      "t": 0.2,
+      "do": "fire",
+      "target": "base_alias",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.22,
+      "do": "fire",
+      "target": "prop_alias",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.25,
+      "do": "entity_call",
+      "target": "retired",
+      "function": "VPhysicsDestroyObject",
+      "args": []
+    },
+    {
+      "t": 0.3,
+      "do": "fire",
+      "target": "retired",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.35,
+      "do": "fire",
+      "target": "retired",
+      "input": "ScriptUnhide"
+    },
+    {
+      "t": 0.8,
+      "do": "save",
+      "slot": "l0_physics_prop_hidden_body",
+      "checkpoint": "hidden_prop",
+      "fields": [
+        {
+          "who": "plus_food",
+          "field": "hidden"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.present"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.kind"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.static"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.surface"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "hidden"
+        },
+        {
+          "who": "chair",
+          "field": "physics.present"
+        },
+        {
+          "who": "chair",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "chair",
+          "field": "physics.kind"
+        },
+        {
+          "who": "chair",
+          "field": "physics.static"
+        },
+        {
+          "who": "chair",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "physics.surface"
+        },
+        {
+          "who": "chair",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "chair",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "chair",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "chair",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "hidden"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.kind"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.static"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.surface"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "hidden"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.kind"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.static"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.surface"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "retired",
+          "field": "physics.present"
+        },
+        {
+          "who": "retired",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "retired",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.present"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.native_owned"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "l0_physics_prop_hidden_body",
+      "checkpoint": "hidden_prop"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "hidden_prop",
+      "fields": [
+        {
+          "who": "plus_food",
+          "field": "hidden"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.present"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.kind"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.static"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.surface"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "plus_food",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "hidden"
+        },
+        {
+          "who": "chair",
+          "field": "physics.present"
+        },
+        {
+          "who": "chair",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "chair",
+          "field": "physics.kind"
+        },
+        {
+          "who": "chair",
+          "field": "physics.static"
+        },
+        {
+          "who": "chair",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "physics.surface"
+        },
+        {
+          "who": "chair",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "chair",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "chair",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "chair",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "chair",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "hidden"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.kind"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.static"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.surface"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "hidden"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.kind"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.static"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.surface"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "retired",
+          "field": "physics.present"
+        },
+        {
+          "who": "retired",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "retired",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.present"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.native_owned"
+        }
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "plus_food",
+      "input": "ScriptUnhide"
+    },
+    {
+      "after": "ready",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "chair",
+      "input": "ScriptUnhide"
+    },
+    {
+      "after": "ready",
+      "delay": 0.2,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        null
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.21,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "chair"
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.22,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsDestroyObject",
+      "args": []
+    },
+    {
+      "after": "ready",
+      "delay": 0.25,
+      "do": "fire",
+      "target": "chair",
+      "input": "ScriptHide"
+    },
+    {
+      "after": "ready",
+      "delay": 0.3,
+      "do": "fire",
+      "target": "chair",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "probes": [
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "plus_food",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "chair",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    }
+  ]
+}

@@ -990,6 +990,8 @@ public:
 	// this entity's body under its move parent's body (the logical link is retail's: the map parse
 	// `0x10136650` ran `SetParent` before any `Spawn`); constraints and other leaves extend this
 	// after every body exists.
+	// 101d1280 -> nonvirtual100aaf30: after own Spawn, before next map Spawn.
+	void DispatchSpawnHiddenArm();
 	virtual void PostSpawn();
 	// The Unreal half of the link: attach this entity's body under `MoveParent`'s body, keeping the
 	// world transform (the pose words already agree through the retail local words). True when

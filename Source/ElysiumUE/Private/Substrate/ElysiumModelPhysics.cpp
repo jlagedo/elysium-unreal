@@ -358,7 +358,9 @@ namespace
 				&& ElysiumModelPhysics::ActorIdentity(Component) == Entry.Actor)
 				if (FElysiumEntity* Owner = Entry.World ? Entry.World->Resolve(Entry.Owner) : nullptr)
 				{
-					ElysiumModelPhysics::Identity(Component)->SetContactModification(true);
+					// The recipe creator installed contact-modification eligibility before
+					// native creation. Its public setter republishes defaults and wakes,
+					// so frame preparation must not call it after a hidden gate/restore.
 					const auto* Proxy = static_cast<Chaos::FSingleParticlePhysicsProxy*>(Entry.Actor);
 					Input->Identities.Add({ Proxy, Proxy->GetGameThreadAPI().UniqueIdx(), false, false,
 						ElysiumModelPhysics::SolidMask(Owner->Flags, Owner->AsPlayer() != nullptr) == 0x200400b, Entry.Incarnation });
@@ -1452,18 +1454,35 @@ void ElysiumModelPhysics::GateStaticModelCollision(UPrimitiveComponent* Componen
 {
 	FBodyInstance* Body = Identity(Component);
 	if (!Body) return;
-	// Restore authored simple/complex collision policy without changing native identity.
-	// SetShapeCollisionEnabled only indexes AggGeom; a cook can also carry complex shapes.
-	Body->UpdatePhysicsFilterData();
-	if (bEnabled) return;
+	// UpdatePhysicsFilterData wakes the particle unconditionally and recalculates mass
+	// when simulation eligibility changes (UE BodyInstance.cpp1003). ScriptHide/object#25
+	// changes collision participation, not current mechanics or activity. Reuse the public
+	// flag builder for the existing body/shape policy, then write eligibility only.
+	const UBodySetup* Setup = Body->GetBodySetup();
+	if (!Setup) return;
+	TArray<FBodyCollisionFlags> ShapePolicy;
+	for (int32 ShapeIndex = 0; ShapeIndex < Setup->AggGeom.GetElementCount(); ++ShapeIndex)
+	{
+		FBodyCollisionFlags Policy;
+		FBodyInstance::BuildBodyCollisionFlags(Policy,
+			CollisionEnabledIntersection(Body->GetCollisionEnabled(), Body->GetShapeCollisionEnabled(ShapeIndex)),
+			Setup->GetCollisionTraceFlag() == CTF_UseComplexAsSimple);
+		ShapePolicy.Add(Policy);
+	}
+	FBodyCollisionFlags DefaultPolicy;
+	FBodyInstance::BuildBodyCollisionFlags(DefaultPolicy, Body->GetCollisionEnabled(),
+		Setup->GetCollisionTraceFlag() == CTF_UseComplexAsSimple);
 	FPhysicsCommand::ExecuteWrite(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
 	{
 		TArray<FPhysicsShapeHandle> Shapes;
 		Body->GetAllShapes_AssumesLocked(Shapes);
-		for (const FPhysicsShapeHandle& Shape : Shapes)
+		for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
 		{
-			FPhysicsInterface::SetIsQueryShape(Shape, false);
-			FPhysicsInterface::SetIsSimulationShape(Shape, false);
+			const auto& Shape = Shapes[ShapeIndex];
+			const auto& Policy = ShapePolicy.IsValidIndex(ShapeIndex) ? ShapePolicy[ShapeIndex] : DefaultPolicy;
+			const bool bComplex = FPhysicsInterface::GetShapeType(Shape) == ECollisionShapeType::Trimesh;
+			FPhysicsInterface::SetIsQueryShape(Shape, bEnabled && Policy.bEnableQueryCollision);
+			FPhysicsInterface::SetIsSimulationShape(Shape, bEnabled && (bComplex ? Policy.bEnableSimCollisionComplex : Policy.bEnableSimCollisionSimple));
 		}
 		if (FPhysScene* Scene = Body->GetPhysicsScene()) Scene->UpdateActorInAccelerationStructure(NativeActor);
 	});
@@ -1624,6 +1643,10 @@ bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceP
 	Component->BodyInstance.InertiaTensorScale = FVector(FMath::Sqrt(Recipe.InertiaScale < 0.f ? 1.f : Recipe.InertiaScale));
 	Component->BodyInstance.bStartAwake = !bStartAsleep;
 	Component->BodyInstance.bGenerateWakeEvents = true;
+	// The solve-filter service needs this native shape-filter bit from creation.
+	// SetContactModification later calls UpdatePhysicsFilterData (UE4029), which
+	// would overwrite saved/hidden eligibility and alter sleep/current mass.
+	Component->BodyInstance.bContactModification = true;
 	if (Proxy)
 	{
 		Proxy->OnComponentWake.AddUniqueDynamic(Proxy, &UElysiumPhysicsPropComponent::NativeWake);

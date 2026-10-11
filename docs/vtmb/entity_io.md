@@ -699,6 +699,17 @@ VtMB's own system and has no equivalent in Source SDK 2013.
   brush entities (NPCs, props and `func_brush` all use it).
 - `ScriptUnhide` (1,333 wires) / `ScriptHide` (626) — turn on / off at runtime.
 
+Spawn order, verified2026-10-11: DispatchSpawn101d1280 calls virtual Spawn, checks the returned
+handle/dead entity, then directly calls CBaseEntity::PostSpawn100aaf30. That base function sets
+name/classname and, if m_bStartHidden is nonzero, invokes virtual+134 ScriptHide100a8710.
+Construction/keyvalue parsing only writes StartHidden; it does not seed the hidden latch or park
+think. Thus ScriptHide captures the leaf's completed Spawn physical words and installed callback,
+before the next map entity's Spawn and later activation. The port's body helpers complete its
+Spawn production before the shared DispatchSpawnHiddenArm; its separate virtual PostSpawn
+attachment/constraint phase is retained. A removed Spawn skips the hidden dispatch. NoSpawn
+construction leaves the keyfield pending. The ModelPhysics HiddenSpawnOrder witness checks real
+map and runtime dispatcher order, noSpawn and deadSpawn, plus callback/physical-word restoration.
+
 Verified in `Vampire/dlls/vampire.dll` (image base `0x10000000`). The datamap is
 built at runtime by `FUN_100a22f0`, which writes 44-byte `typedescription_t`
 records into `.data`; both inputs resolve through incremental-link JMP thunks:

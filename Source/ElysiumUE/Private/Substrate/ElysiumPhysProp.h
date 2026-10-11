@@ -80,8 +80,8 @@ private:
 	void RetireModelBody();
 	bool CreateModelBody(FString& OutError);
 
-	// Hidden/broken → undrawn, non-colliding, not simulating. Live → restore draw + (if enabled)
-	// simulation. Mirrors the whole-entity dormancy switch onto the physics body.
+	// ScriptHide gates art/query/contact eligibility while retaining native dynamics.
+	// Broken retains its separate existing native-retirement branch.
 	void GateBody();
 	// 0019/6: the retail filter bits this entity prop's body wears (`ElysiumRetailMask::PropBodyMaskBits`).
 	uint8 PropMaskBits() const;

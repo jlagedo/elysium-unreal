@@ -138,15 +138,8 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 		OutputTimesRemaining.Add(O.Times);
 	}
 
-	// start_hidden — born fully OFF. No prior think to save; the body build skips
-	// collision + draw while bHidden.
-	if (bStartHidden)
-	{
-		bHidden = true; // 0x100a8710, hidden is not EFL_DORMANT
-		SavedThinkCallback = ThinkCallback; // FUNCTION SAVE +0xe4
-		ThinkCallback = NAME_None; // NULL think +0x118
-		NextThink = ELYSIUM_NEVER_THINK;
-	}
+	// 100aaf30 consumes this key after the leaf's Spawn, not during construction.
+	// Its ScriptHide must capture Spawn-installed think and physical words.
 }
 
 FVector FElysiumEntity::ParseRetailVector(const FString& Text)
@@ -516,6 +509,14 @@ void FElysiumEntity::EnsurePlacedModelBody()
 		GenericModelBody->SetVisibility(!IsInert(), true);
 		ElysiumNpcVisual::GateLeaderCloth(GenericModelBody, !IsInert());
 	}
+}
+
+void FElysiumEntity::DispatchSpawnHiddenArm()
+{
+	// DispatchSpawn101d1280 directly calls CBaseEntity::PostSpawn100aaf30 after
+	// virtual Spawn and its removed/dead check. The port's virtual PostSpawn below
+	// is later attachment/constraint activation work, not this retail dispatch.
+	if (bStartHidden) ScriptHide();
 }
 
 void FElysiumEntity::PostSpawn()

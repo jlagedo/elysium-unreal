@@ -933,3 +933,20 @@ P1 remains open for required metadata coverage, generic type1 and other caller/f
 P2/P3 automatic motion/timing/contact/bounds remain open. No full arm/closing arena/boot-order
 gate or whole-function closure claimed. Next packet reconciles the first unmet P1 observer.
 No owner decision, accepted gameplay divergence or push. Full L0 Goal remains active.
+
+### Hidden PhysProp/native dispatch checkpoint — 2026-10-11
+
+D02/P1 bounded hidden native identity/state accepted:101d1280->100aaf30 consumes StartHidden
+after own Spawn/native producers; Hide/Unhide preserves native references/recipe/mechanics/sleep
+while gating art/query/contact only. Authentic plate5 sleeping first frames and awake two-hull
+chairoffice join typed reload/level transition, independent field aliases, mixed shape flags,
+callbacks225/count0/detached producer/Kill/SetModel/teardown/stale fences. Public shape-policy
+gate avoids waking/mass-changing filter updates; contact modification is installed at creation.
+Exactly18 missing prepared inputs imported;3461 identities/3443 unselected products/18GLBs verified.
+
+Main build231944 passed; default201/201; affected arm2/2; joined affected arena8/8 in one boot;
+worker family16/16; generator and repository policy pass. Exact receipt:
+E:/elysium-work/codex/l0-p1-remaining-bodies-20261011/acceptance-checkpoint.json.
+Existing startup errors/warnings retained. P1 remains open for generic type1/flags/callers and
+36 core metadata rows; P2/P3/full closing gate open. Break unchanged/unclosed. Maker-child
+StartHidden stale comment/omission queued to L4 handoff. No owner decision/divergence/push.

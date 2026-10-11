@@ -820,6 +820,14 @@ recipe/material/mass/pose, actual query shapes and shadow-owner membership. Miss
 fails admission/read; no generic state setters or fabricated recipes are provided. Other stale
 static asset metadata, parented model-shadow, P2 and P3 remain open; this record cannot close P1.
 
+`l0_physics_prop_hidden_body` covers supported PhysProp hide/native lifetime and native host
+save/load: authentic tutorial StartHidden plate5, live core two-hull chairoffice, independent
+hidden base/PhysProp current fields, explicit225 count0 and source-no-binary absence. Hidden
+shape eligibility does not imply particle sleep or disabled motion. The ModelPhysics family
+adds full current settings, identity, per-hull saved flags, real hidden awake solve, public
+callbacks and true-transition proof. This is bounded P1 evidence; remaining core metadata,
+generic type1 failure/debug/remove, P2/P3 and fullP1/D02/L0 stay open.
+
 `l0_physics_model_shadow_body` advances the reached resolved-parent studio model creator
 100a5bb0 ->100a6150 ->1002e3a0. It uses the real office knob, animated TrunkLid and fan
 selected cooks, three genuine studio3 no-binary inputs, independently saved hidden base/prop

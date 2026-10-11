@@ -1604,10 +1604,68 @@ truncated rows fail decode and propagate outer archive failure. Unsupported nati
 saving explicitly. This does not close generic225 shadow/ownership semantics.
 
 Saved absence uses100440c0's count<1 observer invoking owner225. Eligible null fields retain
-a semantic count0 row; restore destroys baseline Spawn's body and skips reconstruction. Prop225
-sets runtime bSimulating=false, so final GateBody does not resurrect it. Actual Destroy ->Freeze
+a semantic count0 row; restore destroys baseline Spawn's body and skips reconstruction. Native
+retirement clears registered references and then calls the PhysProp OnPhysicsActorRetired hook,
+which sets runtime bSimulating=false before native release. The225 override delegates to base;
+it does not itself write this latch. Final art gates do not recreate a missing native actor. Actual Destroy ->Freeze
 ->archive ->ApplySnapshot observes null field/no native actor after reconnect. Generic shadow225
 remains unfinished.
+
+## Supported PhysProp hidden native lifetime and restore (2026-10-11)
+
+The tutorial's authored StartHidden prop_physics plus_food rows1799–1806,1811–1812 use
+plate4/5/7,crapy/glassa, spawnflags1 and override_mass-1. StartHidden itself observes the body
+contract; no plus_food ScriptHide/Unhide output wire is inferred. CPhysicsProp10191510 calls
+VPhysicsInitNormal(6,0,spawnflags&1,0) before massbias/override. The source-selected1002e3a0
+dynamic native body exists before DispatchSpawn101d1280 directly calls base PostSpawn100aaf30.
+The latter tests m_bStartHidden and calls virtual ScriptHide+134. It does not retire the body.
+
+ScriptHide100a8710 parks think, saves solid/move/movecollide/flags/effects, writes move(0,0),
+solid0,flags4,effects0xe0, then Relink/ForceTransmit and hidden latch. ScriptUnhide100a8990
+restores the saved callback dueNOW and physical words, with the inverse publication. Changed
+solid100dc480, changed flags-bit4 at100dc580, and changed move100aad70 notify current
+object#25. The confirmed26016da0→2602e320→26048b00 arm rebuilds collision eligibility/pairs;
+these calls do not write velocity, gravity, sleep or destroy/create the native particle. Shape
+simulation eligibility means contact participation; it does not mean particle motion is disabled.
+No complete P2 callback/filter equivalence follows from this P1 gate.
+
+The port retains the selected PhysProp native actor/recipe/current aliases while gating art and
+native query/contact shape flags through the installed public Chaos shape API under its actor
+lock. The supported carriers are unwelded selected cooks. Public BuildBodyCollisionFlags plus
+per-AggGeom GetShapeCollisionEnabled derive the existing policy, with complex-after fallback;
+the installed Chaos GetAllShapes returns every GT shape, so the static query sync-shape clause
+admits all returned shapes. UpdatePhysicsFilterData is deliberately not used: installed UE5.8
+BodyInstance.cpp1003 always wakes and may recalculate mass on changed simulation eligibility.
+Unhide republishes eligibility without creator reset, sleep/activity or mass compensation.
+Reference-only SetObject clear, overwrite and nullSwap leave former producers alive; their art
+gates do not own225. Explicit225, Kill, replacement and teardown use the existing retirement
+callbacks and fence stale incarnations. The existing bBroken retirement arm remains separate
+and is not a recovered breakable closure.
+
+The actual host's first physics frame exposed a second publication: PrepareSolveFilter called
+Unreal SetContactModification(true), whose BodyInstance.cpp4029 setter calls the same waking
+filter update. The adapter now seeds the public bContactModification option before native
+creation; frame preparation only publishes identity/filter observations. The real sleeping
+plate retains its incarnation, full current output and zero shape flags through that first
+frame. This preserves the existing filter service without claiming further P2 contact parity.
+
+Physics10043c70 admits eligible hidden current fields. The same typed saved outputs and
+independent100443e0/26019483–bc reconstruction used by visible fields therefore also apply to
+hidden PhysProp owners. Final snapshot reconnect preserves exact saved per-shape flags after
+restore, including distinct flags on the two-hull chairoffice cook. Later explicit Unhide restores
+current logical eligibility. Solved world pose/cm/s/world-radians/s, mass/inertia/principal frame,
+material, damping, gravity and sleep remain native outputs distinct from logical MOVETYPE_NONE
+pose. Disposable native save bytes are decoded, decoded Physics arrays reset, then actual Physics
+block consumption is tested on ordinary ApplySnapshot and a true level-transition path before
+the first native frame. No retail-save import/migration or automatic parent/P3 timing is added.
+
+Actual prepared admission across both catalogues found missing typed inputs in all18 core2
+PhysProp meshes, despite their real first binary solids. A bounded public repeated--units--force
+refresh supplied the exact18; core18-before/after-provenance receipts retain all3461 manifest
+entries, all3443 unselected rows/native package hashes and all18 source GLB hashes. Other36
+missing core body-input models remain outside this refresh. The ModelPhysics CorePreparedAdmission,
+HiddenSpawnOrder and HiddenPropBody witnesses and l0_physics_prop_hidden_body arena cover this
+bounded caller; fullP1/D02/L0, generic type1 failure/debug/remove, other body flags and P2/P3 remain open.
 
 
 ## Reached static bbox and current-object lifetime [PE asm/decompiled, 2026-10-11]

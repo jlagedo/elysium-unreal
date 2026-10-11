@@ -3,6 +3,7 @@
 #include "ElysiumPlayerWorldFixture.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumClassRegistry.h"
 #include "ElysiumMapPlaces.h"
 #include "ElysiumModelCatalogues.h"
 #include "ElysiumModelPhysicsInputs.h"
@@ -209,11 +210,12 @@ bool FElysiumModelPhysicsCallerTest::RunTest(const FString&)
 	{
 		if (Row.Slot == 233) TestTrue(TEXT("complete base list is a hand body in census"), Row.Body == EElysiumNpcSlotBody::Hand);
 	}
+	void* OtherActor = Other->VPhysicsGetObject();
+	const auto OtherToken = ElysiumModelPhysics::CaptureIdentity(OtherActor);
 	Other->ScriptHide();
-	TestNull(TEXT("actual ScriptHide retirement clears entity reference"), Other->VPhysicsGetObject());
-	TestNull(TEXT("actual ScriptHide retires native actor"), ElysiumModelPhysics::ActorIdentity(Other->Visual));
+	TestTrue(TEXT("actual ScriptHide retains current native field and incarnation"), Other->VPhysicsGetObject() == OtherActor && ElysiumModelPhysics::IsCurrentOutput(OtherToken));
 	Other->ScriptUnhide();
-	TestNotNull(TEXT("actual ScriptUnhide recreates native actor"), ElysiumModelPhysics::ActorIdentity(Other->Visual));
+	TestTrue(TEXT("actual ScriptUnhide retains native actor"), ElysiumModelPhysics::ActorIdentity(Other->Visual) == OtherActor && ElysiumModelPhysics::IsCurrentOutput(OtherToken));
 	TestTrue(TEXT("unhide publishes current live identity, regardless of allocator reuse"),
 		Other->VPhysicsGetObject() == ElysiumModelPhysics::ActorIdentity(Other->Visual));
 	Other->InputBreak(FElysiumInputArgs());
@@ -2510,5 +2512,308 @@ bool FElysiumModelShadowCallerTest::RunTest(const FString&)
 	AddInfo(TEXT("model-shadow level-transition: typed Physics block restored before first think, three independent hidden fields, removed controller, owner Swap absence, count0"));
 	ElysiumPreparedProps::Release(Map);
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsCorePreparedAdmissionTest, "Elysium.Substrate.ModelPhysics.CorePreparedAdmission",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelPhysicsCorePreparedAdmissionTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture;
+ if (!Fixture.CreateWorld(*this)) return false;
+ auto* Map = Fixture.SpawnMapActorDeferred();
+ auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+ auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+ // Exact prepared core2 PhysProp addresses and first binary hull counts, source receipts retained
+ // in l0-p1-remaining-bodies-20261011/core-prepared-inputs.json. No inferred package addresses.
+ struct FWitness { const TCHAR* Id; const TCHAR* Path; int32 Hulls; };
+ const FWitness Witnesses[] = {
+		{ TEXT("vtmb:model:scenery/physics/bottle/bottle"), TEXT("/ElysiumBaked/Models/scenery/physics/bottle/SM_bottle.SM_bottle"), 1 },
+		{ TEXT("vtmb:model:scenery/physics/sardine/sardine"), TEXT("/ElysiumBaked/Models/scenery/physics/sardine/SM_sardine.SM_sardine"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/retro_chair/retro_chair"), TEXT("/ElysiumBaked/Models/scenery/furniture/retro_chair/SM_retro_chair.SM_retro_chair"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/bottles/glassa"), TEXT("/ElysiumBaked/Models/scenery/misc/bottles/SM_glassa.SM_glassa"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/chairoffice/chairoffice"), TEXT("/ElysiumBaked/Models/scenery/misc/chairoffice/SM_chairoffice.SM_chairoffice"), 2 },
+		{ TEXT("vtmb:model:scenery/misc/plates/crapy"), TEXT("/ElysiumBaked/Models/scenery/misc/plates/SM_crapy.SM_crapy"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/plates/plate4"), TEXT("/ElysiumBaked/Models/scenery/misc/plates/SM_plate4.SM_plate4"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/plates/plate5"), TEXT("/ElysiumBaked/Models/scenery/misc/plates/SM_plate5.SM_plate5"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/plates/plate7"), TEXT("/ElysiumBaked/Models/scenery/misc/plates/SM_plate7.SM_plate7"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/trashgarage/trashgarage"), TEXT("/ElysiumBaked/Models/scenery/misc/trashgarage/SM_trashgarage.SM_trashgarage"), 1 },
+		{ TEXT("vtmb:model:scenery/structural/society/barrel"), TEXT("/ElysiumBaked/Models/scenery/structural/society/SM_barrel.SM_barrel"), 1 },
+		{ TEXT("vtmb:model:scenery/structural/society/shutters"), TEXT("/ElysiumBaked/Models/scenery/structural/society/SM_shutters.SM_shutters"), 1 },
+		{ TEXT("vtmb:model:scenery/structural/society/stool"), TEXT("/ElysiumBaked/Models/scenery/structural/society/SM_stool.SM_stool"), 1 },
+		{ TEXT("vtmb:model:scenery/structural/warehouse/break_crate"), TEXT("/ElysiumBaked/Models/scenery/structural/warehouse/SM_break_crate.SM_break_crate"), 1 },
+		{ TEXT("vtmb:model:scenery/trash/barrels/barrela"), TEXT("/ElysiumBaked/Models/scenery/trash/barrels/SM_barrela.SM_barrela"), 1 },
+		{ TEXT("vtmb:model:scenery/trash/barrels/barrelb"), TEXT("/ElysiumBaked/Models/scenery/trash/barrels/SM_barrelb.SM_barrelb"), 1 },
+		{ TEXT("vtmb:model:scenery/trash/barrels/barrelc"), TEXT("/ElysiumBaked/Models/scenery/trash/barrels/SM_barrelc.SM_barrelc"), 1 },
+		{ TEXT("vtmb:model:scenery/trash/barrels/barreld"), TEXT("/ElysiumBaked/Models/scenery/trash/barrels/SM_barreld.SM_barreld"), 1 },
+ };
+ TArray<FString> Ids;
+ for (const auto& Witness : Witnesses) Ids.Add(Witness.Id);
+ TSet<FSoftObjectPath> Paths; FString Error;
+ if (!TestTrue(TEXT("actual placed and skin catalogue path gathering"), FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)))
+ { AddError(Error); return false; }
+ TArray<UObject*> Assets;
+ for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+ auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+ if (!TestTrue(TEXT("all18 actual resident prepared admission"), Prepared.IsValid())) { AddError(Error); return false; }
+ ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+ FElysiumWorldServices Services; Services.Embodiment = Map;
+ FElysiumEntityWorld EntityWorld(Map, nullptr, Services); EntityWorld.Load(FElysiumEntityDefs());
+ for (const auto& Witness : Witnesses)
+ {
+  auto* Mesh = Prepared->StaticMesh(Witness.Id, Error);
+  const FString Label = FString(Witness.Id) + TEXT(" ") + Witness.Path;
+  if (!TestNotNull(*(Label + TEXT(" prepared static mesh")), Mesh)) continue;
+  TestEqual(*(Label + TEXT(" exact prepared package address")), Mesh->GetPathName(), FString(Witness.Path));
+  const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh);
+  AddInfo(Label + FString::Printf(TEXT(" typed=%d source=%d selected=%d hulls=%d"), Inputs != nullptr,
+   Inputs && Inputs->bSourceBody, Inputs && Inputs->SelectedBody != nullptr,
+   Inputs && Inputs->SelectedBody ? Inputs->SelectedBody->AggGeom.ConvexElems.Num() : 0));
+  if (!TestNotNull(*(Label + TEXT(" typed body inputs")), Inputs)) continue;
+  TestTrue(*(Label + TEXT(" real first binary solid")), Inputs->bSourceBody);
+  if (!TestNotNull(*(Label + TEXT(" selected native body setup")), Inputs->SelectedBody.Get())) continue;
+  TestEqual(*(Label + TEXT(" source first hull count")), Inputs->SelectedBody->AggGeom.ConvexElems.Num(), Witness.Hulls);
+  auto* Component = NewObject<UElysiumPhysicsPropComponent>(Map);
+  Component->SetVisibility(false); // selected collision cook is independent of asynchronous render compilation
+  Component->SetStaticMesh(Mesh); Component->RegisterComponent(); Map->AddInstanceComponent(Component);
+  if (TestTrue(*(Label + TEXT(" selected native cook creates actor")), ElysiumModelPhysics::Create(Component, EntityWorld.PhysicsSurfaces(), 0.f, 0.f, true, Error)))
+  {
+   int32 ShapeCount = 0;
+   FPhysicsCommand::ExecuteRead(ElysiumModelPhysics::Identity(Component)->GetPhysicsActorHandle(), [&](const FPhysicsActorHandle& Actor)
+   { TArray<FPhysicsShapeHandle> Shapes; FPhysicsInterface::GetAllShapes_AssumedLocked(Actor, Shapes); ShapeCount = Shapes.Num(); });
+   TestEqual(*(Label + TEXT(" live native shape count")), ShapeCount, Witness.Hulls);
+  }
+  else AddError(Label + TEXT(" ") + Error);
+  ElysiumModelPhysics::Destroy(Component); Component->DestroyComponent();
+ }
+ return true;
+}
+
+namespace ElysiumHiddenSpawnTest
+{
+ TArray<FString> Events;
+ class FProbe final : public FElysiumEntity
+ {
+ public:
+  void Spawn() override
+  {
+   Events.Add(TargetName + TEXT(":spawn"));
+   SetSolid(6); SetSolidFlags(0); SetMoveType(7, 0);
+   ThinkCallback = TEXT("spawn_think"); NextThink = 12.f;
+   if (Def->Keys.Contains(TEXT("kill_spawn"))) Kill();
+  }
+  void OnDormancyChanged() override
+  {
+   if (bHidden) Events.Add(TargetName + TEXT(":hide"));
+   FElysiumEntity::OnDormancyChanged();
+  }
+  void PostSpawn() override { Events.Add(TargetName + TEXT(":later")); }
+  void Activate() override { Events.Add(TargetName + TEXT(":activate")); }
+ };
+ TUniquePtr<FElysiumEntity> MakeProbe() { return MakeUnique<FProbe>(); }
+ FElysiumClassRegistrar Registrar(TEXT("elysium_test_hidden_spawn_probe"), ElysiumBaseClassName(), &MakeProbe, [](FElysiumClassDesc&) {});
+ FElysiumEntityDef Def(const TCHAR* Name, bool Hidden)
+ {
+  FElysiumEntityDef Result; Result.Classname = TEXT("elysium_test_hidden_spawn_probe"); Result.TargetName = Name; Result.bStartHidden = Hidden; return Result;
+ }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsHiddenSpawnOrderTest, "Elysium.Substrate.ModelPhysics.HiddenSpawnOrder",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelPhysicsHiddenSpawnOrderTest::RunTest(const FString&)
+{
+ using namespace ElysiumHiddenSpawnTest;
+ FElysiumEntityWorld World(nullptr, nullptr, FElysiumWorldServices());
+ FElysiumEntityDefs Defs; Defs.MapName = TEXT("hidden_spawn_order");
+ Defs.Defs.Add(Def(TEXT("first"), true)); Defs.Defs.Add(Def(TEXT("next"), false));
+ auto Dead = Def(TEXT("dead"), true); Dead.Keys.Add(TEXT("kill_spawn"), TEXT("1")); Defs.Defs.Add(Dead);
+ Events.Reset(); World.Load(MoveTemp(Defs));
+ TestEqual(TEXT("101d1280 direct base hidden arm runs before next Spawn; dead arm skips it"), FString::Join(Events, TEXT(" ")),
+  FString(TEXT("first:spawn first:hide next:spawn dead:spawn first:later next:later")));
+ auto* First = World.FindByName(TEXT("first")); if (!First) return false;
+ TestTrue(TEXT("hidden captures Spawn think callback and complete physical words"), First->bHidden && First->ThinkCallback.IsNone()
+  && First->SavedThinkCallback == FName(TEXT("spawn_think")) && First->ScriptSavedSolid == 6 && First->ScriptSavedMoveType == 7 && First->ScriptSavedSolidFlags == 0);
+ First->ScriptUnhide(); TestEqual(TEXT("actual unhide reinstates Spawn callback"), First->ThinkCallback, FName(TEXT("spawn_think")));
+ World.Activate(0.);
+ auto NoSpawn = Def(TEXT("no_spawn"), true);
+ auto* Constructed = World.Resolve(World.CreateRuntimeEntityNoSpawn(NoSpawn)); if (!Constructed) return false;
+ TestTrue(TEXT("Construct/noSpawn keeps StartHidden keyfield without invoking ScriptHide"), Constructed->bStartHidden && !Constructed->bHidden && !Constructed->bSavedPhysicalWordsAvailable && !Constructed->bSpawnCalled);
+ Events.Reset(); World.CallEntitySpawn(*Constructed);
+ TestEqual(TEXT("runtime direct hidden arm precedes later work and activation"), FString::Join(Events, TEXT(" ")),
+  FString(TEXT("no_spawn:spawn no_spawn:hide no_spawn:later no_spawn:activate")));
+ TestEqual(TEXT("runtime captures own Spawn-installed callback"), Constructed->SavedThinkCallback, FName(TEXT("spawn_think")));
+ auto RuntimeDead = Def(TEXT("runtime_dead"), true); RuntimeDead.Keys.Add(TEXT("kill_spawn"), TEXT("1"));
+ Events.Reset(); World.SpawnRuntimeEntity(RuntimeDead);
+ TestEqual(TEXT("runtime dead Spawn reaches no hide/later/activation"), FString::Join(Events,TEXT(" ")), FString(TEXT("runtime_dead:spawn")));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsHiddenPropBodyTest, "Elysium.Substrate.ModelPhysics.HiddenPropBody",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelPhysicsHiddenPropBodyTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+ auto* Map = Fixture.SpawnMapActorDeferred();
+ auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+ auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+ const TArray<FString> Ids = { TEXT("vtmb:model:scenery/misc/plates/plate5"), TEXT("vtmb:model:scenery/misc/chairoffice/chairoffice"), ElysiumModelPhysicsTest::AbsentId };
+ TSet<FSoftObjectPath> Paths; FString Error;
+ if (!FElysiumPreparedPropModels::GatherPaths(Placed,Skins,Ids,Paths,Error)) { AddError(Error); return false; }
+ TArray<UObject*> Assets; for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+ auto Prepared=FElysiumPreparedPropModels::Create(Map,1,Placed,Skins,Ids,Assets,Error);
+ if (!Prepared) { AddError(Error); return false; } ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+ FElysiumWorldServices Services; Services.Embodiment=Map;
+ FElysiumEntityDefs Defs; Defs.MapName=TEXT("hidden_prop_native");
+ auto PlateDef=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/misc/plates/plate5.mdl"),TEXT("plus_food"));
+ PlateDef.bStartHidden=true; PlateDef.Keys.Add(TEXT("StartHidden"),TEXT("1")); PlateDef.Keys.Add(TEXT("override_mass"),TEXT("-1")); PlateDef.Origin=FVector(5000,5000,3000); Defs.Defs.Add(PlateDef);
+ auto ChairDef=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/misc/chairoffice/chairoffice.mdl"),TEXT("chair"));
+ ChairDef.Keys.Add(TEXT("spawnflags"),TEXT("0")); ChairDef.Origin=FVector(8000,5000,3000); Defs.Defs.Add(ChairDef);
+ auto AliasDef=ChairDef; AliasDef.TargetName=TEXT("prop_alias"); AliasDef.Origin=FVector(12000,5000,3000); Defs.Defs.Add(AliasDef);
+ auto RemovedDef=ChairDef; RemovedDef.TargetName=TEXT("retired"); RemovedDef.Origin=FVector(15000,5000,3000); Defs.Defs.Add(RemovedDef);
+ auto AbsentDef=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/structural/society/chair.mdl"),TEXT("no_binary")); Defs.Defs.Add(AbsentDef);
+ FElysiumEntityDef Point; Point.Classname=TEXT("info_target"); Point.TargetName=TEXT("base_alias"); Defs.Defs.Add(Point);
+ auto StaticDef=PlateDef; StaticDef.Classname=TEXT("prop_dynamic"); StaticDef.TargetName=TEXT("hidden_static"); StaticDef.Keys.Add(TEXT("solid"),TEXT("6")); StaticDef.Origin=FVector(21000,5000,3000); Defs.Defs.Add(StaticDef);
+ FElysiumEntityDef Parent; Parent.Classname=TEXT("func_door"); Parent.TargetName=TEXT("hidden_parent"); Parent.Model=2; Parent.Keys.Add(TEXT("model"),TEXT("*2")); Parent.Origin=FVector(24000,5000,3000);
+ FElysiumConvexHull ParentHull; for(float X:{-20.f,20.f})for(float Y:{-20.f,20.f})for(float Z:{-20.f,20.f})ParentHull.Vertices.Add(FVector(X,Y,Z)); Parent.Hulls.Add(ParentHull); Defs.Defs.Add(Parent);
+ auto ShadowDef=StaticDef; ShadowDef.TargetName=TEXT("hidden_shadow"); ShadowDef.Keys.Add(TEXT("parentname"),TEXT("hidden_parent")); ShadowDef.Origin=FVector(24000,5000,3000); Defs.Defs.Add(ShadowDef);
+ FElysiumEntityDef BrushDef; BrushDef.Classname=TEXT("func_brush"); BrushDef.TargetName=TEXT("hidden_brush"); BrushDef.Model=1; BrushDef.Keys.Add(TEXT("model"),TEXT("*1")); BrushDef.bStartHidden=true; BrushDef.Origin=FVector(27000,5000,3000);
+ FElysiumConvexHull BrushHull; for(float X:{-20.f,20.f})for(float Y:{-20.f,20.f})for(float Z:{-20.f,20.f})BrushHull.Vertices.Add(FVector(X,Y,Z)); BrushDef.Hulls.Add(BrushHull); Defs.Defs.Add(BrushDef);
+ auto DestinationDefs=Defs; auto TravelDefs=Defs;
+ FElysiumEntityWorld World(Map,nullptr,Services); World.Load(MoveTemp(Defs));
+ for(const TCHAR* Name:{TEXT("hidden_static"),TEXT("hidden_shadow")})
+ {
+  auto* Generic=World.FindByName(Name); FElysiumSavedPhysicsBody State;
+  if (!Generic||!TestTrue(TEXT("StartHidden follows generic native model Spawn producer"),ElysiumModelPhysics::Capture(Generic->VPhysicsGetObject(),State))) return false;
+  TestTrue(TEXT("hidden static and parented model-shadow preserve selected native body and restore words"),Generic->bHidden&&Generic->ScriptSavedSolid==6&&State.ModelShapeFlags==TArray<uint8>({0}));
+ }
+ auto* HiddenBrush=World.FindByName(TEXT("hidden_brush"));
+ if (!TestNotNull(TEXT("born-hidden brush body built before shared hidden dispatch"),HiddenBrush ? HiddenBrush->Body : nullptr)) return false;
+ TestTrue(TEXT("born-hidden brush retains postSpawn non-solid words and actual collision gate"),HiddenBrush->bHidden&&HiddenBrush->bSavedPhysicalWordsAvailable&&HiddenBrush->Body->GetCollisionEnabled()==ECollisionEnabled::NoCollision);
+ auto* Plate=static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("plus_food")));
+ auto* Chair=static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("chair")));
+ auto* PropAlias=static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("prop_alias")));
+ auto* Retired=static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("retired")));
+ auto* Absent=World.FindByName(TEXT("no_binary")); auto* BaseAlias=World.FindByName(TEXT("base_alias"));
+ if (!Plate||!Chair||!PropAlias||!Retired||!Absent||!BaseAlias) return false;
+ auto Capture=[&](FElysiumEntity* Ent, FElysiumSavedPhysicsBody& State) { return TestTrue(TEXT("actual native saved output"), ElysiumModelPhysics::Capture(Ent->VPhysicsGetObject(),State)); };
+ auto CheckWords=[&](FElysiumEntity* Ent, bool Hidden)
+ {
+  int32 Solid,Move,MoveCollide,Flags,Effects;
+  Ent->ReadScriptPhysicalWords(Solid,Move,MoveCollide,Flags,Effects);
+  return TestTrue(TEXT("actual hidden and restored logical physical words"), Hidden ? Solid==0&&Move==0&&MoveCollide==0&&Flags==4&&Effects==0xe0 : Solid==6&&Move==7&&Flags==0);
+ };
+ auto SameState=[&](const FElysiumSavedPhysicsBody& A,const FElysiumSavedPhysicsBody& B,bool Flags=true)
+ {
+  return A.Pose.Equals(B.Pose,.001)&&A.LinearVelocity.Equals(B.LinearVelocity,.001)&&A.AngularVelocityRadians.Equals(B.AngularVelocityRadians,.001)
+   &&A.CurrentMassKg==B.CurrentMassKg&&A.CurrentInertia==B.CurrentInertia&&A.CurrentInverseInertia==B.CurrentInverseInertia&&A.CurrentMassFrame.Equals(B.CurrentMassFrame,1.e-6)
+   &&A.CurrentSurface==B.CurrentSurface&&A.CurrentLinearDamping==B.CurrentLinearDamping&&A.CurrentAngularDamping==B.CurrentAngularDamping&&A.bGravity==B.bGravity&&A.bAsleep==B.bAsleep
+   &&A.CollisionProfile==B.CollisionProfile&&A.CollisionResponses==B.CollisionResponses&&A.CollisionMask==B.CollisionMask&&(!Flags||A.ModelShapeFlags==B.ModelShapeFlags);
+ };
+ FElysiumSavedPhysicsBody PlateState; if (!Capture(Plate,PlateState)) return false;
+ AddInfo(FString::Printf(TEXT("born-hidden plate5: hidden=%d visible=%d asleep=%d spawnflags=%u shapes=%d firstflags=%d"),Plate->bHidden,Plate->Visual->IsVisible(),PlateState.bAsleep,Plate->SpawnFlags,PlateState.ModelShapeFlags.Num(),PlateState.ModelShapeFlags.IsEmpty()?-1:PlateState.ModelShapeFlags[0]));
+ TestTrue(TEXT("authentic tutorial StartHidden plate5 retains sleeping native body and zero shape eligibility"), Plate->bHidden&&!Plate->Visual->IsVisible()&&PlateState.bAsleep&&PlateState.ModelShapeFlags==TArray<uint8>({0})&&ElysiumModelPhysics::RecipeFor(Plate->VPhysicsGetObject()));
+ TestTrue(TEXT("born-hidden retains unhide solid/move/flags captured after native Spawn"), Plate->bSavedPhysicalWordsAvailable&&Plate->ScriptSavedSolid==6&&Plate->ScriptSavedMoveType==7&&Plate->ScriptSavedSolidFlags==0); CheckWords(Plate,true);
+ FHitResult HiddenHit; const FVector PlateCenter=PlateState.Pose.GetLocation()+Plate->Visual->GetStaticMesh()->GetBounds().Origin;
+ TestFalse(TEXT("actual scene query passes through hidden plate art"),Fixture.World->LineTraceSingleByChannel(HiddenHit,PlateCenter-FVector(500,0,0),PlateCenter+FVector(500,0,0),ElysiumCollision::SightChannel));
+ void* PlateObject=Plate->VPhysicsGetObject(); const auto PlateToken=ElysiumModelPhysics::CaptureIdentity(PlateObject);
+ Plate->ScriptUnhide(); FElysiumSavedPhysicsBody PlateUnhidden; if (!Capture(Plate,PlateUnhidden))return false;
+ TestTrue(TEXT("sleeping plate Unhide preserves incarnation and full mechanics without waking or recalculating mass"),Plate->VPhysicsGetObject()==PlateObject&&ElysiumModelPhysics::IsCurrentOutput(PlateToken)&&SameState(PlateState,PlateUnhidden,false)&&PlateUnhidden.bAsleep);
+ TestEqual(TEXT("sleeping plate Unhide publishes shape eligibility without motion enable"),PlateUnhidden.ModelShapeFlags,TArray<uint8>({3})); CheckWords(Plate,false);
+ Plate->ScriptHide(); FElysiumSavedPhysicsBody PlateRehidden; if (!Capture(Plate,PlateRehidden))return false;
+ TestTrue(TEXT("sleeping plate Hide preserves complete prior sleeping native state"),Plate->VPhysicsGetObject()==PlateObject&&SameState(PlateState,PlateRehidden)); CheckWords(Plate,true);
+ TestTrue(TEXT("contact-modification service bit is installed before first native frame"),ElysiumModelPhysics::Identity(Plate->Visual)->bContactModification);
+ World.Activate(0.);
+ World.BeginNativePhysicsFrame(.02,.02); if (!Fixture.TestWorld.TickTestWorld(.02f)) return false; World.FinishNativePhysicsFrame();
+ if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+ FElysiumSavedPhysicsBody PlateAfterFrames; if (!Capture(Plate,PlateAfterFrames))return false;
+ TestTrue(TEXT("actual first-frame filter preparation preserves hidden sleeping plate incarnation and complete native output"),Plate->VPhysicsGetObject()==PlateObject&&ElysiumModelPhysics::IsCurrentOutput(PlateToken)&&SameState(PlateState,PlateAfterFrames)&&PlateAfterFrames.bAsleep);
+ auto* ChairBody=ElysiumModelPhysics::Identity(Chair->Visual); if (!ChairBody) return false;
+ Chair->Visual->SetEnableGravity(false); Chair->Visual->SetLinearDamping(.37f); Chair->Visual->SetAngularDamping(.61f);
+ Chair->Visual->SetMassOverrideInKg(NAME_None,17.f,true); // current mechanics must survive eligibility changes
+ ChairBody->SetBodyTransform(FTransform(FRotator(17,31,23),FVector(8200,5200,3200)),ETeleportType::TeleportPhysics);
+ ChairBody->SetLinearVelocity(FVector(125,-40,20),false); ChairBody->SetAngularVelocityInRadians(FVector(.1,.2,.3),false);
+ FElysiumSavedPhysicsBody BeforeHide; if (!Capture(Chair,BeforeHide)) return false;
+ TestEqual(TEXT("core chairoffice actual first solid has two live shapes"),BeforeHide.ModelShapeFlags.Num(),2);
+ void* ChairObject=Chair->VPhysicsGetObject(); const auto ChairToken=ElysiumModelPhysics::CaptureIdentity(ChairObject);
+ BaseAlias->VPhysicsSetObject(ChairObject); const auto DetachedToken=ElysiumModelPhysics::CaptureIdentity(PropAlias->VPhysicsGetObject());
+ PropAlias->VPhysicsSetObject(nullptr); PropAlias->VPhysicsSetObject(ChairObject); //clear first; no overwrite-warning substitute
+ Chair->ScriptHide(); FElysiumSavedPhysicsBody AfterHide; if (!Capture(Chair,AfterHide)) return false;
+ TestTrue(TEXT("Hide retains native incarnation, aliases and complete mechanics"),Chair->VPhysicsGetObject()==ChairObject&&BaseAlias->VPhysicsGetObject()==ChairObject&&PropAlias->VPhysicsGetObject()==ChairObject&&ElysiumModelPhysics::IsCurrentOutput(ChairToken)&&SameState(BeforeHide,AfterHide,false));
+ TestEqual(TEXT("Hide removes both hulls from query and simulation eligibility"),AfterHide.ModelShapeFlags,TArray<uint8>({0,0})); CheckWords(Chair,true);
+ PropAlias->ScriptHide(); PropAlias->ScriptUnhide(); TestTrue(TEXT("art gates leave former detached producer alive"),ElysiumModelPhysics::IsCurrentOutput(DetachedToken));
+#if WITH_EDITOR
+ auto* HiddenCarrier=Cast<UElysiumPhysicsPropComponent>(Chair->Visual); if (!HiddenCarrier) return false;
+ HiddenCarrier->PreStaticMeshCompilation(); HiddenCarrier->PostStaticMeshCompilation();
+ TestTrue(TEXT("actual public hidden render callbacks retain selected incarnation and current references"),ElysiumModelPhysics::IsCurrentOutput(ChairToken)&&Chair->VPhysicsGetObject()==ChairObject);
+#endif
+ Chair->ScriptUnhide(); FElysiumSavedPhysicsBody AfterUnhide; if (!Capture(Chair,AfterUnhide)) return false;
+ TestTrue(TEXT("Unhide retains identity/current mechanics without creator reset"),Chair->VPhysicsGetObject()==ChairObject&&SameState(BeforeHide,AfterUnhide,false));
+ TestEqual(TEXT("Unhide restores both hulls collision eligibility"),AfterUnhide.ModelShapeFlags,TArray<uint8>({3,3})); CheckWords(Chair,false);
+ Chair->ScriptHide(); World.Activate(0.);
+ const FVector LogicalPose=Chair->Origin; const FVector SolvedPose=ChairBody->GetUnrealWorldTransform().GetLocation();
+ auto* Solver=ChairBody->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>(); const double SolverTime=Solver->GetSolverTime();
+ World.BeginNativePhysicsFrame(.02,.02); if (!Fixture.TestWorld.TickTestWorld(.02f)) return false; World.FinishNativePhysicsFrame();
+ if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+ TestTrue(TEXT("shape collision gate does not suppress awake hidden native particle motion"),Solver->GetSolverTime()>SolverTime&&!ChairBody->GetUnrealWorldTransform().GetLocation().Equals(SolvedPose,.001));
+ TestTrue(TEXT("hidden MOVETYPE_NONE logical pose remains distinct from solved pose"),Chair->Origin.Equals(LogicalPose,.001));
+ // A real per-hull saved output proves final reconnect does not overwrite restored flags.
+ FPhysicsCommand::ExecuteWrite(ChairBody->GetPhysicsActor(),[&](const FPhysicsActorHandle&)
+ {
+  TArray<FPhysicsShapeHandle> Shapes; ChairBody->GetAllShapes_AssumesLocked(Shapes);
+  if (Shapes.Num()==2) { FPhysicsInterface::SetIsQueryShape(Shapes[0],true); FPhysicsInterface::SetIsSimulationShape(Shapes[1],true); }
+ });
+ FElysiumSavedPhysicsBody SavedChair; if (!Capture(Chair,SavedChair)) return false;
+ TestEqual(TEXT("actual two-hull output carries distinct saved flags"),SavedChair.ModelShapeFlags,TArray<uint8>({1,2}));
+ PropAlias->ScriptHide(); BaseAlias->ScriptHide(); Retired->VPhysicsDestroyObject(); Retired->ScriptHide(); Retired->ScriptUnhide();
+ TestNull(TEXT("explicit225 never resurrects on subsequent art gates"),Retired->VPhysicsGetObject());
+ TestNull(TEXT("genuine core source-no-binary has no fallback physics"),Absent->VPhysicsGetObject());
+ FElysiumMapSnapshot Snapshot; World.Freeze(Snapshot);
+ if (!TestFalse(TEXT("eligible hidden count1 native fields admitted by Physics block"),Snapshot.bPhysicsSaveFailed)) return false;
+ const int32 ChairIndex=Chair->Handle.Index,PlateIndex=Plate->Handle.Index,PropIndex=PropAlias->Handle.Index,BaseIndex=BaseAlias->Handle.Index,RetiredIndex=Retired->Handle.Index,AbsentIndex=Absent->Handle.Index;
+ const auto* HiddenRow=Snapshot.PhysicsBodies.FindByPredicate([&](const FElysiumSavedPhysicsBody& State){return State.EntityIndex==ChairIndex;});
+ const auto* Count0=Snapshot.PhysicsBodies.FindByPredicate([&](const FElysiumSavedPhysicsBody& State){return State.EntityIndex==RetiredIndex;});
+ TestTrue(TEXT("hidden current field saves count1 and retired field saves count0"),HiddenRow&&HiddenRow->bHasObject&&Count0&&!Count0->bHasObject);
+ TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive SaveAr(Writer,FElysiumSaveVersion::Latest); SaveAr<<Snapshot;
+ FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive LoadAr(Reader,FElysiumSaveVersion::Latest); LoadAr<<Persisted;
+ if (!TestFalse(TEXT("actual typed map archive decodes hidden Physics block"),Reader.IsError())) return false;
+ FElysiumSavedPhysicsBody SavedPlate; if (!Capture(Plate,SavedPlate)) return false;
+ World.Teardown(); TestFalse(TEXT("source teardown fences current and detached native incarnations"),ElysiumModelPhysics::IsCurrentOutput(ChairToken)||ElysiumModelPhysics::IsCurrentOutput(DetachedToken));
+ auto CheckRestore=[&](FElysiumEntityWorld& RestoringWorld)
+ {
+  auto Resolve=[&](int32 Index){return RestoringWorld.Resolve(FElysiumEntityHandle(Index,RestoringWorld.GetEpoch()));};
+  auto* Owner=Resolve(ChairIndex); auto* Sleep=Resolve(PlateIndex); auto* Base=Resolve(BaseIndex); auto* Prop=Resolve(PropIndex);
+  if (!Owner||!Sleep||!Base||!Prop) return false;
+  for(auto* Ent:{Owner,Base,Prop}) { FElysiumSavedPhysicsBody State; if (!Capture(Ent,State)) return false; TestTrue(TEXT("hidden own/base/PhysProp saved fields retain exact mechanics and two-hull flags before first native frame"),SameState(SavedChair,State)&&Ent->bHidden); }
+  TestTrue(TEXT("type1 independently allocates each hidden current field"),Owner->VPhysicsGetObject()!=Base->VPhysicsGetObject()&&Owner->VPhysicsGetObject()!=Prop->VPhysicsGetObject()&&Base->VPhysicsGetObject()!=Prop->VPhysicsGetObject());
+  FElysiumSavedPhysicsBody SleepState; if (!Capture(Sleep,SleepState)) return false;
+  TestTrue(TEXT("born-hidden sleeping plate native settings/flags persist"),SameState(SavedPlate,SleepState)); CheckWords(Sleep,true);
+  TestNull(TEXT("typed reload preserves explicit225 count0"),Resolve(RetiredIndex)->VPhysicsGetObject());
+  TestNull(TEXT("typed reload preserves genuine no-binary count0"),Resolve(AbsentIndex)->VPhysicsGetObject());
+  const auto RestoredToken=ElysiumModelPhysics::CaptureIdentity(Owner->VPhysicsGetObject()); void* Object=Owner->VPhysicsGetObject();
+  Owner->ScriptUnhide(); FElysiumSavedPhysicsBody Unhidden; if (!Capture(Owner,Unhidden)) return false;
+  TestTrue(TEXT("after reload Unhide keeps reconstructed identity and mechanics"),ElysiumModelPhysics::IsCurrentOutput(RestoredToken)&&SameState(SavedChair,Unhidden,false));
+  TestEqual(TEXT("after reload Unhide publishes logical eligibility for both hulls"),Unhidden.ModelShapeFlags,TArray<uint8>({3,3})); CheckWords(Owner,false);
+  Owner->ScriptHide(); Base->VPhysicsSetObject(nullptr); Base->VPhysicsSetObject(Object); Prop->VPhysicsSetObject(nullptr); Prop->VPhysicsSetObject(Object);
+  int32 Callbacks=0;
+  RestoringWorld.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+  {
+   if(Event.Kind!=TEXT("physics_retire"))return; ++Callbacks;
+   TestTrue(TEXT("borrowed225 callbacks see all current fields null and recipe retired before native release"),!Owner->VPhysicsGetObject()&&!Base->VPhysicsGetObject()&&!Prop->VPhysicsGetObject()&&!ElysiumModelPhysics::RecipeFor(Object)&&ElysiumModelPhysics::ComponentFor(Object)==nullptr);
+  });
+  Base->VPhysicsDestroyObject(); RestoringWorld.SetAiTraceSink({});
+  TestEqual(TEXT("borrowed225 retirement calls all three references"),Callbacks,3);
+  TestFalse(TEXT("borrowed225 fences hidden owner incarnation"),ElysiumModelPhysics::IsCurrentOutput(RestoredToken)); Owner->ScriptUnhide(); TestNull(TEXT("post225 Unhide cannot re-create native"),Owner->VPhysicsGetObject());
+  Sleep->Kill(); TestNull(TEXT("actual Kill of hidden sleeping owner retires native"),Sleep->VPhysicsGetObject());
+  auto* Replacement=static_cast<FElysiumPhysProp*>(Resolve(AbsentIndex)); Replacement->SetRuntimeModel(TEXT("models/scenery/misc/plates/plate5.mdl"));
+  const auto ReplacementToken=ElysiumModelPhysics::CaptureIdentity(Replacement->VPhysicsGetObject()); TestTrue(TEXT("real successful SetModel creates admitted own body"),ElysiumModelPhysics::IsCurrentOutput(ReplacementToken));
+  Replacement->SetRuntimeModel(TEXT("models/scenery/structural/society/chair.mdl")); TestTrue(TEXT("real source-no-binary SetModel retires without fallback"),!Replacement->VPhysicsGetObject()&&!ElysiumModelPhysics::IsCurrentOutput(ReplacementToken));
+  return true;
+ };
+ FElysiumEntityWorld Destination(Map,nullptr,Services); Destination.Load(MoveTemp(DestinationDefs)); Persisted.PhysicsBodies.Reset();
+ if (!TestTrue(TEXT("ordinary reload consumes persisted Physics block after decoded-array reset"),Destination.ApplySnapshot(Persisted)>=0)||!CheckRestore(Destination))return false;
+ Destination.Teardown();
+ FElysiumEntityWorld Travel(Map,nullptr,Services); Travel.Load(MoveTemp(TravelDefs));
+ if (!TestTrue(TEXT("genuine transition consumes same hidden Physics bytes before activation"),Travel.ApplySnapshot(Persisted,0.,true)>=0)||!CheckRestore(Travel))return false;
+ Travel.Teardown(); AddInfo(FString::Printf(TEXT("hidden-prop joined: archive_bytes=%d plate5_sleeping=1 chairoffice_shapes=2 own/base/PhysProp_fields=3 native_motion=1 reload=1 transition=1"),Bytes.Num()));
+ return true;
 }
 #endif

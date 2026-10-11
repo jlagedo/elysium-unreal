@@ -60,7 +60,7 @@ bool FElysiumPhysProp::CreateModelBody(FString& OutError)
 bool FElysiumPhysProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError)
 {
 	RetireModelBody(); // the port's spawned baseline is retired before Physics reconstruction.
-	if (!Visual || IsInert() || bBroken || State.FieldName != TEXT("m_pPhysicsObject"))
+	if (!Visual || IsDead() || bBroken || State.FieldName != TEXT("m_pPhysicsObject"))
 	{ OutError = TEXT("saved physics prop has no live admitted field/component"); return false; }
 	if (!ElysiumModelPhysics::Restore(Visual, World->PhysicsSurfaces(), State, OutError))
 	{ bSimulating = false; return false; }
@@ -179,7 +179,8 @@ void FElysiumPhysProp::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 	Out.Emplace(TEXT("Body"), ElysiumModelPhysics::Identity(Visual) ? TEXT("Chaos body") : TEXT("(none)"));
 	Out.Emplace(TEXT("Active"), ElysiumModelPhysics::IsActive(Visual) ? TEXT("yes") : TEXT("no"));
-	Out.Emplace(TEXT("Simulating"), bSimulating && !bBroken && !IsInert() ? TEXT("yes") : TEXT("no"));
+	// Hidden shape eligibility does not stop native particle dynamics or imply sleep.
+	Out.Emplace(TEXT("Simulating"), ElysiumModelPhysics::Identity(Visual) ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Broken"), bBroken ? TEXT("yes") : TEXT("no"));
 	// The mass Chaos is actually using, so the model's authored `.phy` mass can be checked
 	// against the body rather than inferred from the asset.
@@ -299,27 +300,19 @@ void FElysiumPhysProp::GateBody()
 	}
 	// Bare field clear/overwrite leaves a detached former producer alive. Art gating does not own225.
 	if (void* NativeActor = ElysiumModelPhysics::ActorIdentity(Visual); NativeActor && NativeActor != VPhysicsGetObject()) return;
-	if (bDown)
+	if (bBroken)
 	{
 		const bool bResumeSimulation = bSimulating;
 		RetireModelBody();
-		bSimulating = bResumeSimulation; // dormancy keeps the selected producer's resume permission.
+		bSimulating = bResumeSimulation; // preserve existing break retirement; not ScriptHide.
 	}
-	else if (bSimulating)
+	else if (ElysiumModelPhysics::Identity(Visual))
 	{
 		// Final entity reconnect follows the Physics block. Keep its reconstructed solved state.
 		if (bRestoredNativePhysics && World && World->IsApplyingSnapshot()) return;
-		RetireModelBody(); // the profile/collision changes below may recreate a native actor.
-		Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
-		// 0018 story 6: the profile reset the body's responses. A moving prop is still an entity
-		// prop to `StandardFilterRules 0x101d3080` (R2 section 2): met only under MONSTER
-		// (`PropMaskBit`, unless `blocks_traces`), and then it blocks `FVisible`'s `0x2804091`
-		// (unless `npc_transparent`), which `PhysicsActor` ignores -- so the sight Block is set
-		// again on this body alone.
-		Visual->SetMaskFilterOnBodyInstance(PropMaskBits());
-		Visual->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
-		FString BodyError;
-		bSimulating = CreateModelBody(BodyError);
+		// 100a8710/100a8990 notify current object#25 through physical words. Gate
+		// query/contact eligibility without225, creation, velocity, gravity or sleep writes.
+		ElysiumModelPhysics::GateStaticModelCollision(Visual, !bDown);
 	}
 }
 
