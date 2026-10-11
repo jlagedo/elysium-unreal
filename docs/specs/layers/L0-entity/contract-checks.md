@@ -6,6 +6,14 @@ before the layer closes (gate item 5): a record shows the contract holds, or the
 divergence the owner accepts. 187 other engine-replaced core rows of this layer are
 presentation, networking, memory or debug and need no check.
 
+Physics ownership correction (2026-10-10): Unreal/Chaos owns geometry and rigid mechanics;
+the checks concern authored inputs, observable outputs and event order. The unreachable compact
+box reconstruction and its byte/lifetime tests were removed after consumer verification.
+Packed Source/IVP topology, feature IDs, support trees and internal scheduling have no shipped
+observer requiring reproduction. Existing baked geometry is an available backend input, not
+proof of complete body callbacks, lifecycle, model failure/override arms or shadow feedback.
+The physics rows below remain subject to those observable checks before layer closure.
+
 | subsystem | address | function | maps | what it does | how the port replaces it |
 |---|---|---|---|---|---|
 | audio | `0x1024c000` | Global::FUN_1024c000 | 108 | Remove a range from a pointer array by shifting the remaining entries with memmove. | This shifts the retail string-pool block array. The port’s std::string and std::map storage has no matching contiguous block array. |

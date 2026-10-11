@@ -8,10 +8,11 @@ consecutive slices of one subsystem up to ~1.5 KB of retail code or 8 functions.
 
 Owner ownership correction (2026-10-10, superseding the mechanical-IVP prerequisites below):
 Unreal services own solving, collision geometry, broadphase/contact mechanics and rigid-body
-scheduling. Source/IVP addresses remain oracle evidence, not cloning requirements. First repair
-this plan, then finish the current authored surface packet with typed semantics and BYOG-safe
-derived verification data. Next fresh worker removes the compact box reconstruction whose
-only consumers are tests. Subsequent packets implement the Chaos adapter seams in the targeted
+scheduling. Source/IVP addresses remain oracle evidence, not cloning requirements. The authored
+surface packet is gated with typed semantics and BYOG-safe derived verification data. The separate
+removal worker verified that the compact box reconstruction had only implementation/test consumers,
+then removed its header, implementation, two tests and game-derived packed box golden.
+Subsequent packets implement the Chaos adapter seams in the targeted
 producer walk: authored body inputs/lifetime/timing, ordered filtering/contact notifications,
 shadow targets/blocked feedback, NPC sample-think-submit order, then bounds/partition/cache.
 No packed topology, support tree, allocator or IVP scheduler is a prerequisite absent a named
@@ -28,23 +29,29 @@ commands and loaded before entities by the process service. Narrow physics UFS s
 without a packaged cook claim. Existing flattened audible/material divergence remains documented.
 Worker final build/touched2/2 and pipeline5/5 pass. Coordinator build/default175/175,
 selected motor/sight6/6 and bounded arena18/18 pass; JSON evidence is in progress.md.
-No original run closes (23/88), no broad body/trace/cache row closes. After the next
-fresh worker removes the unnecessary compact reconstruction, the next implementation boundary is
+No original run closes (23/88), no broad body/trace/cache row closes. With the unnecessary
+compact reconstruction removed, the next implementation boundary is
 authored body inputs -> Chaos adapter identity/create/destroy/activity and ordered physical timing.
 
-Independent box-construction packet (coordinator reviewed and gated): Collision007#19
+Historical box-construction packet (coordinator reviewed and gated before removal): Collision007#19
 `2600a310`, exact cache2600a480, seed2600a1a0, clone2600a050, surface construction26009fd0,
-append2600a3e0 and explicit geometry destruction2600a520 are implemented as a complete
-prerequisite with real endpoint producers and full compact collision output. Native arithmetic
+append2600a3e0 and explicit geometry destruction2600a520 were implemented with
+real endpoint producers and full compact collision output. Native arithmetic
 retains the recovered branch/store/quantization contract;36 bounded read-only retail execution
 comparisons match all412bytes, with16 durable UE operation goldens. No new helper arena action;
 existing bounded records gate regression only. This is not the entity wrapper, owned body,
 contact/hash, solver/controller, Collision007#18 query or physical publication boundary.
 No original run closes (23/88); the saved r022a candidate remains deferred. See the targeted
-physics producer walk and matching oracle for provenance and concrete next constructor/core/
-broadphase inputs. Coordinator evidence in progress.md: build succeeded, default173/173,
+physics producer walk and matching oracle for provenance; their older constructor/core/
+broadphase implementation frontier is superseded by the approved Chaos plan above.
+Historical coordinator evidence in progress.md: build succeeded, default173/173,
 motor/sight6/6 and bounded arena18/18; actual UE full-byte goldens pass. Audit1002dfe0 was
 downgraded to partial because its callback/body wrapper remains absent. No broad row closed.
+
+Compact removal coordinator gates pass: build exit0, default173/173 Success (175 minus the two
+removed box tests), retained surface production2/2 with zero errors/warnings and bounded arena18/18
+pass across both hosts. JSON evidence is in progress.md. These cover regressions only, not new
+body/contact closure. No full-arm, full-arena, three-order closing gate or packaged cook ran.
 
 Original r022 remains open. Its absolute setters need a partition lifecycle that was omitted from
 the coarse r022 -> r044/r045 ordering. Initial sequence (superseded by the physical prerequisite

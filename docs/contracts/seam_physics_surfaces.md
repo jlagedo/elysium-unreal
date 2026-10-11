@@ -34,6 +34,11 @@ case fold occurs in the seam. The separate existing `surface-properties` assets 
 Unreal visual/audio consumers with their older flattened contract. They cannot substitute for
 this input; their pool/default/order divergence remains recorded for future consumer work.
 
+The 2026-10-10 compact collision reconstruction removal does not change this authored input
+seam or its typed parser/material service. Project-authored parser cases and ignored deployed
+semantic expectations remain. Chaos geometry/body adapters must consume the required authored
+values; no packed Source/IVP box layout or internal feature numbering is part of this seam.
+
 2026-10-10 final typed-semantic public deployment: source SHA256
 `3219d190cfb3eadb65159a4f48373c5ac3bd5f999cb960262abc87a6e09c4570`, GLB SHA256
 `4d0accfc9e7edf612ccd5f2ad7e01078567632e0b37ab4825b65792ff85cd016`.

@@ -16,9 +16,9 @@ evidence, not new validation or acceptance of the layer closing gate.
 - Owner steering (2026-10-10) supersedes the earlier IVP reconstruction frontier. Read
   `docs/vision.md` ownership test: Unreal owns rigid mechanics, geometry, broadphase/contact
   solving and internal scheduling. The substrate retains authored values, named rules, lifecycle
-  and observable event order. Record/repair this plan before further runtime work. Compact box
-  implementation currently has tests as its only consumers; its unnecessary internal topology
-  reconstruction is scheduled for removal by the next fresh worker, outside the surface packet.
+  and observable event order. The compact box header, implementation, two tests and packed box
+  golden file were removed in the separate removal packet after a reference inventory confirmed
+  no production consumers. Their retail recovery/probe evidence remains historical oracle data.
   Surface work may finish only as typed authored semantics; shipped payload goldens must stay
   in ignored derived artifacts, never tracked game content. Revised seams are in the producer
   walk and runs checkpoint below. No original layer run closes (23/88).
@@ -35,12 +35,12 @@ evidence, not new validation or acceptance of the layer closing gate.
   No original run/broadbody row closes;23/88 remains unchanged. Narrow physics UFS staging is
   declared; no packaged cook validated. The revised Chaos seam plan precedes further work.
 
-- Independent complete box geometry prerequisite (2026-10-10): Collision007#19 construction
-  and borrowed-cache lifetime are implemented with complete native compact surface geometry;
+- Historical independent box reconstruction (2026-10-10): Collision007#19 construction
+  and borrowed-cache lifetime were implemented with complete native compact surface geometry;
   read-only retail execution yielded36/36 matching full412-byte outputs. Coordinator-reviewed UE
   goldens/lifetime tests, build/default and bounded regression gates pass below. No caller/body/contact,
   bounds-query or original run closes;23/88 remains unchanged. Its historical internal frontier
-  is superseded by the ownership correction above; removal is the next fresh worker packet.
+  is superseded by the ownership correction above; the unused reconstruction is now removed.
 - Start: `47b6f780`, clean `main`; r001-r021, r029, r030 landed (23/88).
 - r022 deferred before runtime edits: its absolute-origin partition walk needs the unfinished
   bounds/physics/partition lifecycle. Docs-only recovery checkpoint; no code gate or new record.
@@ -74,14 +74,41 @@ evidence, not new validation or acceptance of the layer closing gate.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
 
-### Authored surface coordinator gates (2026-10-10)
+### Compact reconstruction removal worker evidence (2026-10-10)
+
+At c7035f35, tracked reference inventory found FElysiumPhysicsCollision/FElysiumPhysicsCollide
+only in the removed header, implementation and test file; ElysiumPhysicsBoxGolden.inl was
+included only by that test. No entity/world/body/query caller used this service. Exactly those
+four files were removed; the packed box golden was game-derived. The surface golden contains
+project-authored parser cases and remains with the typed service, source import and ignored
+deployed semantic expectations. Retail facts and the read-only probe remain oracle history.
+No Chaos placeholder, mirror test or new game-sourced tracked data was added. This removes
+unreachable engine reconstruction; no gameplay behavior changes. Coordinator reviewed and gated
+the frozen source: build exit0, default173/173 Success and bounded arena18/18 pass. The prior
+default175 included the two removed box tests. Original runs remain23/88 and r022a remains deferred. Next is authored
+body input/lifecycle, Chaos query/contact rules, shadow target/solved permissions and blocked
+feedback, observable postthink PhysFrame/NPC order, then callback/bounds/cache publication.
+
+Coordinator build JSON reports succeeded/exit0:
+`E:/elysium-work/logs/20261011T000949.357593Z-build.json`.
+Default JSON has173 tests in Success state (94 clean,79 with warnings), failed/notRun0:
+`E:/elysium-work/reports/tests/20261011T001051.427897Z-elysium-session-elysium-substrate/index.json`.
+Retained PhysicsSurface.Parser and PhysicsSurface.Deployed both have zero errors/warnings;
+the removed box registrations are absent. Bounded arena18/18 pass, both hosts exit0:
+`E:/elysium-work/reports/arena/20261011T001111.308111Z/index.json`.
+Merged and both host JSONs were read. Ordinary first_unmet values are null; the two intentional
+failure selftests pass by inversion. Existing Engine Toolsets AgentSkill startup errors and
+NPC/stub warnings remain. No actual gameplay behavior changed, so no additional arm-family gate
+was needed. No full-arm, full-arena, three-order layer close or packaged cook gate ran.
+
+### Authored surface coordinator gates (2026-10-10; historical pre-removal binary)
 
 Reviewed typed public parser, process lifetime and real project-resident load; the authored
 source import seam preserves whole source ordering. Tracked expectations contain only project
 authored cases; both deployed source and semantic verification artifacts are gitignored.
 Narrow UFS staging was checked against UE5.8 Content-relative staging and platform file APIs;
-packaged cook remains untested. Compact reconstruction has no production consumer and is the
-next separate removal packet; body/contact/Chaos wiring and original runs remain open (23/88).
+packaged cook remains untested. This gate preceded the separate compact reconstruction removal;
+body/contact/Chaos wiring and original runs remain open (23/88).
 
 Independent coordinator build succeeded:
 `E:/elysium-work/logs/20261011T000141.698553Z-build.json`.
@@ -142,11 +169,11 @@ regression. The two intentional failure selftests pass by inversion. Existing Un
 AgentSkill startup errors recur; no new runtime error acceptance follows. No new internal
 construction-helper arena action was added.
 
-Audit 0x1002dfe0 is downgraded from overstated engine_replaced to partial: this real shape
-prerequisite does not implement PhysCreateBbox's callback or actual entity/environment bodies.
-Original completed runs remain 23/88. Next is actual environment/body construction
-260104f0 -> 260189f0, parameter/material conversion, shape/core/wrapper initialization and
-owned activity/deletion/clock, then live contact/hash notifications. Group change, complete
+Audit 0x1002dfe0 was downgraded from overstated engine_replaced to partial: that reconstruction
+did not implement PhysCreateBbox's callback or actual entity/environment bodies.
+Original completed runs remain 23/88. The historical shape/core frontier is superseded by
+the approved Chaos ownership plan; authored parameters, body identity/lifecycle/activity/timing
+and observable contact notifications remain required. Group change, complete
 filter/query, shadow/controller, partition/cache and saved r022a remain open. No full arm,
 full arena or layer closure gate ran; no modernization accepted; no push.
 

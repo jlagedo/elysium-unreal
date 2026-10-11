@@ -442,15 +442,20 @@ to be walked before an engine adapter is a complete service. Unreal may replace 
 under AGENTS.md only with the retail contract/state/event sequence preserved. No such replacement
 acceptance or object/controller runtime implementation is claimed by this recovery.
 
-### Independent BBoxToCollide geometry construction [PE/execution, 2026-10-10]
+### Historical BBoxToCollide geometry construction [PE/execution, 2026-10-10; runtime removed]
 
-`Collision007#19 0x2600a310` is now implemented independently by
-`FElysiumPhysicsCollision::BBoxToCollide`. Its real inputs are the two Source-space float
+`Collision007#19 0x2600a310` was implemented independently by
+`FElysiumPhysicsCollision::BBoxToCollide`. Its real inputs were the two Source-space float
 endpoints. It returns allocated, immutable compact collision geometry, with the full ledge,
 packed triangle/edge features, point array, surface header and single-leaf bounds tree.
 No caller-created geometry record, body pointer, solver object or fixture supplies these inputs.
-The later entity wrapper/body creation is still absent; this closes only the complete box
-geometry prerequisite. It does not implement Collision007#18 world AABB or contact queries.
+The later entity wrapper/body creation remained absent; no production caller consumed the
+compact representation. The owner then applied the vision ownership test: Unreal owns collision
+geometry, broadphase/contact solving and rigid mechanics. A fresh reference inventory at c7035f35
+confirmed only the reconstruction header/implementation/tests and their box golden depended on
+it; those four files were removed. The facts/probe below remain retail oracle history. Packed
+layout, feature IDs, support trees and IVP internals are not runtime prerequisites without a
+shipped observer. No gameplay divergence, body adapter or query closure follows from removal.
 
 The operation rejects **only** three equal endpoint components, looks backwards through the
 exact-component cache (`0x2600a480`), bootstraps its seed on the first miss (`0x2600a1a0`),
@@ -528,18 +533,24 @@ and equalXY, reversedX, tiny `(0,0,0)/(1e-7,2e-7,3e-7)`, and minX NaN (x86 atof 
 plane/line/reversed arms for each axis of `(-3.25,2.5,7.75)/(19.125,34.625,55.875)`.
 All **36/36** reconstructed 412-byte outputs matched the retail probe after the documented
 arithmetic corrections. This is bounded constructor evidence, not downstream body/query parity.
-The 16 primary/axis outputs are durable full-byte goldens in
-`Private/Tests/ElysiumPhysicsBoxGolden.inl`; automation calls the actual public construction
-operation. `PhysicsBoxLifetime` checks explicit allocation lifetime through cache teardown.
+The 16 primary/axis outputs were tracked full-byte goldens in
+`Private/Tests/ElysiumPhysicsBoxGolden.inl`; that game-derived file and its construction/lifetime
+tests were removed with the reconstruction. Captures remain in ignored scratch; the read-only
+probe remains available for research, not a runtime dependency.
 
-The next concrete producer is environment `0x260104f0 -> 0x260189f0`: template `0x26018ba0`
+The recovered retail construction chain is environment `0x260104f0 -> 0x260189f0`: template `0x26018ba0`
 uses real object parameters/surface material, shape `0x26009a00`, IVP construction
 `0x260397c0 -> 0x2605ad10 -> 0x2602dcf0` (core `0x26030f20`) and wrapper
 `0x260168e0 -> 0x26016930`. Broadphase/recheck `object#25 0x26016da0 -> 0x2602e320 ->
 0x26048b00` refreshes actual candidates and core lookahead, filters static/same-core/disabled
 arms, removes obsolete pairs in reverse, then inserts pairs and invokes listeners in reverse
 candidate/listener order. Its live broadphase, owned pair hash and deletion/insertion callbacks
-remain required; a standalone ignored-pair boolean/hash fixture cannot close that boundary.
+are oracle evidence for observable mutations and ordering. Chaos supplies backend geometry,
+candidate/contact mechanics and solving; its adapter must expose the required body identity,
+lifecycle/activity, authored parameters and ordered game callbacks. Reproducing the IVP core,
+tree, packed IDs or scheduler is not required. An ignored-pair fixture cannot supply missing
+production body/contact outputs. Next work follows the targeted L0 producer walk: body inputs/
+lifecycle, query/contact rules, shadow target/solved feedback, postthink/NPC order, then bounds/cache.
 
 ### Independent trace selectors and actual single-player collision rules (2026-10-10)
 
@@ -595,7 +606,9 @@ the real IVP object at wrapper+8 and tail-calls `0x2602e320`. With an IVP collis
 object+0x9c it invokes `0x26048b00`: live broad-phase candidates, filter dispatch, existing
 collision-pair comparison, obsolete-contact deletion and insertion callbacks. A group word
 setter with a bool body-presence/recheck counter omits these effects and is not this producer.
-This packet therefore leaves SetCollisionGroup open until the actual owned body/contact service.
+SetCollisionGroup remains open until a real Chaos body/contact adapter propagates those
+observable filter mutations and callbacks in order. The IVP broadphase itself is oracle
+mechanism evidence, not a required implementation.
 
 `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` executes StandardFilterRules `0x101d3080`,
 pass rules `0x101d2fc0`, **candidate slot 91**, candidate BCC targetable/script-hidden gate,
@@ -618,8 +631,9 @@ then publishes table `0x260c9b7c`. Slot 3 `0x26011b70` asks embedded pair-hash t
 for each physics object whose slot 1 predicate is clear, invoke the same real object slot 25
 recheck. Slot 1 `0x26016d60` tests bits `0x0c` on the word reached through wrapper+8 then
 IVP object+0xa4; this is not the deletion predicate at object slot 4 `0x26016cf0`.
-Identity lifetime, complete hash mutations and their body/contact notifications remain open;
-an always-empty hash would stub same-L0 state, not provide an upward hook.
+Identity lifetime, complete ignored-pair mutations and their body/contact notifications remain open;
+Unreal containers/Chaos replace internal hash allocation and mechanical pair maintenance.
+An always-empty ignored-pair set would stub same-L0 state, not provide an upward hook.
 
 `Elysium.Substrate.CollisionRulesProduction` covers each predicate rejection/neighbor and
 reversed arguments, 6 remapping, signed edge values, the existing wrapper, registered base/NPC/

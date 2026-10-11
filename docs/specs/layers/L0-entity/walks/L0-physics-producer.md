@@ -20,8 +20,10 @@ The owner explicitly applies `docs/vision.md`'s ownership test: Unreal owns geom
 mechanics, broadphase/contact solving and internal scheduling. Retail remains the oracle for
 authored inputs, game-visible rules, lifecycle and event order. No packed topology, feature ID,
 support tree, allocator or IVP core scheduler is required without a named authored observer.
-The compact box reconstruction has only implementation/test consumers; remove it in the next
-fresh worker packet, not as part of the current authored surface correction.
+The compact box reconstruction had only implementation/test consumers. The separate removal
+packet verified that inventory and removed its header, implementation, two tests and packed
+game-derived box golden. The typed authored surface service/import and ignored semantic
+expectations remain; no replacement adapter or body/contact closure is implied.
 
 1. **Body adapter inputs and lifetime.** Actual callers100a6150/100a5d80/1002dfe0/1002e3a0
    supply authored bbox/model geometry, pose, mass/damping/inertia/material parameters and body
@@ -222,15 +224,14 @@ The existing components are useful engine algorithms, but do not already impleme
 | `FElysiumPhysProp::Visual` | Cooked Chaos collision/mass and world simulation | Generic object identity, ordered active callbacks, shadow permissions/limits and deferred deletion |
 | `FElysiumPhysicsSourceData` | Resident exact hull/solid/parameter evidence | Creation-time retail default/override/surface conversion and live object service |
 
-Construction does **not** depend on the caller's think loop: a complete owned body/controller
-environment can land independently before STEP. The first real producer boundary is shape and
-parameter acquisition, body lifecycle/identity, controller target **and simulation**, environment
-clock/activity/deferred deletion and contact/event production together. A box-body subset may
-be a separate complete service implementation, but cannot claim complete `VPhysicsInitShadow`
-while its model/custom/failure arms are absent. UE may replace the internal solver if the retail
-externally observable contract and event/state sequencing are maintained. No IVP-copy requirement
-or accepted divergent sequencing is inferred here. Current body adapters and this targeted
-recovery do not establish that complete producer boundary; a pointer or target store is insufficient.
+Construction does **not** depend on the caller's think loop: the authored-input/body-lifecycle
+boundary can land before STEP. Chaos owns shape construction and solving; the substrate keeps
+identity, parameters, activity/deferred removal and ordered game publication. Subsequent packets
+complete query/contact rules and shadow target **and solved state** before their STEP callers.
+A box-body subset cannot claim complete `VPhysicsInitShadow` while its model/custom/failure
+arms are absent. Preserve the externally observable contract and event/state sequencing; no
+IVP-copy requirement or divergent sequencing is accepted. Current adapters and this targeted
+recovery do not establish those complete boundaries; a pointer or target store is insufficient.
 
 The live NPC loop adds specific L0 prerequisites, not a general “physics missing” assertion:
 
@@ -255,18 +256,17 @@ The live NPC loop adds specific L0 prerequisites, not a general “physics missi
   Current `RunThinks` runs only the primary callback at NextThink<=Now, while retail specific
   think permits one-frametime early execution. r024a storage is not this dispatch production.
 
-Implementation order must follow actual inputs, independently of historical run slices:
-1. Slot 237 and its actual input producers are complete independently; complete required trace shape/filter/results production.
-   Reuse existing box query algorithms where all contract arms are proven; add missing data and
-   filters rather than naming the current seam equivalent. Query-time partition remains separate.
-2. Complete the owned environment/body/controller boundary above, starting from retail box
-   construction and the exact clock/activity/contact/deletion reads. Use resident cooked hull and
-   parameter data for the model path only after its default/override/surface semantics are walked.
-   Test real service-created bodies, controller target/solved-pose distinction, blocked movement,
-   active callback order, dt limits and callback-time destruction; fixtures cannot supply bodies.
-3. Complete required think phases and STEP/pusher/relink feedback using those live inputs, then
-   implement independent local/cache frames with these consumers. Their current SetOrigin-driven
-   UE teleport and pre-think SyncMovingNpcRecords cannot remain authoritative publication.
+Implementation order follows the approved plan above, independently of historical run slices:
+1. Authored body inputs, Chaos-created body identity/lifecycle/activity and ordered timing.
+   Use resident cooked hull/parameter data after default/override/surface semantics are walked;
+   no retail compact box/core construction is needed. Slot 237 is already complete independently.
+2. Chaos query/contact outputs with full shape/filter/result rules and ordered mutation callbacks.
+   Reuse existing query algorithms only where their observable contract arms are proven.
+3. Shadow target/solved-pose distinction, permissions, limits, blocked feedback and live lifecycle.
+4. Post-think PhysFrame, NPC sample-think-submit and STEP/pusher feedback with real backend inputs.
+5. Callback/bounds/partition/cache publication, then local/cache frames and absolute setters.
+   Current SetOrigin-driven UE teleport and pre-think SyncMovingNpcRecords are insufficient.
+Test real service-created bodies and observable outputs; fixtures cannot supply absent bodies.
 
 Collision service factory `0x260099f0` returns `0x260f0698`, ctor `0x26009850` installs table
 `0x260c9550`. Slot 18 `0x2600aad0` adjusts `this` by +4 and reaches `CollideGetAABB 0x26021db0`;
@@ -320,12 +320,12 @@ No fake setter/pair producer or full filter implementation was added; the shared
 uses nav tester-first veto order. The special-mask production test deliberately bypasses that
 unfinished tail exactly as retail does. Neither broad trace row nor original run closes.
 
-## Independent complete bbox geometry prerequisite (2026-10-10)
+## Historical independent bbox reconstruction (2026-10-10; removed)
 
-`Collision007#19 2600a310` is implemented by `FElysiumPhysicsCollision::BBoxToCollide` with
+`Collision007#19 2600a310` was implemented by `FElysiumPhysicsCollision::BBoxToCollide` with
 real Source float endpoints, actual immutable compact surface output and explicit allocation
 lifetime. Exact reverse cache2600a480, bootstrap2600a1a0, clone/ordered rewrite2600a050,
-surface builder26009fd0 and append2600a3e0 are complete for this single-box operation.
+surface builder26009fd0 and append2600a3e0 were reproduced for this single-box operation.
 Full point degeneracy alone rejects; plane/line/reversed/tiny/NaN arms retain retail geometry.
 Seed Qhull output permutation/triangle features are retrieved bytes, not invented feature IDs.
 The source representation includes the full412-byte surface/header/ledge/triangle/point/tree,
@@ -334,16 +334,17 @@ boxes. Cache borrows raw pointers; DestroyCollide leaves stale identity and cach
 not own shapes. No safe lifetime modernization was introduced.
 
 Read-only x86 retail probe provenance, shape layout, arithmetic/store order and bounded36/36
-full-byte comparisons are in physics-interaction.md, "Independent BBoxToCollide geometry
-construction". Durable16-output goldens and the public operation/cache lifetime automation
-are production witnesses for this independent constructor. There is no internal helper arena
+full-byte comparisons are in physics-interaction.md, "Historical BBoxToCollide geometry
+construction". The then-tracked16-output goldens and public operation/cache lifetime automation
+were bounded constructor evidence; they were removed with the unreachable reconstruction.
+There was no internal helper arena
 action and no new entity/body construction record: the actual upper caller is still absent.
 
 Historical prerequisite assessment before the owner corrected engine ownership:
 It does **not** close vampire1002dfe0/100a5d80, their surface/default/callback/body arms,
 Collision007#18 world AABB, geometry query, group recheck or ignored-pair mutation. The old
 IVP constructor/core/shape chain remains oracle evidence only. No production consumer requires
-the compact representation; its removal belongs to the next fresh packet. The revised plan above
+the compact representation; the separate packet has removed it. The revised plan above
 instead requires authored body inputs, Chaos identity/lifecycle/activity, ordered contact events
 and shadow target/solved-state feedback with the retail game rules preserved.
 The saved r022a frame/cache packet remains deferred and original run counts stay23/88.
@@ -384,7 +385,7 @@ regressions pass. Evidence/provenance is in the oracle and progress checkpoint. 
 arena action or absent body fixture was added.
 
 This completes an independent authored surface parser input, not the Chaos material/body adapter
-or audible consumers. Next, after compact reconstruction removal, recover/implement the concrete
+or audible consumers. Next, recover/implement the concrete
 entity callback and authored geometry/pose/mass/damping/inertia/material inputs to Chaos body
 identity/create/destroy/activity and ordered postthink timing. Contact filtering/notifications,
 shadow feedback and NPC sample-think-submit follow in the revised plan. IVP core/scheduler,
