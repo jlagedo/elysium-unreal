@@ -44,6 +44,7 @@ public class ElysiumUE : ModuleRules
 		// don't transitively inherit them.
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
+			"ChaosCore", //public semantic triangle query instantiates FImplicitObject bounds
 			"InputCore", "EnhancedInput", "GameInputBase",
 			// Native NPC locomotion: Recast owns the runtime walkable graph, while the
 			// engine AI/path-following stack moves character capsules over it.

@@ -113,10 +113,24 @@ namespace ElysiumModelPhysics
 	};
 	TArray<FShadowEventSample> ShadowEvents(void* Actor); //completed, incarnation-fenced PT observations
 	void ObservePostSolve(UWorld& World); //diagnostic opt-in at next Prepare, automatically retired with world
+	struct FSemanticContactSample
+	{
+		int32 Side = INDEX_NONE, Point = INDEX_NONE, Face = INDEX_NONE, NativeFace = INDEX_NONE;
+		uint16 Selector = 0; bool bHit = false, bDeepest = false, bNativeMaterialPoint = false;
+		TArray<int32> CandidateFaces;
+		TArray<uint16> CandidateSelectors;
+		FVector Position = FVector::ZeroVector, Normal = FVector::ZeroVector;
+		double ResidualCm = 0., SearchCm = 0.;
+	};
+	// Diagnostic only: immutable authored geometry queried by Chaos at real modifier points.
+	// No production geometry, material or coefficient write; no source/native ordinal join.
+	bool ObserveSemanticTriangles(UPrimitiveComponent& Component, const TArray<FVector>& Vertices,
+		const TArray<int32>& Indices, const TArray<uint16>& Selectors, FString& OutError, bool bObserveCompetingTriangles = false);
 	struct FPairMaterialSample
 	{
 		const void* Partner = nullptr; double Time = 0.;
 		double StaticFriction = 0., DynamicFriction = 0., Restitution = 0.;
+		TArray<FSemanticContactSample> SemanticContacts;
 	};
 	TArray<FPairMaterialSample> PairMaterials(void* Actor); //completed modifier POD, opt-in and incarnation-fenced
 	// Called by the production Gameplay tick after thinks, before UE StartPhysics.

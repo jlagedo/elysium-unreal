@@ -1,5 +1,60 @@
 # L0 progress — the orchestrator's log
 
+## Production authored material query diagnostic — 2026-10-11 (after bd132e64)
+
+Reviewed bounded diagnostic reaches the actual native contact modifier before Chaos
+solves, with no coefficient writes. Public immutable Chaos semantic triangle queries
+associate independently authored face interiors with cooked world convex plane3.
+Project-authored contents0x2 derives signature3/common-solid; the same cube source
+feeds the native payload cook. Static body frame is installed before registration.
+Literal interior selectors7/11 and rotated7 pass with residual0 or <=3.25e-7cm.
+This is project-authored source/filter correspondence, not shipped-map proof.
+
+Actual mixed-case point0/deepest(-10,-10,5) and point1(10,10,5) each hit both
+coplanar source triangles0:7 and1:11 at residual0cm. The semantic mesh chooses11;
+point2 uniquely chooses11 and point3 chooses7. Raw helper products are .12/.25 and
+.54/2, while native pair .4200000167/.3000000119 is untouched. Literal assertions
+require exactly2 competing contact points and both selected selectors7/11.
+Retail vphysics.dll2604ec00 consumes ONE feature-link product through2604eb60;
+pair-level Chaos setters do not prove a retail per-point coefficient requirement.
+Public point0 or the query's edge choice has not established retail selection
+equivalence. The bounded diagnostic stops here without an inferred owner divergence.
+
+Query inputs own immutable meshes and copied static frame; installation and output
+are fenced by native UniqueIdx/incarnation or actual world-creation generation.
+Semantic opt-in registers cleanup even without a later Prepare/ObservePostSolve.
+No PT UObject access or native geometry dereference occurs beyond the callback;
+semantic output copies numeric samples alongside existing opaque identity tokens.
+Moving-body association is unproved. Source ledge/native hull ordinal joins, geometry
+replacement, manifold/cadence changes and default material fallbacks were not made.
+
+Final functional4 paths froze before final families/scenario gates in
+E:/elysium-work/codex/l0-world-material-binding-20261011/functional-freeze-trial6/manifest.json
+SHA9468585b10c1a921a85fa88cbd8ea42412077ba1c94e0b8a293c6ccff2f25d86.
+Build152253.915777Z exits0/23s; focused2 at152333.453541Z passes clean; affected31
+at152411.257448Z passes9 ModelPhysics/19 Mover/3 PhysicsSurface,0 failed/notRun/inProcess.
+Scenario2 at152451.090722Z passes/nullfirst_unmet/events290/81; wrapper152450.806881Z
+exits0/25.6s, existing27 startup errors29warnings separate.
+Coordinator default193 at152542.382872Z passes114clean79warned0failed/notRun/inProcess;
+wrapper152542.221700Z exits0/30.1s. Bounded19 at152627.304111Z passes19 across
+arena/sm_hub_1, both hosts exit0, ordinaryfirst_unmet null and2intentional inverted
+refusal passes; wrapper152627.096848Z exits0/65s, existing27errors534warnings separate.
+Doctor152751.088332Z exits0/21existing warnings; repo-only policy152804.975807Z
+exits0/0warnings. All4 live functional hashes still match the final freeze. All46
+worker and32 coordinator original/copied receipt hashes match. Exact source, diff,
+receipts and SHA inventory are in the packet final-manifest.json; coordinator owns
+final independent review and the exact-path local commit.
+
+Trial1 missing ChaosCore link dependency and trial3 invalid static placement/contents
+stimulus were retained before correction; trial3 never reached a contact and is not
+query failure. Reviewed literal mixed assertions and cleanup safeguard supersede
+earlier freezes/gates. No existing valid assertion was weakened. Native bake semantic
+association, process-owned mapping installation and selected coefficient binding remain
+OPEN. Shipped mixed-selector inventory is not reached shipped contact proof. Raw2
+native semantics/FromJson clamp and moving44/178 parity remain OPEN. **0 original
+packages newly closed;23/88 complete,65 remaining.** FullL0/r044/r045 stay OPEN.
+No worker jobs/next packet/commit/push or corpus/gamecontent/golden/audit/hook changes.
+
 ## Authored world material provenance prerequisite — 2026-10-11 (after f327317b)
 
 Reviewed producer scope adds map schema1.2.0 ordered requested-name/atoi-slot

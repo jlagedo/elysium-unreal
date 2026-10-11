@@ -1,5 +1,24 @@
 # Worker runs — L0-entity
 
+## Production semantic query diagnostic — 2026-10-11 (after bd132e64)
+
+Actual production cooked-convex contacts prove independent project-authored interior
+selectors7/11 and rotated7. The mixed coplanar fixture has exactly2 real points
+admitting both selectors at zero residual, with different raw .12/.25 and .54/2
+products. Native coefficients remain untouched. This stops the bounded query
+diagnostic; neither retail representative selection nor reached shipped association
+is proved. No owner divergence or per-point retail requirement is inferred.
+
+Final functional4-path freeze is functional-freeze-trial6/manifest.json under
+E:/elysium-work/codex/l0-world-material-binding-20261011. Final build23s/focused2/
+affected31/scenario2 pass. Coordinator default193 passes114clean79warned0failed;
+bounded19 passes on both hosts, doctor passes with21existing warnings and repo-only
+policy passes with0warnings. All4 functional freeze hashes and all78 original/copied
+receipt hashes match. Exact receipts are in progress.md and final-manifest.json. Trial source/diffs/hashes were retained before
+each correction. Native baked association/process mapping/selected binding remain
+OPEN. Original0 newly closed,23/88 complete65remaining; fullL0/r044/r045 and moving
+parity stay OPEN. Worker leaves no job, commit, push or next packet.
+
 ## World authored selector/declaration producer — 2026-10-11 (after f327317b)
 
 Root/coordinator reviewed precode scope before edits: map schema1.2.0 preserves

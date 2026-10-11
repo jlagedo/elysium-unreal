@@ -1,5 +1,57 @@
 # VtMB's rigid-body world — ragdolls, the physics hands, and the placed physics surface
 
+## Bounded representative material query and production evidence (2026-10-11)
+
+Retail vphysics.dll2604cc80 obtains/reuses the friction link through26050c20 and
+refreshes2604ec00. Constructor2603b4f0 copies the collision pair's two geometry
+feature pointers into it.2604eb60 loops stored records link+8/+1c with body slots
+link+10/+24;2603ea60 obtains triangle byte3&127 from the feature pointer. Thus
+2604ec00 produces ONE link friction/elasticity product. These internal feature/link
+identities establish input selection granularity, not a requirement to reproduce IVP
+topology or a retail per-manifold-point material contract. The prior mapping/current
+body semantics and product formulas remain settled below.
+
+Installed public UE5.8 FConvex::FindMostOpposingFace(position,unitDirection,hint,
+searchDistance) identifies a native plane; inherited GetMaterialIndex returns0.
+Public FContactPairModifier supplies actual geometry, shape transform, contact
+locations/normal and deepest index. Its friction/restitution modifications are
+pair-level. PBDCollisionConstraints.cpp445..457 uses point0.FaceIndex for the entire
+manifold. Deepest and native material point0 are distinct diagnostic labels.
+FTriangleMeshImplicitObject accepts indexed particles and uint16 material indices;
+public Raycast and GetMaterialIndex form an immutable auxiliary Chaos query service.
+Installed signatures, consumers, lifetime and file hashes are retained in
+E:/elysium-work/codex/l0-world-material-binding-20261011/installed-api-evidence.json.
+
+The opt-in production observer preserves native geometry/coefficients/solve order.
+GT owns meshes and copies static body frame plus native UniqueIdx/incarnation or
+world creation generation into PT input. Installation also registers world cleanup.
+PT reads only public geometry/query APIs and emits copied numeric observations.
+No PT UObject access or native geometry dereference occurs beyond the callback;
+semantic output is numeric data alongside existing opaque identity tokens.
+
+Independent project-authored cube source contents0x2 maps to signature3/common-solid;
+the same source vertices cook the native world hull. Literal face interiors7/11 and
+rotated7 associate with native convex plane3, residual0 or <=3.25e-7cm. At a real
+mixed contact, point0/deepest(-10,-10,5) and point1(10,10,5) each hit BOTH source
+triangles0:7 and1:11 at zero residual; whole-mesh Raycast returns11. Other points
+select11 and7 uniquely. Exact2 competing points and both selected selectors are
+asserted. Raw typed helper products against body .6/1 are .12/.25 and .54/2;
+actual native coefficients stay .4200000167/.3000000119. Helper products do not
+prove retail representative selection or selected solved response.
+
+This measured ambiguity satisfies the bounded diagnostic stop condition. Public
+plane identity alone loses coplanar authored triangle distinctions; point location
+and normal at the shared edge admit both selectors. Interior association is viable,
+but choosing point0 or the query's tied result has not been shown to preserve retail
+ONE feature selection. No per-point requirement or owner divergence is inferred.
+No bake expansion, uniform fallback, geometry/manifold/cadence change or coefficient
+write follows. Shipped source inventory is not reached shipped contact evidence;
+static copied-frame proof is not moving-body proof. Baked compatible model/solid/
+contents association, process mapping installation and native representative binding
+remain OPEN, as do raw2 native semantics and normal226/44/178 parity. Exact source,
+trial corrections, production outputs and gates are in production-finding.md,
+final-manifest.json and the L0 pusher walk. Original0 new,23/88 complete65remaining.
+
 ## Authored world collision material selection (2026-10-11)
 
 The world factory is vampire1002e140 ->10158600. Initial static body10158612..64

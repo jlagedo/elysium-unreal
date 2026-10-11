@@ -8,6 +8,7 @@
 #include "ElysiumWorldCollisionActor.h"
 #include "EngineUtils.h"
 #include "Chaos/ContactModification.h"
+#include "Chaos/TriangleMeshImplicitObject.h"
 #include "Chaos/SimCallbackObject.h"
 #include "Chaos/Collision/CollisionConstraintAllocator.h"
 #include "PBDRigidsSolver.h"
@@ -46,6 +47,15 @@ namespace
 		bool bPendingInactive = false;
 	};
 	TArray<FNativeAssociation> NativeAssociations;
+	struct FSemanticQueryAssociation
+	{
+		TWeakObjectPtr<UPrimitiveComponent> Component;
+		const void* Actor;
+		Chaos::FUniqueIdx UniqueIdx; uint64 Generation;
+		TSharedPtr<const Chaos::FTriangleMeshImplicitObject, ESPMode::ThreadSafe> Mesh;
+		TArray<TSharedPtr<const Chaos::FTriangleMeshImplicitObject, ESPMode::ThreadSafe>> TriangleQueries;
+	};
+	TArray<FSemanticQueryAssociation> SemanticQueryAssociations; //GT; diagnostic opt-in only
 	struct FWorldCreationAssociation
 	{
 		void* Actor; Chaos::FUniqueIdx UniqueIdx; TWeakObjectPtr<UElysiumWorldCollisionComponent> Component;
@@ -60,6 +70,9 @@ namespace
 	struct FSolveFilterIdentity
 	{
 		const void* Proxy; Chaos::FUniqueIdx UniqueIdx; bool bWorld; bool bCommonSolid; bool bBaseMask; uint64 Generation;
+		TSharedPtr<const Chaos::FTriangleMeshImplicitObject, ESPMode::ThreadSafe> SemanticQuery;
+		TArray<TSharedPtr<const Chaos::FTriangleMeshImplicitObject, ESPMode::ThreadSafe>> SemanticTriangleQueries;
+		FTransform SemanticToWorld = FTransform::Identity; //copied GT value; fixture/static model frame
 	};
 	struct FShadowEventInput
 	{
@@ -87,6 +100,7 @@ namespace
 		FVector ObservedPose[2] = {FVector::ZeroVector,FVector::ZeroVector};
 		bool bMaterialObserved = false;
 		double StaticFriction = 0., DynamicFriction = 0., Restitution = 0.;
+		TArray<ElysiumModelPhysics::FSemanticContactSample> SemanticContacts;
 	};
 	struct FSolveFilterOutput : Chaos::FSimCallbackOutput
 	{
@@ -265,6 +279,41 @@ namespace
 					Observation.ObservedPose[0] = Pair.GetShapeToWorld(0).GetLocation(); Observation.ObservedPose[1] = Pair.GetShapeToWorld(1).GetLocation();
 					for (int32 PointIndex = 0; PointIndex < Pair.GetNumContacts(); ++PointIndex)
 						Observation.ObservedSeparation = FMath::Min(Observation.ObservedSeparation,static_cast<double>(Pair.GetSeparation(PointIndex)));
+					for (int32 Side = 0; Side < 2; ++Side)
+						if (Identities[Side] && Identities[Side]->SemanticQuery)
+							for (int32 PointIndex = 0; PointIndex < Pair.GetNumContacts(); ++PointIndex)
+							{
+								Chaos::FVec3 Locations[2]; Pair.GetWorldContactLocations(PointIndex,Locations[0],Locations[1]);
+								auto& Sample = Observation.SemanticContacts.AddDefaulted_GetRef();
+								Sample.Side = Side; Sample.Point = PointIndex; Sample.bDeepest = PointIndex == Pair.GetDeepestContactIndex();
+								Sample.bNativeMaterialPoint = PointIndex == 0;
+								const FVector Outward = FVector(Pair.GetWorldNormal(PointIndex)) * (Side == 0 ? -1. : 1.);
+								Sample.Position = Identities[Side]->SemanticToWorld.InverseTransformPosition(FVector(Locations[Side]));
+								Sample.Normal = Identities[Side]->SemanticToWorld.InverseTransformVectorNoScale(Outward).GetSafeNormal();
+								Sample.SearchCm = 1.; //recorded bounded diagnostic ray; never a solve or accepted retail tolerance
+								Chaos::FReal HitTime; Chaos::FVec3 HitPosition, HitNormal;
+								Sample.bHit = Identities[Side]->SemanticQuery->Raycast(Chaos::FVec3(Sample.Position + Sample.Normal * Sample.SearchCm),
+									Chaos::FVec3(-Sample.Normal),2. * Sample.SearchCm,0.,HitTime,HitPosition,HitNormal,Sample.Face);
+								if (Sample.bHit)
+								{
+									Sample.Selector = Identities[Side]->SemanticQuery->GetMaterialIndex(Sample.Face);
+									Sample.ResidualCm = FVector::Distance(Sample.Position,FVector(HitPosition));
+								}
+								const auto NativeToWorld = Pair.GetShapeToWorld(Side);
+								for (int32 TriangleIndex = 0; TriangleIndex < Identities[Side]->SemanticTriangleQueries.Num(); ++TriangleIndex)
+								{
+									int32 CandidateFace = INDEX_NONE;
+									if (Identities[Side]->SemanticTriangleQueries[TriangleIndex]->Raycast(Chaos::FVec3(Sample.Position + Sample.Normal * Sample.SearchCm),
+										Chaos::FVec3(-Sample.Normal),2. * Sample.SearchCm,0.,HitTime,HitPosition,HitNormal,CandidateFace))
+									{
+										Sample.CandidateFaces.Add(TriangleIndex);
+										Sample.CandidateSelectors.Add(Identities[Side]->SemanticTriangleQueries[TriangleIndex]->GetMaterialIndex(CandidateFace));
+									}
+								}
+								if (const auto* Geometry = Pair.GetContactGeometry(Side))
+									Sample.NativeFace = Geometry->FindMostOpposingFace(NativeToWorld.InverseTransformPosition(Locations[Side]),
+										NativeToWorld.InverseTransformVector(Chaos::FVec3(-Outward)),INDEX_NONE,Sample.SearchCm);
+							}
 				}
 			}
 		}
@@ -278,6 +327,8 @@ namespace
 			Registration->Solver->UnregisterAndFreeSimCallbackObject_External(Registration->Callback);
 		SolveFilters.Remove(World);
 		PostSolveObservationWorlds.Remove(World);
+		SemanticQueryAssociations.RemoveAll([World](const auto& Entry)
+		{ return !Entry.Component.IsValid() || Entry.Component->GetWorld() == World; });
 		ForgetCompletedWorld(World);
 		ForgetShadowWorld(World); //callback destructor runs on PT and never touches UObjects
 		WorldCreationAssociations.RemoveAll([World](const FWorldCreationAssociation& Entry)
@@ -326,6 +377,16 @@ namespace
 							Association ? Association->Generation : 0 });
 					}
 		}
+		for (auto& Identity : Input->Identities)
+			if (const auto* Semantic = SemanticQueryAssociations.FindByPredicate([&](const auto& Entry)
+				{ return Entry.Actor == Identity.Proxy && Entry.Component.IsValid() && Entry.Component->GetWorld() == &World
+					&& ElysiumModelPhysics::ActorIdentity(Entry.Component.Get()) == Entry.Actor
+					&& Entry.UniqueIdx == Identity.UniqueIdx && Entry.Generation == Identity.Generation; }))
+			{
+				Identity.SemanticQuery = Semantic->Mesh;
+				Identity.SemanticTriangleQueries = Semantic->TriangleQueries;
+				Identity.SemanticToWorld = Semantic->Component->GetComponentTransform();
+			}
 	}
 	// Chaos can retain cached constraints until its next maintenance step after proxy removal.
 	// A retired producer is distinct from a surviving world contact with null GameData.
@@ -1028,6 +1089,44 @@ void ElysiumModelPhysics::ObservePostSolve(UWorld& World)
 	PostSolveObservationWorlds.Add(&World); //retired at actual world cleanup; takes effect at Prepare
 }
 
+bool ElysiumModelPhysics::ObserveSemanticTriangles(UPrimitiveComponent& Component,
+	const TArray<FVector>& Vertices, const TArray<int32>& Indices, const TArray<uint16>& Selectors, FString& OutError, bool bObserveCompetingTriangles)
+{
+	check(IsInGameThread());
+	if (Indices.Num() == 0 || Indices.Num() % 3 != 0 || Selectors.Num() != Indices.Num()/3)
+	{ OutError = TEXT("semantic triangle/index/selector association is incomplete"); return false; }
+	for (int32 Index : Indices) if (!Vertices.IsValidIndex(Index))
+	{ OutError = TEXT("semantic triangle index is outside authored vertices"); return false; }
+	void* Actor = ActorIdentity(&Component);
+	if (!Actor) { OutError = TEXT("semantic diagnostic requires actual native identity"); return false; }
+	EnsureSolveFilterCleanup(); //retire immutable queries even if no subsequent Prepare/ObservePostSolve occurs
+	Chaos::FTriangleMeshImplicitObject::ParticlesType Particles;
+	Particles.AddParticles(Vertices.Num());
+	for (int32 Index = 0; Index < Vertices.Num(); ++Index) Particles.SetX(Index,Chaos::FVec3f(Vertices[Index]));
+	TArray<Chaos::TVec3<int32>> Elements;
+	for (int32 Index = 0; Index < Indices.Num(); Index += 3)
+		Elements.Add(Chaos::TVec3<int32>(Indices[Index],Indices[Index+1],Indices[Index+2]));
+	TArray<uint16> Materials = Selectors;
+	auto Mesh = MakeShared<Chaos::FTriangleMeshImplicitObject, ESPMode::ThreadSafe>(MoveTemp(Particles),MoveTemp(Elements),MoveTemp(Materials));
+	SemanticQueryAssociations.RemoveAll([&](const auto& Entry) { return Entry.Component.Get() == &Component; });
+	const auto NativeIdentity = CaptureIdentity(Actor);
+	uint64 Generation = NativeIdentity.Incarnation;
+	if (const auto* WorldIdentity = WorldCreationAssociations.FindByPredicate([&](const FWorldCreationAssociation& Entry)
+		{ return Entry.Actor == Actor && Entry.Producer == &Component; })) Generation = WorldIdentity->Generation;
+	auto& Association = SemanticQueryAssociations.Add_GetRef({&Component,Actor,static_cast<Chaos::FSingleParticlePhysicsProxy*>(Actor)->GetGameThreadAPI().UniqueIdx(),Generation,Mesh});
+	if (bObserveCompetingTriangles)
+		for (int32 TriangleIndex = 0; TriangleIndex < Selectors.Num(); ++TriangleIndex)
+		{
+			Chaos::FTriangleMeshImplicitObject::ParticlesType TriangleParticles;
+			TriangleParticles.AddParticles(3);
+			for (int32 Corner = 0; Corner < 3; ++Corner) TriangleParticles.SetX(Corner,Chaos::FVec3f(Vertices[Indices[TriangleIndex*3+Corner]]));
+			TArray<Chaos::TVec3<int32>> TriangleElements = {Chaos::TVec3<int32>(0,1,2)};
+			TArray<uint16> TriangleMaterials = {Selectors[TriangleIndex]};
+			Association.TriangleQueries.Add(MakeShared<Chaos::FTriangleMeshImplicitObject,ESPMode::ThreadSafe>(MoveTemp(TriangleParticles),MoveTemp(TriangleElements),MoveTemp(TriangleMaterials)));
+		}
+	return true;
+}
+
 TArray<ElysiumModelPhysics::FPairMaterialSample> ElysiumModelPhysics::PairMaterials(void* Actor)
 {
 	TArray<FPairMaterialSample> Result;
@@ -1040,7 +1139,7 @@ TArray<ElysiumModelPhysics::FPairMaterialSample> ElysiumModelPhysics::PairMateri
 				if (Entry.Contact.Proxies[Side] == Actor && Entry.Contact.Generations[Side] == Identity.Incarnation
 					&& Entry.Contact.UniqueIds[Side] == static_cast<Chaos::FSingleParticlePhysicsProxy*>(Actor)->GetGameThreadAPI().UniqueIdx()
 					&& !RetiredNativeActors.Contains(const_cast<void*>(Entry.Contact.Proxies[1-Side])))
-					Result.Add({Entry.Contact.Proxies[1-Side], Entry.OutputTime, Entry.Contact.StaticFriction, Entry.Contact.DynamicFriction, Entry.Contact.Restitution});
+					Result.Add({Entry.Contact.Proxies[1-Side], Entry.OutputTime, Entry.Contact.StaticFriction, Entry.Contact.DynamicFriction, Entry.Contact.Restitution, Entry.Contact.SemanticContacts});
 	return Result;
 }
 

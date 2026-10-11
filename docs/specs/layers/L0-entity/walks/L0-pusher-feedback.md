@@ -1,5 +1,35 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Bounded production material association diagnostic (2026-10-11)
+
+Contract/recovery/installed API evidence and production-finding.md are retained in
+E:/elysium-work/codex/l0-world-material-binding-20261011. Public contact geometry,
+shape transform, point location/normal and immutable Chaos triangle Raycast queries
+reach the actual production modifier. Actual world creation generation plus native
+UniqueIdx guard the static semantic installation; copied numeric output has existing
+retirement fences. Opt-in registers world cleanup before owning queries.
+
+Independent project-authored cube contents0x2 derives signature3/common-solid, with
+identical source/native hull inputs and body frame installed before registration.
+Interior7/interior11/rotated7 are literal-proved on actual native convex plane3.
+Shared-edge point0/deepest(-10,-10,5) and point1(10,10,5) each admit triangle0:7
+and triangle1:11 at zero residual. The mesh chooses11 there; remaining points
+uniquely select11 and7. Literal mixed assertions require exactly2 competing points
+and both selectors. Raw typed helper products .12/.25 versus .54/2 are separate
+from native untouched .4200000167/.3000000119. They are not solved selected effects.
+
+vphysics.dll2604ec00/2604eb60 consumes one stored feature-link product. No retail
+per-manifold-point requirement follows from pair-level native coefficients. Public
+primary point0 or a tied query result has not established that representative's
+observable selector/product. The bounded diagnostic stops; no geometry, manifold,
+cadence or material fallback is introduced, and no owner divergence is inferred.
+Future closure still needs baked source model/solid/compatible contents association,
+process mapping installation and representative selected coefficient effect/event
+proof, including reached shipped mixed surfaces. Static fixture correspondence is
+not moving-body or shipped proof. Final build/focused2/affected31/scenario2 and exact
+functional freeze/receipts are in progress.md. Original0 new,23/88 complete65remaining;
+fullL0/r044/r045/moving parity and raw2 native semantics remain OPEN.
+
 ## Authored world material producer prerequisite checkpoint (2026-10-11)
 
 After f327317b, the reviewed bounded packet closes supported IVPS map-triangle

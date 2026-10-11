@@ -2703,4 +2703,132 @@ bool FElysiumNativeMaterialEffectTest::RunTest(const FString&)
 	}
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeMaterialAssociationTest, "Elysium.Substrate.Mover.NativeMaterialAssociation", GElysiumMoverTestFlags)
+bool FElysiumNativeMaterialAssociationTest::RunTest(const FString&)
+{
+	FTestWorldWrapper Fixture;
+	if (!ElysiumDoorCaseTests::OpenEngineWorld(Fixture,this)) return false;
+	UWorld* EngineWorld = Fixture.GetTestWorld();
+	auto* Owner = EngineWorld->SpawnActor<AActor>();
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(Owner,nullptr,Services.Bundle());
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("__native_semantic_query__"); World.Load(MoveTemp(Defs));
+	FElysiumEntityDef Def; Def.Classname = TEXT("info_target");
+	auto* Dynamic = World.Resolve(World.SpawnRuntimeEntity(Def));
+	auto* FloorEntity = World.Resolve(World.SpawnRuntimeEntity(Def));
+	FElysiumPhysicsSurfaceProps Surfaces;
+	Surfaces.ParseSurfaceData(TEXT("semantic-query-controls"),TEXT("default { friction 0.6 elasticity 1 density 1000 } floor { friction 0.4 elasticity 0.5 density 3000 }"));
+	auto* Body = NewObject<UElysiumPhysicsPropComponent>(Owner); Owner->AddInstanceComponent(Body); Body->RegisterComponent();
+	auto* Floor = NewObject<UElysiumPhysicsPropComponent>(Owner); Owner->AddInstanceComponent(Floor); Floor->RegisterComponent();
+	Body->SetWorldLocation(FVector(17,-23,50));
+	FElysiumPhysicsBodyRecipe Recipe; Recipe.Kind = EElysiumPhysicsRecipeKind::Bbox;
+	Recipe.BboxMin = FVector(-10); Recipe.BboxMax = FVector(10); Recipe.MassKg = 1.f;
+	Recipe.LinearDamping = 0.f; Recipe.AngularDamping = 0.f;
+	FString Error;
+	if (!TestTrue(TEXT("semantic query actual native dynamic creation"),ElysiumModelPhysics::CreateBbox(Body,Surfaces,Recipe,false,Error))) return false;
+	Recipe.bStatic = true; Recipe.Surface = TEXT("floor"); Recipe.BboxMin = FVector(-100,-100,-5); Recipe.BboxMax = FVector(100,100,5);
+	if (!TestTrue(TEXT("semantic query actual native static creation"),ElysiumModelPhysics::CreateBbox(Floor,Surfaces,Recipe,false,Error))) return false;
+	void* Actor = ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor = ElysiumModelPhysics::ActorIdentity(Floor);
+	ElysiumModelPhysics::SetGameData(Actor,*Dynamic); ElysiumModelPhysics::SetGameData(FloorActor,*FloorEntity);
+	Dynamic->VPhysicsSetObject(Actor); FloorEntity->VPhysicsSetObject(FloorActor);
+	Body->SetEnableGravity(false);
+	const TArray<FVector> SemanticVertices = {FVector(-100,-100,5),FVector(100,-100,5),FVector(100,100,5),FVector(-100,100,5)};
+	if (!TestTrue(TEXT("immutable authored semantic query installation on actual identity"),ElysiumModelPhysics::ObserveSemanticTriangles(*Floor,SemanticVertices,{0,1,2,0,2,3},{7,7},Error)))
+	{ AddError(Error); return false; }
+	ElysiumModelPhysics::Identity(Body)->SetLinearVelocity(FVector(0,0,-600),false);
+	ElysiumModelPhysics::ObservePostSolve(*EngineWorld);
+	bool bReached = false, bImpact = false;
+	for (int32 Frame = 1; Frame <= 10; ++Frame)
+	{
+		World.BeginNativePhysicsFrame(Frame/60.,1./60.);
+		ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,1.f/60.f,1.f,true); Fixture.TickTestWorld(1.f/60.f);
+		for (const auto& Pair : ElysiumModelPhysics::PairMaterials(Actor)) if (Pair.Partner == FloorActor && !Pair.SemanticContacts.IsEmpty())
+		{
+			bReached = true; bImpact |= ElysiumModelPhysics::Identity(Body)->GetUnrealWorldVelocity().Z > 0.;
+			for (const auto& Sample : Pair.SemanticContacts)
+				AddInfo(FString::Printf(TEXT("SEMANTIC_PRODUCTION,frame=%d,time=%.17g,side=%d,point=%d,deepest=%d,primary0=%d,hit=%d,face=%d,selector=%d,nativeFace=%d,local=%.17g/%.17g/%.17g,normal=%.17g/%.17g/%.17g,residual=%.17g,ray=%.17g,friction=%.17g,restitution=%.17g,velocityZ=%.17g"),Frame,Pair.Time,Sample.Side,Sample.Point,Sample.bDeepest,Sample.bNativeMaterialPoint,Sample.bHit,Sample.Face,Sample.Selector,Sample.NativeFace,Sample.Position.X,Sample.Position.Y,Sample.Position.Z,Sample.Normal.X,Sample.Normal.Y,Sample.Normal.Z,Sample.ResidualCm,Sample.SearchCm,Pair.DynamicFriction,Pair.Restitution,ElysiumModelPhysics::Identity(Body)->GetUnrealWorldVelocity().Z));
+		}
+		World.FinishNativePhysicsFrame();
+	}
+	TestTrue(TEXT("first minimal fixture reaches actual production modifier query"),bReached);
+	TestTrue(TEXT("first minimal fixture reaches actual completed native contact response"),bImpact);
+	ElysiumModelPhysics::Destroy(Body); ElysiumModelPhysics::Destroy(Floor);
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeMaterialAssociationConvexTest, "Elysium.Substrate.Mover.NativeMaterialAssociationConvex", GElysiumMoverTestFlags)
+bool FElysiumNativeMaterialAssociationConvexTest::RunTest(const FString&)
+{
+	for (int32 CaseIndex = 0; CaseIndex < 4; ++CaseIndex)
+	{
+		FTestWorldWrapper Fixture;
+		if (!ElysiumDoorCaseTests::OpenEngineWorld(Fixture,this)) return false;
+		UWorld* EngineWorld = Fixture.GetTestWorld();
+		auto* Owner = EngineWorld->SpawnActor<AActor>();
+		auto* Payload = NewObject<UElysiumMapCollisionPayload>(); Payload->MapName = TEXT("__semantic_world_convex__");
+		constexpr uint32 SourceContents = 0x2;
+		const uint8 SourceSignature = static_cast<uint8>(ElysiumContents::SignatureOf(SourceContents));
+		const bool bSourceCommonSolid = (SourceContents & 0x400b) != 0;
+		TestEqual(TEXT("literal project-authored contents2 has PN signature3"),SourceSignature,static_cast<uint8>(3));
+		FElysiumCollisionHull Hull;
+		for (float X : {-100.f,100.f}) for (float Y : {-100.f,100.f}) for (float Z : {-5.f,5.f}) Hull.Vertices.Emplace(X,Y,Z);
+		Payload->AuthorWorldBody(SourceSignature,{Hull},bSourceCommonSolid);
+		if (!TestTrue(TEXT("semantic source cube cooks unchanged native world convex"),Payload->CreatePhysicsMeshes())) return false;
+		const FTransform ModelFrame(CaseIndex == 3 ? FRotator(0,0,30).Quaternion() : FQuat::Identity,FVector(300,200,100));
+		auto* Collider = EngineWorld->SpawnActor<AElysiumWorldCollisionActor>(ModelFrame.GetLocation(),ModelFrame.Rotator());
+		if (!TestEqual(TEXT("actual world body producer installs source-compatible common-solid partition"),Collider->AuthorFromPayload(Payload),1)) return false;
+		auto* Floor = Collider->Bodies[0].Get();
+		TestTrue(TEXT("static source frame is installed before component registration"),Floor->GetComponentTransform().Equals(ModelFrame,.00001));
+		FElysiumEntityDefs Defs; Defs.MapName = Payload->MapName;
+		FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+		FElysiumRecordingServices Services; FElysiumEntityWorld World(Owner,nullptr,Services.Bundle()); World.Load(MoveTemp(Defs)); World.Activate(0.);
+		FElysiumEntityDef Def; Def.Classname = TEXT("info_target"); auto* Dynamic = World.Resolve(World.SpawnRuntimeEntity(Def));
+		FElysiumPhysicsSurfaceProps Surfaces;
+		Surfaces.ParseSurfaceData(TEXT("semantic-literal-products"),TEXT("default { friction 0.6 elasticity 1 density 1000 } face7 { friction 0.2 elasticity 0.25 } face11 { friction 0.9 elasticity 2 }"));
+		FElysiumWorldMaterialMapping Mapping; FString Error;
+		if (!TestTrue(TEXT("ordered explicit diagnostic selector map"),Surfaces.InstallWorldMaterialTable(Mapping,true,{{TEXT("face7"),TEXT("7")},{TEXT("face11"),TEXT("11")}},Error))) return false;
+		auto* Body = NewObject<UElysiumPhysicsPropComponent>(Owner); Owner->AddInstanceComponent(Body); Body->RegisterComponent();
+		const FVector LocalStart = CaseIndex == 1 ? FVector(-23,17,50) : CaseIndex == 2 ? FVector(0,0,50) : FVector(17,-23,50);
+		Body->SetWorldTransform(FTransform(ModelFrame.GetRotation(),ModelFrame.TransformPosition(LocalStart)));
+		FElysiumPhysicsBodyRecipe Recipe; Recipe.Kind = EElysiumPhysicsRecipeKind::Bbox;
+		Recipe.BboxMin = FVector(-10); Recipe.BboxMax = FVector(10); Recipe.MassKg = 1.f; Recipe.LinearDamping = 0.f; Recipe.AngularDamping = 0.f;
+		if (!TestTrue(TEXT("convex fixture actual dynamic native body"),ElysiumModelPhysics::CreateBbox(Body,Surfaces,Recipe,false,Error))) return false;
+		void* Actor = ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor = ElysiumModelPhysics::ActorIdentity(Floor);
+		ElysiumModelPhysics::SetGameData(Actor,*Dynamic); Dynamic->VPhysicsSetObject(Actor); Body->SetEnableGravity(false);
+		const TArray<FVector> Vertices = {FVector(-100,-100,5),FVector(100,-100,5),FVector(100,100,5),FVector(-100,100,5)};
+		if (!TestTrue(TEXT("world generation-fenced source model0 plane query"),ElysiumModelPhysics::ObserveSemanticTriangles(*Floor,Vertices,{0,1,2,0,2,3},{7,11},Error,true))) { AddError(Error); return false; }
+		ElysiumModelPhysics::Identity(Body)->SetLinearVelocity(ModelFrame.TransformVectorNoScale(FVector(0,0,-600)),false);
+		ElysiumModelPhysics::ObservePostSolve(*EngineWorld);
+		bool bReached = false; TSet<uint16> ReachedSelectors; int32 CompetingPoints = 0;
+		for (int32 Frame = 1; Frame <= 6; ++Frame)
+		{
+			World.BeginNativePhysicsFrame(Frame/60.,1./60.);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,1.f/60.f,1.f,true); Fixture.TickTestWorld(1.f/60.f);
+			for (const auto& Pair : ElysiumModelPhysics::PairMaterials(Actor)) if (Pair.Partner == FloorActor && !bReached)
+			{
+				for (const auto& Sample : Pair.SemanticContacts)
+				{
+					bReached = true; ReachedSelectors.Add(Sample.Selector); CompetingPoints += Sample.CandidateSelectors.Num() > 1;
+					const auto* Selected = Surfaces.ResolveWorldMaterial(Mapping,static_cast<uint8>(Sample.Selector),Surfaces.GetSurfaceData(0));
+					FString Candidates;
+					for (int32 CandidateIndex = 0; CandidateIndex < Sample.CandidateSelectors.Num(); ++CandidateIndex)
+						Candidates += FString::Printf(TEXT("%d:%d;"),Sample.CandidateFaces[CandidateIndex],Sample.CandidateSelectors[CandidateIndex]);
+					AddInfo(FString::Printf(TEXT("SEMANTIC_CONVEX,case=%d,frame=%d,time=%.17g,source=project-authored/model0/solid0/contents0x2,signature=%d,common=%d,point=%d,deepest=%d,primary0=%d,hit=%d,face=%d,selector=%d,nativeFace=%d,local=%.17g/%.17g/%.17g,residual=%.17g,candidates=%s,authoredProductMu=%.17g,authoredProductE=%.17g,nativeMu=%.17g,nativeE=%.17g"),CaseIndex,Frame,Pair.Time,Floor->Signature,Floor->bCommonSolid,Sample.Point,Sample.bDeepest,Sample.bNativeMaterialPoint,Sample.bHit,Sample.Face,Sample.Selector,Sample.NativeFace,Sample.Position.X,Sample.Position.Y,Sample.Position.Z,Sample.ResidualCm,*Candidates,Selected->Friction()*.6f,Selected->Elasticity(),Pair.DynamicFriction,Pair.Restitution));
+					TestTrue(TEXT("actual convex contact query reaches authored source plane"),Sample.bHit && Sample.NativeFace >= 0 && Sample.ResidualCm < .001);
+					if (CaseIndex != 2) TestEqual(TEXT("independent face interior literal selector"),Sample.Selector,static_cast<uint16>(CaseIndex == 1 ? 11 : 7));
+				}
+			}
+			World.FinishNativePhysicsFrame();
+		}
+		TestTrue(TEXT("actual world generation source query reaches production contact"),bReached);
+		if (CaseIndex == 2)
+		{
+			TestEqual(TEXT("literal mixed diagonal has exactly two competing real contact points"),CompetingPoints,2);
+			TestEqual(TEXT("literal mixed manifold selects exactly two authored selectors"),ReachedSelectors.Num(),2);
+			TestTrue(TEXT("literal mixed manifold reaches selector7 and selector11"),ReachedSelectors.Contains(7) && ReachedSelectors.Contains(11));
+		}
+		AddInfo(FString::Printf(TEXT("SEMANTIC_CONVEX_SUMMARY,case=%d,distinctSelected=%d,competingPoints=%d"),CaseIndex,ReachedSelectors.Num(),CompetingPoints));
+		ElysiumModelPhysics::Destroy(Body);
+	}
+	return true;
+}
 #endif // WITH_DEV_AUTOMATION_TESTS
