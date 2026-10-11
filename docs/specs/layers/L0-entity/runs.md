@@ -813,3 +813,49 @@ final-manifest.json. Unchanged pipeline54 and preserved map2 evidence is reused 
 input inventory. Only checkpoint docs followed functional freeze. Exact eleven paths
 are committed by the coordinator; this one run terminates with no push or next worker.
 Original0 newly closed,23/88 complete65remaining and all full-L0 gates remain open.
+
+### Public retail selected material checkpoint — 2026-10-11
+
+One serial Medium coordinator and fresh High worker completed the bounded independent
+public retail material diagnostic from d3a5e35. Collision007 public query methods verify
+an authored cube, assign selectors7/11, and reread unchanged vertices. Public collision
+events directly emit rows12/7 pre/post followed by12/11 pre/post in admitted frame3.
+Contact44 identifies the floor and completed velocity proves a solved response. The12
+frame records and geometry are byte-identical between observer off/on processes.
+Products .12000000476837158/.25 and .54000002145767212/2 are COMPUTED from independently
+verified rows and the confirmed formula; no stored coefficient readback is claimed.
+Pre speed/borrowed relative-speed values are not interpreted as current impact.
+
+Final frozen probe passes all8 installed-fixture regressions at
+E:/elysium-work/codex/l0-retail-material-selection-20261011/runs/20261011T160005.280466Z/index.json
+SHA5d00245eab21fa6dcb7ea78e8f47443f7ce08204c2fa50a622c93011b8b8508c.
+Original wrapper E:/elysium-work/logs/20261011T160005.185611Z-research.json exits0.
+All source/input/output/compile/wrapper originals and copies are indexed with equal
+SHA256 receipts. Initial Windows max-macro compile failure and INVALID NEW totalcount13
+assertion are preserved before correction; settled shadow-once2601598c/totalcount26014de0
+requires14 stored rows while all13 authored row assertions stay literal. No stimulus,
+geometry, clock, material value or valid original expectation was changed to obtain green.
+
+Functional freeze: Python4f6ba78d4b7bab1cd397d1516b429719d4abe685f1e583ca33c606f47b6c94d0,
+C++3912cfd85023e09265723580a4a919c743b4ef948753d4319d26a9ce667894d6,
+oracle ab549e04c1d17fe5be7d04467c7ac452a9eb1bd4d61762c9ed9ac1639bcf449e.
+Protected original contacts hashes a6772d8f/fe46597e remain unchanged. Only independent
+research tooling and oracle/checkpoint docs change. Prior frozen UE build/family/scenario,
+default193 (114clean79warned), bounded19/two-host, doctor and policy evidence in
+E:/elysium-work/codex/l0-world-material-binding-20261011/final-manifest.json remains
+applicable because runtime/content and verification assumptions are unchanged; no engine
+suite rerun is claimed. This checkpoint does not prove full arm/full arena/boot-order closure.
+
+The question is answered and stops here: two selected material events in one admitted
+frame do not justify a single frame-wide product or Chaos point0 policy. Compatible
+shipped model/solid/contents association, native raw2 response and the selected surface/
+response/event adapter remain open. The next consuming game contract is existing
+surface-impact-feedback: CBaseEntity::VPhysicsCollision100a6640/slot230 filters events
+and surface properties before impact sound10031990/10031d50/1002d070, shake10032180 and
+effects10032380. Its same/lower L0 producers must be built with the consumer or confirmed
+already complete; no empty fallback or collision-link topology reconstruction follows.
+Full collision-event dispatcher recovery remains unrecovered here; no address is invented.
+0 original packages newly closed;23/88 complete,65 remaining. No owner divergence,
+production binding, runtime geometry/cadence policy change, corpus/content/golden/audit/
+hook/ledger edit, push or next worker. Final manifest/checkpoint records the proportional
+policy gate and exact-path reviewed local commit; this one run then terminates.

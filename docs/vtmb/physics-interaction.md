@@ -1,5 +1,93 @@
 # VtMB's rigid-body world — ragdolls, the physics hands, and the placed physics surface
 
+## Public retail selected-material diagnostic contract (2026-10-11)
+
+The installed Collision007 table260c9550 supplies public query creation30/2600af50
+and destruction31/2600af70. Query260c96dc supplies convex count1, triangle count2,
+vertices4/2600b070, selector6/2600b100 and setter7/2600b120. The getter returns
+triangle byte3&127; the setter changes only those seven bits. These entries agree
+with the original retained Bloodlines SDK Collision007 public declaration. Authored
+selector assignment can therefore use public APIs after independent geometry
+verification; packed geometry mutation and cooking-ordinal associations are unnecessary.
+
+Installed environment32/26011330 registers the borrowed public collision handler.
+Pre2600edb0 resolves actual contact materials through SurfaceProps11, falling back
+to object19 only for negative row identity, then calls handler0. Post2600ef80 calls
+handler1 and publishes fabs(relative speed dot normal) in Source inches/s. The x86
+32-byte event has objects0/4, surface rows8/12, flags16/17, delta20, post speed24 and
+borrowed collision data28. Public data normal0/2600eee0 points toward event object1;
+point1/2600ef00 and speed2/2600ef40 are Source world values. Callback data are copied
+inside their lifetime. Event normal orientation differs from Chaos's pair normal.
+
+The installed object260c9db0 table ends at70;67/68 are other methods and69/70
+set/get a FLOAT. The next word is FLOAT1/3. A later SDK friction-snapshot declaration
+does not describe this installed public interface. Numeric products in this diagnostic
+are computed from independently verified public surface rows and the already settled
+2604ec00 formula, never labelled stored native coefficient readback.
+
+The separate `vphysics_material_selection` public probe tests one independent cube
+with top selectors7/11 split y=x and a falling bbox. It first verifies public queried
+vertex sets, then literal selector reread and unchanged geometry, actual matched
+pre/post dispatch, Contact44, completed response and observer-on/off trajectories.
+Unexpected geometry or missing branch terminates INVALID without recooking. It uses
+the retained Source-unit/Y-reflection conversion, explicit .015 retail step, admitted
+FLOAT1/60 host dt and public environment clock readback. Initial branch admission imposed
+no contact-frame expectation; frame3 is now an installed-fixture regression.
+Both capturing/no-op handlers outlive bodies/environment, and no-op replaces capturing
+before teardown; null is not installed. The cached bbox is borrowed; the converted
+cube is released after all users. No production geometry, cadence, coefficient binding
+or save state changes. Contract and original SDK/installed evidence are retained at
+E:/elysium-work/codex/l0-retail-material-selection-20261011. Diagnostic only:0new,
+23/88complete,65remaining; shipped association and representative binding remain open.
+
+The first compiled trial20261011T155245.443779Z stopped before geometry because its
+diagnostic assertion confused13 authored rows with the parser's14 total stored rows.
+All13 name/row/property expectations matched. The settled2601598c once-created special
+shadow producer and total-count2/26014de0 explain the extra row. Root reviewed the
+assertion correction to14 plus public name/index/property checks for row13 and f000;
+input geometry, material values and all13 declared row identities remain unchanged.
+This was an invalid diagnostic admission assertion, not a runtime/gameplay divergence.
+
+The reviewed first proof20261011T155539.274901Z reaches the explicit public geometry,
+contact and observer branches. Query reports1 convex/12 triangles, verifies the authored
+top split y=x and selectors7/11, and rereads every vertex byte-identically after public
+selector writes. All13 authored names retain literal rows/properties; ordinary row13
+is `$MATERIAL_INDEX_SHADOW`, name lookup returns f000, and both public property paths
+give .8/0. The independent installed table7/11 is identity, current floor0/body12.
+
+At admitted frame3, env clock is .033333335071802139 before and .050000004470348358
+after; timestep is .014999999664723873, host/admitted dt .01666666753590107. Retail
+emits two ordered matched pre/post collision events: body/floor rows12/7, then12/11,
+with isCollision1/isShadowCollision0. These are direct resolved row identities from
+the actual contact material observer, not selector guesses from equal products.
+Both Source normals(0,0,-1) point toward the second object, the floor. Source event
+points are(3.937007904,3.937007904,2.218404055) then(-3.929641247,-3.929641008,
+2.194220781) inches; their XY positions lie in the corresponding independently
+authored top triangle interiors after Y reflection. No native plane/triangle ordinal
+or event-point plane-residual equivalence is asserted.
+
+Post collisionSpeed is236.22047424316406 then445.83184814453125 Source inches/s.
+Pre collisionSpeed is invalid; copied pre relative-speed data may reflect borrowed
+previous state and is not interpreted as current-impact velocity. First delta is1;
+second is5.417410284280777e-05. Computed raw products from the verified event rows
+are .12000000476837158/.25 and .54000002145767212/2. They are not stored native
+coefficient readback. Public Contact44 reports floor at frame3, and completed body
+velocity changes from(0,0,-236.2204742) to(31.4646454,31.4646473,216.8890381) inches/s.
+The12 completed frame records are byte-identical between observer off/on processes;
+geometry records also agree. These floating values are installed-fixture regression
+evidence, not an engine trajectory blueprint or general material-effect equivalence.
+
+The bounded question is answered: the one independent body/floor stimulus reaches
+two actual selected material event products in one admitted frame. A single frame-wide
+representative product or Chaos point0 substitution is not proved. No homogeneous
+controls, solver reconstruction, coefficient writes or further recovery follow. Exact
+source/input/DLL hashes, outputs and original/copied SHA receipts are retained in
+`runs/20261011T155539.274901Z/` under the evidence directory above. Literal reviewed
+event order/rows/flags, post speeds, clock/contact and noninterference form the probe's
+regression gate. Next consuming closure remains supported production authored binding
+with compatible shipped model/solid/contents association and an observable representative
+policy. This diagnostic closes0 original packages:23/88complete,65remaining.
+
 ## Bounded representative material query and production evidence (2026-10-11)
 
 Retail vphysics.dll2604cc80 obtains/reuses the friction link through26050c20 and
