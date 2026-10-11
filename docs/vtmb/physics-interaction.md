@@ -482,6 +482,78 @@ and pending forced increments remain open. Chaos retains solver, geometry, mecha
 and scheduling ownership. Finite tensor and semantic material remain unresolved;
 pair combine is independently queued. Full L0 and original23/88 remain OPEN.
 
+## Base entity velocity query (D02/P1, 2026-10-11)
+
+`CBaseEntity::GetVelocity` vampire.dll `0x100ad1a0` (slot199) reads the **current**
+`m_pPhysicsObject+0x36c` first. A nonnull object supplies slot40 (`vtable+0xa0`).
+When angular output is requested, `100ad225..100ad246` passes a temporary Vector to
+the object and copies its `(y,z,x)` into the entity output: QAngle pitch/yaw/roll.
+The decompiler's physical-angular arm is damaged; assembly establishes this reorder.
+With no object, `100ad272..100ad2b3` copies each requested local field directly:
+`m_vecVelocity+0x3d4` and `m_vecAngVelocity+0x3c8`. It does not calculate absolute
+velocity, read the parent frame, clear dirty flags or change entity state. Linear is
+written before angular; sharing the two output buffers therefore leaves angular.
+
+Both outputs are independently optional. Object table `260c9db0` slot40 points to
+vphysics.dll `26017f50`; `26017f50..26017ff2` returns before core access if both
+pointers are null. Linear sums current velocity and pending increments, then converts
+IVP world `(x,y,z)` to Source `(x,z,-y)*39.370079f` (`260c948c`): inches/second.
+Angular sums its three local rotation-rate fields, converts `(x,z,-y)*57.29578f`
+(`260c919c`), and the base getter reorders that result to QAngle rates. These are
+degrees/second, **not** world angular axes and not Euler-angle differences per frame.
+
+The frame distinction is established by object point-velocity getter `26018000`:
+`26018045..26018072` rotates those same local angular sums with the core matrix via
+`2602a300` before the world displacement cross product. Setter39 `260183b0` writes
+the local angular fields without world rotation. For the reached model/bbox creators,
+`260189f0` builds an identity matrix with `26028ee0` and supplies only optional mass
+center translation through `2602a4b0`; `26018ba0` supplies no rotated mass transform.
+`2602dcf0` initializes the relative quaternion pointer to null, and `2602ea60` uses
+identity local quaternion plus the center translation. The observable frame is their
+creation-aligned body axes. A future rotated relative-core creation is unrecovered;
+this query does not implement an IVP topology or native inertia-axis convention.
+
+The port's linear fields and gameplay world positions use reflected Unreal
+centimetres, so the native world cm/s output already matches the fallback and its
+position consumers. The angular fields retain Source QAngle degrees. For native
+world angular velocity `W` in radians/s and solved actor quaternion `R`, read
+`L=R.UnrotateVector(W)` and return `(L.y,-L.z,-L.x)*57.29578f`. The reflected basis
+changes axial-vector signs before the retail QAngle reorder. Chaos principal inertia
+axes are distinct from those body axes; they do not replace the semantic query frame.
+`ElysiumModelPhysics::GetVelocity` uses existing live `ComponentFor`/`Identity`, one
+supported native read lock and `GetUnrealWorldTransform_AssumesLocked(false,true)`:
+actual global actor pose, excluding kinematic targets and custom projection callbacks.
+It reads the latest synchronized native state at caller time; it advances no clock,
+does no solve, publishes no target and requires no saved-body recipe or material.
+
+The existing current-reference contract applies immediately: SetObject clear is
+nondestructive, Swap changes the source without destroying either body, and225 native
+retirement clears every alias before release. A null current field then uses local
+fallback. Invalid nonnull native identity has no defined retail recovery; the adapter
+reports failure without writing outputs and the base diagnoses that broken invariant.
+Both-null remains legal without native lookup. No persistent state/schema is added.
+
+Observers include sound-owner StartTask callsite `10282c65` and self obstruction query
+`103c0626`, but neither proves base dispatch for every receiver. Animating199
+`10095e50` delegates for movetype7 or absent flags bit1; otherwise it reads sequence
+motion plus local angular fields. Its current port override remains L1 work. The
+production witness uses `FElysiumPhysProp : FElysiumEntity` directly, so real model
+Spawn reaches the implemented base virtual slot. Native `ModelPhysics.BaseVelocity`
+proves actual solved motion before optional-output assertions; a rotated body with
+world `W=(-.5,.25,.75)` has literal QAngle `(28.64789,-42.971835,-14.323945)` even
+with a distinct native principal mass frame. It covers nullable/aliased outputs,
+parented local fallback and dirty-word preservation, clear/swap, recipe independence
+and actual225 alias fallback before release. Arena `l0_physics_velocity` queries a
+real falling prop, all optional-output arms and bodyless authored fields; its bounded
+225 dispatch exercises existing removal followed by same-live-receiver199 fallback.
+The native prop is an initial scene row through the existing map model preparation
+barrier. Arena BuildRow mirrors the sidecar's non-NPC `.mdl` static stem/full rotation
+annotations using `PropModelStem`; canonical skeletal identity is not the static stem.
+The first retained arena failure had a bodyless runtime-spawn stimulus (`object=0`);
+the repaired fixture retains the strict `object=1` native assertions.
+No gameplay input is added. Full body interfaces/filtering, P1 lifecycle closing list,
+P2/P3, animating/NPC consumer wiring and D02 closure remain open.
+
 ## Supported shape and shadow mechanical readback (2026-10-11)
 
 The bounded observer remains normal START_OPEN/InputClose active226 ->100a55b0,

@@ -1,66 +1,39 @@
-# Next bounded packet candidate — P1 velocity contract
+# Next bounded packet — P1 body/lifetime closing witness
 
-Prepared by the planning review, 2026-10-11. **Not dispatched.** The owner has authorized resume
-under `goal.md`; use after main accepts the plan and reconciles its sound packet at `8f8aea1b`.
-Check current source and
-receipts before using this candidate; do not redo it if main has already completed the contract.
+Read [goal.md](goal.md) and [checkpoint.md](checkpoint.md). Base GetVelocity199 `0x100ad1a0`
+is implemented and accepted; reuse its packet/receipts at
+`E:/elysium-work/codex/l0-p1-velocity-20261011/`. Do not replay that recovery or add P2 to it.
 
-## Concrete gap and observer
+## Select the remaining P1 contract
 
-At the reviewed source snapshot, `FElysiumEntity::GetVelocity` in
-`Source/ElysiumUE/Private/Substrate/ElysiumEntitySlots.cpp` only fires the slot diagnostic and
-writes neither optional output. The original D02 story identifies retail `0x100ad1a0`: read
-linear/angular velocity from a real physics object, otherwise use the entity-field fallback.
+P1 maps `L0.physics.physics-object-contract-1` (SetObject/Swap) and
+`L0.physics.physics-object-contract-6` (owned native saved state). Its closing obligation also
+joins actual body creation, identity, enumeration/velocity, replacement/removal and stale
+callback/alias fences across reached model, static bbox and shadow caller arms.
 
-This is a gameplay velocity query, not engine storage. Existing port consumers include the
-owner velocity query in `ElysiumNpcBaseStartTask.cpp` (retail callsite `0x10282c65`) and the
-self query in `ElysiumNpcRunAi.cpp` (`0x103c0626`). These name the semantic observer, not proof
-that all their receiver types use the base body: confirm base-versus-animating dispatch before
-selecting the witness. The L1 animating override and L4 task logic stay outside this packet.
+First inspect the current code and retained walk sections/receipts. Existing native tests
+NativeInputs, PlacedCaller, SavedBody, BboxRecipeService, StaticBboxCaller and ParentShadowFrame
+already prove selected arms. Separate accepted contracts from older open historical prose;
+internal IVP differences alone do not establish a missing producer. Name every remaining
+requirement's authored field, caller, native save field or gameplay/event observer.
 
-`uv run elysium research where 0x100ad1a0` found no hand-written implementation citation at the
-planning snapshot. Its index points to `secondary_motion.md`, but `research section` found no
-matching section and the file did not contain this address. Do not call that a confirmed walk.
-Reuse the object/lifetime walk; recover only this getter's exact outputs, fallback, units/frame
-and caller contract if no confirmed body walk exists.
+Return a compact precode packet identifying the first actual gap, its same/lower producers,
+units/frames/phase/state/failure/lifetime contract, permitted files and real closing witness.
+If implemented contracts suffice, assemble a coherent P1 integration acceptance record with
+production bodies and native save/reconstruction instead of rewriting them. Missing required
+producer behavior is implemented with its consumer. A record cannot close by omitting an
+unsupported required body. Keep contact filters/results, GetCollideable and full shadow motion,
+clock/pose/bounds publication in E2/P2/P3 unless this P1 observer demonstrably requires an arm.
 
-## Scope and production inputs
+## Evidence and stop boundary
 
-- Source brief: the getter portion of `L0.physics.physics-object-contract-2`; D02 P1 supplies
-  velocity service, while P2 retains that brief's filtering/interface closure.
-- Use actual body identity and the supported native physics readback service. Do not create a
-  second body registry or expose an IVP layout/vtable to satisfy the getter.
-- Prove the required read phase and Source/Unreal unit conversion using the existing adapter.
-  If an actual producer is missing, name it and repair this packet's prerequisite; do not return
-  a fabricated zero or fold target pose/velocity into solved body state.
-- Expected files: the base slot implementation, existing
-  `Private/Substrate/ElysiumModelPhysics.{h,cpp}` only if a semantic query is missing, and
-  focused tests/arena instrumentation. No sound, solver, geometry, higher-layer gameplay or
-  broad save/import changes.
+Reuse [walks/L0-physics-producer.md](walks/L0-physics-producer.md), targeted physics-interaction.md
+sections and actual native tests. Use public APIs and current producer paths; no duplicate
+body registry, target substituted for solved pose, save recipe manufactured to pass a query,
+IVP clone or empty same-layer seam. Any remaining higher-layer reconstruction obligation names
+its explicit handoff. Existing gameplay divergence is not silently accepted.
 
-## Acceptance
-
-1. A production-created body with deliberately distinct logical and native motion reports the
-   authoritative linear and angular values through the real base-entity slot.
-2. Linear-only, angular-only and both-output calls preserve optional-output behavior. Recover
-   the null-output arm before specifying an assertion; do not infer an unsafe dereference.
-3. A nonphysical entity uses the actual retail fallback fields; clearing/replacing/retiring a
-   body switches source correctly and never reads a stale native object.
-4. Units, angular convention and read phase are explicit. The witness observes the gameplay
-   query output, not simply that a Chaos method was called.
-5. Register a bounded executable velocity record. The original broad
-   `l0_physics_object_contract` scenario was not found under `Arena/scenarios` at review time;
-   it still needs later complete group/impulse/swap/interface coverage and must not be marked
-   passing or complete by this getter packet.
-
-Existing affected tests include `Elysium.Substrate.ModelPhysics.`. Add only meaningful cases
-that distinguish native/fallback/lifetime behavior. Run related mover coverage if its adapter
-path changes. Worker runs build and focused records; coordinator independently reviews and
-runs build/default/affected arena gates, then makes an exact-path local commit and checkpoint.
-No push. Report the P1 contract closed and the remaining P1/P2/P3 requirements, not r045 or L0 done.
-
-## Boundary after this packet
-
-Return to the P1 ownership/lifetime closing list. `GetCollideable` was also still a null-returning
-slot at review time, but it belongs to the separate P2 query/interface contract. Do not append
-all of P2, ragdoll handoff, impact audio or constraints to this velocity run.
+One fresh Sol High worker, one run, no nested workers, no staging/commit/push. Prove the
+production branch first; focused development checks, then freeze for main's independent
+review/build/default/affected arena and baseline gates. Main commits/checkpoints before
+proceeding. This packet is a selection/reconciliation boundary, not a claim P1/D02/L0 is closed.

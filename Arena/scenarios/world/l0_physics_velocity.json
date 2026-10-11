@@ -1,0 +1,36 @@
+{
+  "name": "l0_physics_velocity",
+  "about": "Bounded D02/P1 CBaseEntity GetVelocity slot199 vampire.dll100ad1a0. Initial prop_physics row crosses actual map model preparation before Spawn, owns selected .phy native motion and directly inherits base199; actual Chaos gravity advances before the query. info_target supplies direct local-field fallback. Independent optional outputs and actual225 removal then fallback are observed. Native ModelPhysics.BaseVelocity separately proves rotated three-axis QAngle mapping, optional aliasing, current-body swaps, recipe independence and reference retirement before release. Animating19910095e50 and higher NPC consumers remain outside this record; no full physics object/filter/interface or P1/D02 closure.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.1,
+  "player": { "at": "start" },
+  "rows": [
+    { "classname": "prop_physics", "name": "velocity_native", "at": [500, 500, 400], "keys": { "model": "models/scenery/street/trashcan1/trashcan1_base.mdl", "spawnflags": "0", "velocity": "10 20 30", "avelocity": "40 50 60" } }
+  ],
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "info_target", "name": "velocity_local", "at": [800, 500, 400], "keys": { "velocity": "7 -11 13", "avelocity": "17 -19 23" } } },
+    { "t": 0.30, "do": "entity_call", "target": "velocity_native", "function": "GetVelocity", "args": [] },
+    { "t": 0.35, "do": "entity_call", "target": "velocity_native", "function": "GetVelocity", "args": [true, false] },
+    { "t": 0.40, "do": "entity_call", "target": "velocity_native", "function": "GetVelocity", "args": [false, true] },
+    { "t": 0.45, "do": "entity_call", "target": "velocity_native", "function": "GetVelocity", "args": [false, false] },
+    { "t": 0.50, "do": "entity_call", "target": "velocity_local", "function": "GetVelocity", "args": [] },
+    { "t": 0.55, "do": "entity_call", "target": "velocity_local", "function": "GetVelocity", "args": [true, false] },
+    { "t": 0.60, "do": "entity_call", "target": "velocity_local", "function": "GetVelocity", "args": [false, true] },
+    { "t": 0.65, "do": "entity_call", "target": "velocity_local", "function": "GetVelocity", "args": [false, false] },
+    { "t": 0.70, "do": "entity_call", "target": "velocity_native", "function": "VPhysicsDestroyObject", "args": [] },
+    { "t": 0.75, "do": "entity_call", "target": "velocity_native", "function": "GetVelocity", "args": [] }
+  ],
+  "expect": [
+    { "label": "native_both", "who": "velocity_native", "kind": "script", "match": "entity_call GetVelocity done object=1 requested=1,1 written=1 unrequested_preserved=1 linear_moving=1", "by": 0.33 },
+    { "label": "native_linear", "who": "velocity_native", "kind": "script", "match": "object=1 requested=1,0 written=1 unrequested_preserved=1 linear_moving=1", "by": 0.38 },
+    { "label": "native_angular", "who": "velocity_native", "kind": "script", "match": "object=1 requested=0,1 written=1 unrequested_preserved=1 linear_moving=0 linear=- angular=X=0.000 Y=-0.000 Z=-0.000", "by": 0.43 },
+    { "label": "native_neither", "who": "velocity_native", "kind": "script", "match": "object=1 requested=0,0 written=1 unrequested_preserved=1 linear_moving=0 linear=- angular=-", "by": 0.48 },
+    { "label": "fallback_both", "who": "velocity_local", "kind": "script", "match": "object=0 requested=1,1 written=1 unrequested_preserved=1 linear_moving=1 linear=X=7.000 Y=-11.000 Z=13.000 angular=X=17.000 Y=-19.000 Z=23.000", "by": 0.53 },
+    { "label": "fallback_linear", "who": "velocity_local", "kind": "script", "match": "object=0 requested=1,0 written=1 unrequested_preserved=1 linear_moving=1 linear=X=7.000 Y=-11.000 Z=13.000 angular=-", "by": 0.58 },
+    { "label": "fallback_angular", "who": "velocity_local", "kind": "script", "match": "object=0 requested=0,1 written=1 unrequested_preserved=1 linear_moving=0 linear=- angular=X=17.000 Y=-19.000 Z=23.000", "by": 0.63 },
+    { "label": "fallback_neither", "who": "velocity_local", "kind": "script", "match": "object=0 requested=0,0 written=1 unrequested_preserved=1 linear_moving=0 linear=- angular=-", "by": 0.68 },
+    { "label": "actual_remove", "who": "velocity_native", "kind": "script", "match": "entity_call VPhysicsDestroyObject done object=0", "by": 0.73 },
+    { "label": "removed_fallback", "who": "velocity_native", "kind": "script", "match": "object=0 requested=1,1 written=1 unrequested_preserved=1 linear_moving=1 linear=X=10.000 Y=20.000 Z=30.000 angular=X=40.000 Y=50.000 Z=60.000", "by": 0.78 }
+  ]
+}

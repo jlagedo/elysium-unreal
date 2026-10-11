@@ -1682,4 +1682,156 @@ bool FElysiumNativeTouchDispatchTest::RunTest(const FString&)
  TestFalse(TEXT("retirement releases the surviving native receiver's pair"),Dynamic->IsCurrentlyTouching());
  return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBaseVelocityTest, "Elysium.Substrate.ModelPhysics.BaseVelocity",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumBaseVelocityTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture VelocityFixture;
+	if (!VelocityFixture.CreateWorld(*this)) return false;
+	auto* VelocityMap = VelocityFixture.SpawnMapActorDeferred();
+	auto* VelocityPlaced = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* VelocitySkins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	TSet<FSoftObjectPath> VelocityPaths; FString VelocityError;
+	if (!TestTrue(TEXT("production velocity model catalogue"), FElysiumPreparedPropModels::GatherPaths(VelocityPlaced, VelocitySkins,
+		{ ElysiumModelPhysicsTest::BodyId }, VelocityPaths, VelocityError))) return false;
+	TArray<UObject*> VelocityAssets;
+	for (const auto& AssetPath : VelocityPaths) VelocityAssets.Add(AssetPath.TryLoad());
+	auto VelocityPrepared = FElysiumPreparedPropModels::Create(VelocityMap, 1, VelocityPlaced, VelocitySkins,
+		{ ElysiumModelPhysicsTest::BodyId }, VelocityAssets, VelocityError);
+	if (!TestTrue(TEXT("production velocity model preparation"), VelocityPrepared.IsValid())) return false;
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(VelocityMap); };
+	FElysiumWorldServices VelocityServices; VelocityServices.Embodiment = VelocityMap;
+	FElysiumEntityWorld VelocityWorld(VelocityMap, nullptr, VelocityServices);
+	FElysiumEntityDefs VelocityDefs; VelocityDefs.MapName = TEXT("base_velocity_native"); VelocityWorld.Load(MoveTemp(VelocityDefs));
+	auto VelocityDef = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("velocity_body"));
+	VelocityDef.Origin = FVector(5000, 4000, 3000);
+	FElysiumEntity* VelocityEntity = VelocityWorld.Resolve(VelocityWorld.SpawnRuntimeEntity(MoveTemp(VelocityDef)));
+	if (!TestNotNull(TEXT("registered prop_physics receiver"), VelocityEntity)) return false;
+	auto* VelocityProp = static_cast<FElysiumPhysProp*>(VelocityEntity); //FElysiumPhysProp inherits base199 directly.
+	auto* VelocityNative = ElysiumModelPhysics::Identity(VelocityProp->Visual);
+	if (!TestNotNull(TEXT("real Spawn selected .phy dynamic native body"), VelocityNative)) return false;
+	TestTrue(TEXT("real native simulation is admitted"), VelocityProp->Visual->IsSimulatingPhysics());
+	VelocityProp->Visual->SetEnableGravity(false);
+	VelocityProp->Visual->SetLinearDamping(0.f); VelocityProp->Visual->SetAngularDamping(0.f);
+	VelocityNative->SetBodyTransform(FTransform(FRotator(0, 90, 0), FVector(5000, 4000, 3000)), ETeleportType::TeleportPhysics);
+	VelocityEntity->Velocity = FVector(700, 800, 900); VelocityEntity->AngularVelocity = FVector(9, 10, 11);
+	VelocityNative->SetLinearVelocity(FVector(101, -53, 17), false);
+	VelocityNative->SetAngularVelocityInRadians(FVector(-.5, .25, .75), false);
+	const FVector VelocityBefore = VelocityNative->GetUnrealWorldTransform().GetLocation();
+	if (!TestTrue(TEXT("actual native frame advances"), VelocityFixture.TestWorld.TickTestWorld(.02f))) return false;
+	const FTransform VelocitySolved = VelocityNative->GetUnrealWorldTransform(false, true);
+	const FVector VelocityLinear = VelocityNative->GetUnrealWorldVelocity();
+	const FVector VelocityLocalAngular = VelocitySolved.GetRotation().UnrotateVector(VelocityNative->GetUnrealWorldAngularVelocityInRadians());
+	FVector VelocityQueryLinear(-1), VelocityQueryAngular(-1);
+	VelocityEntity->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular); //real base-slot virtual dispatch
+	AddInfo(FString::Printf(TEXT("BASE_VELOCITY_PROOF object=%d moved_cm=%.9g native_cm_s=%s query_cm_s=%s local_rad_s=%s query_qangle_deg_s=%s"),
+		VelocityEntity->VPhysicsGetObject() != nullptr, (VelocitySolved.GetLocation()-VelocityBefore).Size(), *VelocityLinear.ToString(),
+		*VelocityQueryLinear.ToString(), *VelocityLocalAngular.ToString(), *VelocityQueryAngular.ToString()));
+	TestTrue(TEXT("production fixture truly moved in native solve"), (VelocitySolved.GetLocation()-VelocityBefore).Size() > .5);
+	TestTrue(TEXT("virtual base query reads authoritative native world cm/s"), VelocityQueryLinear.Equals(VelocityLinear, .0001));
+	TestFalse(TEXT("native query differs from deliberately distinct logical velocity"), VelocityQueryLinear.Equals(VelocityEntity->Velocity, .0001));
+	TestTrue(TEXT("rotated base query returns body-local pitch yaw roll degrees/s"), VelocityQueryAngular.Equals(
+		FVector(VelocityLocalAngular.Y, -VelocityLocalAngular.Z, -VelocityLocalAngular.X) * 57.29578f, .0001));
+	TestFalse(TEXT("native angular query differs from local logical angular fields"), VelocityQueryAngular.Equals(VelocityEntity->AngularVelocity, .0001));
+	// Fixed rotated three-axis stimulus, after proving actual production solve above. The
+	// native inertia principal frame is deliberately different from the body query frame.
+	FTransform VelocityMassFrame = VelocityNative->GetMassSpaceLocal();
+	VelocityMassFrame.SetRotation(FRotator(17, 31, 23).Quaternion());
+	VelocityNative->SetMassSpaceLocal(VelocityMassFrame);
+	VelocityNative->SetBodyTransform(FTransform(FRotator(0, 90, 0), FVector(5000, 4000, 3000)), ETeleportType::TeleportPhysics);
+	VelocityNative->SetLinearVelocity(FVector(101, -53, 17), false);
+	VelocityNative->SetAngularVelocityInRadians(FVector(-.5, .25, .75), false);
+	const FVector VelocityExpectedLinear(101, -53, 17), VelocityExpectedAngular(28.64789, -42.971835, -14.323945);
+	VelocityEntity->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular);
+	TestTrue(TEXT("literal rotated-body pitch yaw roll independent of principal inertia axes"), VelocityQueryAngular.Equals(VelocityExpectedAngular, .0001));
+	TestTrue(TEXT("literal native world cm/s has no extra inches scaling or reflection"), VelocityQueryLinear.Equals(VelocityExpectedLinear, .0001));
+	const FVector VelocitySentinel(98765, -43210, 11223);
+	VelocityQueryLinear = VelocitySentinel; VelocityQueryAngular = VelocitySentinel;
+	VelocityEntity->GetVelocity(&VelocityQueryLinear, nullptr);
+	TestTrue(TEXT("native linear-only call"), VelocityQueryLinear.Equals(VelocityExpectedLinear, .0001));
+	TestEqual(TEXT("native linear-only preserves other storage"), VelocityQueryAngular, VelocitySentinel);
+	VelocityQueryLinear = VelocitySentinel;
+	VelocityEntity->GetVelocity(nullptr, &VelocityQueryAngular);
+	TestTrue(TEXT("native angular-only call"), VelocityQueryAngular.Equals(VelocityExpectedAngular, .0001));
+	TestEqual(TEXT("native angular-only preserves other storage"), VelocityQueryLinear, VelocitySentinel);
+	VelocityEntity->GetVelocity(nullptr, nullptr);
+	TestEqual(TEXT("native both-null leaves linear storage"), VelocityQueryLinear, VelocitySentinel);
+	VelocityEntity->GetVelocity(&VelocityQueryAngular, &VelocityQueryAngular);
+	TestTrue(TEXT("shared output storage receives angular last"), VelocityQueryAngular.Equals(VelocityExpectedAngular, .0001));
+	FElysiumEntityDef VelocityFallbackDef; VelocityFallbackDef.Classname = TEXT("info_target"); VelocityFallbackDef.TargetName = TEXT("velocity_fallback");
+	FElysiumEntity* VelocityFallback = VelocityWorld.Resolve(VelocityWorld.SpawnRuntimeEntity(VelocityFallbackDef));
+	VelocityFallbackDef.TargetName = TEXT("velocity_parent");
+	FElysiumEntity* VelocityParent = VelocityWorld.Resolve(VelocityWorld.SpawnRuntimeEntity(MoveTemp(VelocityFallbackDef)));
+	if (!VelocityFallback || !VelocityParent) return false;
+	VelocityParent->SetAngles(FRotator(19, 73, 11));
+	VelocityParent->Velocity = FVector(200, 300, 400);
+	VelocityFallback->SetParent(VelocityParent, 0);
+	VelocityFallback->Velocity = FVector(7, -11, 13); VelocityFallback->AngularVelocity = FVector(17, -19, 23);
+	VelocityFallback->EFlags |= 0x3000u;
+	const uint32 VelocityDirtyBefore = VelocityFallback->EFlags;
+	const FVector VelocityFallbackLinear = VelocityFallback->Velocity, VelocityFallbackAngular = VelocityFallback->AngularVelocity;
+	VelocityFallback->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular);
+	TestEqual(TEXT("bodyless parented query copies local velocity without absolute refresh"), VelocityQueryLinear, VelocityFallbackLinear);
+	TestEqual(TEXT("bodyless query copies QAngle fields verbatim"), VelocityQueryAngular, VelocityFallbackAngular);
+	TestEqual(TEXT("fallback query preserves transform dirty flags"), VelocityFallback->EFlags, VelocityDirtyBefore);
+	VelocityQueryLinear = VelocitySentinel; VelocityQueryAngular = VelocitySentinel;
+	VelocityFallback->GetVelocity(&VelocityQueryLinear, nullptr);
+	TestEqual(TEXT("fallback linear-only"), VelocityQueryLinear, VelocityFallbackLinear);
+	TestEqual(TEXT("fallback linear-only preserves other storage"), VelocityQueryAngular, VelocitySentinel);
+	VelocityQueryLinear = VelocitySentinel;
+	VelocityFallback->GetVelocity(nullptr, &VelocityQueryAngular);
+	TestEqual(TEXT("fallback angular-only"), VelocityQueryAngular, VelocityFallbackAngular);
+	TestEqual(TEXT("fallback angular-only preserves other storage"), VelocityQueryLinear, VelocitySentinel);
+	VelocityFallback->GetVelocity(nullptr, nullptr);
+	VelocityFallback->GetVelocity(&VelocityQueryAngular, &VelocityQueryAngular);
+	TestEqual(TEXT("fallback shared output angular wins"), VelocityQueryAngular, VelocityFallbackAngular);
+	void* VelocityObject = VelocityEntity->VPhysicsGetObject();
+	VelocityEntity->VPhysicsSetObject(nullptr); //100a6490 reference-only clear, retains owned native producer.
+	VelocityEntity->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular);
+	TestEqual(TEXT("clear current object switches linear to logical field"), VelocityQueryLinear, VelocityEntity->Velocity);
+	TestEqual(TEXT("clear current object switches angular to logical field"), VelocityQueryAngular, VelocityEntity->AngularVelocity);
+	TestNotNull(TEXT("reference-only clear preserves native body"), ElysiumModelPhysics::ComponentFor(VelocityObject));
+	VelocityEntity->VPhysicsSetObject(VelocityObject);
+	auto VelocitySecondDef = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("velocity_second"));
+	VelocitySecondDef.Origin = FVector(-5000, -4000, 3000);
+	auto* VelocitySecond = static_cast<FElysiumPhysProp*>(VelocityWorld.Resolve(VelocityWorld.SpawnRuntimeEntity(MoveTemp(VelocitySecondDef))));
+	if (!VelocitySecond || !ElysiumModelPhysics::Identity(VelocitySecond->Visual)) return false;
+	auto* VelocitySecondNative = ElysiumModelPhysics::Identity(VelocitySecond->Visual);
+	VelocitySecondNative->SetLinearVelocity(FVector(-31, 47, -59), false);
+	VelocityEntity->VPhysicsSwapObject(VelocitySecond->VPhysicsGetObject());
+	VelocityEntity->GetVelocity(&VelocityQueryLinear, nullptr);
+	TestTrue(TEXT("current-object replacement reads second authoritative body"), VelocityQueryLinear.Equals(FVector(-31, 47, -59), .0001));
+	TestNotNull(TEXT("replacement leaves first owned body alive"), ElysiumModelPhysics::ComponentFor(VelocityObject));
+	VelocityEntity->VPhysicsSwapObject(VelocityObject);
+	VelocityFallback->VPhysicsSetObject(VelocityObject); //independent registered base alias.
+	// Serialization eligibility is not a gameplay input. Retire only recipe association;
+	// native reference/identity continue to serve real queries until actual225 removal.
+	ElysiumModelPhysics::RetireRecipe(VelocityProp->Visual);
+	TestNull(TEXT("velocity fixture has no save recipe"), ElysiumModelPhysics::RecipeFor(VelocityObject));
+	VelocityFallback->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular);
+	TestTrue(TEXT("base alias query ignores absent save recipe"), VelocityQueryLinear.Equals(VelocityExpectedLinear, .0001));
+	bool bVelocityRetirementObserved = false;
+	VelocityWorld.SetAiTraceSink([&](const FElysiumAiTraceEvent& VelocityEvent)
+	{
+		if (VelocityEvent.Kind != TEXT("physics_retire") || VelocityEvent.Entity != VelocityFallback->Handle) return;
+		bVelocityRetirementObserved = true;
+		TestNotNull(TEXT("retirement observer runs before native release"), ElysiumModelPhysics::Identity(VelocityProp->Visual));
+		TestNull(TEXT("retirement clears alias before its gameplay query"), VelocityFallback->VPhysicsGetObject());
+		VelocityFallback->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular);
+		TestEqual(TEXT("pre-release alias query uses local linear fallback"), VelocityQueryLinear, VelocityFallbackLinear);
+		TestEqual(TEXT("pre-release alias query uses local angular fallback"), VelocityQueryAngular, VelocityFallbackAngular);
+	});
+	VelocityEntity->VPhysicsDestroyObject();
+	VelocityWorld.SetAiTraceSink({});
+	TestTrue(TEXT("actual225 exposes alias retirement before release"), bVelocityRetirementObserved);
+	TestNull(TEXT("retired current object field cleared"), VelocityEntity->VPhysicsGetObject());
+	TestNull(TEXT("retired native actor is undiscoverable"), ElysiumModelPhysics::ComponentFor(VelocityObject));
+	VelocityQueryLinear = VelocitySentinel;
+	TestFalse(TEXT("retired native semantic query fails without stale dereference"), ElysiumModelPhysics::GetVelocity(VelocityObject, &VelocityQueryLinear, nullptr));
+	TestEqual(TEXT("failed native lookup leaves optional storage untouched"), VelocityQueryLinear, VelocitySentinel);
+	VelocityEntity->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular);
+	TestEqual(TEXT("destroyed owner query uses local linear fallback"), VelocityQueryLinear, VelocityEntity->Velocity);
+	TestNotNull(TEXT("retiring first body preserves replacement body's own identity"), VelocitySecond->VPhysicsGetObject());
+	return true;
+}
 #endif

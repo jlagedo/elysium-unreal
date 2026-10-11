@@ -1,5 +1,27 @@
 # L0 progress — the orchestrator's log
 
+## D02/P1 base velocity contract — 2026-10-11
+
+Base slot199 `0x100ad1a0` now reads the current real native body's world cm/s and
+body-local Source QAngle degrees/s, with independently nullable outputs and angular-last
+alias ordering. No-body fallback copies local fields without parent refresh or dirty writes.
+One supported native read lock samples solved actor pose and velocities; no target/projection,
+save eligibility, IVP mechanism or extra simulation step supplies the gameplay query.
+
+Actual selected .phy Spawn and moved native frames precede literal rotated-axis, clear/swap,
+recipe-independent and pre-release alias-fallback assertions. Retained first arena failure
+showed object0 because the harness omitted model annotation/preparation. Initial authored rows
+now use the existing map preparation barrier and the baked static stem/quaternion convention;
+the strict native-body expectation is unchanged. Independent main review/build, default195/195,
+five affected arena records including baseline anim_prop_event, generator check and repo policy
+passed. Native ModelPhysics10/10 is retained. Audit promotion is only the base getter.
+
+Exact source/test/commit receipt:
+`E:/elysium-work/codex/l0-p1-velocity-20261011/acceptance-checkpoint.json`;
+recovery is in physics-interaction.md's Base entity velocity query section. No push.
+P1 body/lifetime/native-state integration remains the active milestone; next is its precise
+remaining consumer witness. P2/P3, animating/NPC wiring and full L0 gate remain open.
+
 ## Selected live SoundEmitter source/native lifetime prerequisite — 2026-10-11 (after db4d174c)
 
 Current sound cycle supplies the whole selected authored table, public sound-script-data export/import,

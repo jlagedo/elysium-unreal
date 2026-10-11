@@ -54,6 +54,8 @@ namespace ElysiumModelPhysics
 	void RecordNativeActivity(UPrimitiveComponent* Component, bool bAwake);
 	void Wake(UPrimitiveComponent* Component);
 	bool GetPosition(void* Actor, FVector& OriginCm, FRotator& SourceAngles);
+	//100ad1a0 ->object40/26017f50: world cm/s and body-local Source QAngle degrees/s.
+	bool GetVelocity(void* Actor, FVector* LinearCmPerSecond, FVector* SourceAngularDegrees);
 	void RetireNative(UPrimitiveComponent* Component);
 	void DestroyActor(void* Actor);
 	FBodyInstance* Identity(UPrimitiveComponent* Component);

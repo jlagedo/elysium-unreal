@@ -7,6 +7,7 @@
 #include "Debug/ElysiumGreenRoomShared.h"   // ResolveDriveBody: the seat's four steps need the drive refs
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCastData.h"                // the body name's canonical model id
+#include "ElysiumContentPaths.h"            // PropModelStem: the sidecar's static model annotation
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -27,6 +28,7 @@
 #include "Engine/Engine.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumUserCmd.h"
+#include "ElysiumWorldServices.h"           // reflected full Source QAngle placement
 #include "Substrate/ElysiumDisciplines.h"   // ClearAll: the one discipline teardown
 #include "HAL/IConsoleManager.h"            // ResetPlayerState: the `debug_stealth_light` pin
 #include "Substrate/ElysiumNodeEntity.h"    // which record rows take an AI-network node
@@ -742,6 +744,20 @@ bool BuildRow(const FHost& Host, const FElysiumArenaRow& Row, const FVector& Pla
 	for (const TPair<FString, FString>& Key : Row.Keys)
 	{
 		Out.Keys.Add(Key.Key, Key.Value);
+	}
+	// Mirror UE_map_sidecars' non-NPC .mdl annotations. Initial rows then pass through the
+	// map's real model preparation barrier before Spawn; the stem admits the production body.
+	const FString PlacedModelPath = Out.Keys.FindRef(TEXT("model")).Replace(TEXT("\\"), TEXT("/")).ToLower();
+	if (!Out.Classname.StartsWith(TEXT("npc_"), ESearchCase::IgnoreCase) &&
+		PlacedModelPath.EndsWith(TEXT(".mdl")))
+	{
+		Out.ModelMesh = FElysiumContentPaths::PropModelStem(PlacedModelPath);
+		TArray<FString> PlacedAnglesParts;
+		Out.Keys.FindRef(TEXT("angles")).ParseIntoArrayWS(PlacedAnglesParts);
+		const FVector PlacedSourceAngles = PlacedAnglesParts.Num() == 3
+			? FVector(FCString::Atof(*PlacedAnglesParts[0]), FCString::Atof(*PlacedAnglesParts[1]),
+				FCString::Atof(*PlacedAnglesParts[2])) : FVector::ZeroVector;
+		Out.ModelQuat = ElysiumPlayerView::ToUnreal(PlacedSourceAngles).Quaternion();
 	}
 	// The bake hoists `StartHidden == "1"` out of the keys into the def; a staged row does the same
 	// rather than leaving the two to disagree.

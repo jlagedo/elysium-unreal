@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 76 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 78 are defined by hand in the substrate,
-// and 50 are still stubs — 49 29c, 1 unassigned. 15 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 79 are defined by hand in the substrate,
+// and 49 are still stubs — 48 29c, 1 unassigned. 15 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -1399,11 +1399,10 @@ void* FElysiumEntity::GetLocalVelocity()
 // slot 199 0x100ad1a0 (sdk) `void GetVelocity(Vector*, AngularImpulse*)`
 //   takes `AngularImpulse*`
 //   layer 0, story 29c
-void FElysiumEntity::GetVelocity(FVector*, void*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetVelocity"), TEXT("0x100ad1a0"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::GetVelocity`, written by hand in the substrate:
+// `CBaseEntity::GetVelocity` 0x100ad1a0: current native object40 world linear/body-local QAngle
+// angular output or direct local fields, independently nullable; animating override remains L1
+// (`ElysiumEntitySlotBodies.cpp`). Declared here, defined there.
 
 // slot 200 0x100ad6e0 (walked) `int Illumination()`
 //   layer 0, story 29c
@@ -2426,7 +2425,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetLocalVelocity),
 				nullptr },
 			{ 199, TEXT("0x100ad1a0"), TEXT("CBaseEntity"), TEXT("GetVelocity"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector*, void*)>::Test(&FElysiumEntity::GetVelocity),
 				nullptr },
 			{ 200, TEXT("0x100ad6e0"), TEXT("CBaseEntity"), TEXT("Illumination"),

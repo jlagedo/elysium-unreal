@@ -786,6 +786,30 @@ bool ElysiumModelPhysics::GetPosition(void* Actor, FVector& OriginCm, FRotator& 
 	return true;
 }
 
+bool ElysiumModelPhysics::GetVelocity(void* Actor, FVector* LinearCmPerSecond, FVector* SourceAngularDegrees)
+{
+	//26017f50 exits before touching the core when both outputs are null.
+	if (!LinearCmPerSecond && !SourceAngularDegrees) return true;
+	const FBodyInstance* NativeBody = Identity(ComponentFor(Actor));
+	if (!NativeBody) return false;
+	FPhysicsCommand::ExecuteRead(NativeBody->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
+	{
+		if (LinearCmPerSecond) *LinearCmPerSecond = NativeBody->GetUnrealWorldVelocity_AssumesLocked();
+		if (SourceAngularDegrees)
+		{
+			//26018000 rotates object40's angular sums into world space before its point-velocity
+			// cross product. Undo solved actor rotation, not the native principal inertia frame.
+			// Explicit global pose excludes kinematic targets; no custom projection callback.
+			const FQuat SolvedRotation = NativeBody->GetUnrealWorldTransform_AssumesLocked(false, true).GetRotation();
+			const FVector BodyLocal = SolvedRotation.UnrotateVector(NativeBody->GetUnrealWorldAngularVelocityInRadians_AssumesLocked());
+			constexpr float DegreesPerRadian = 57.29578f; //vphysics.dll260c919c
+			// Axial-vector reflection reverses handedness.100ad241 then reorders xyz to yzx.
+			*SourceAngularDegrees = FVector(BodyLocal.Y * DegreesPerRadian, -BodyLocal.Z * DegreesPerRadian, -BodyLocal.X * DegreesPerRadian);
+		}
+	});
+	return true;
+}
+
 FElysiumEntity* ElysiumModelPhysics::GameDataForObject(void* Actor)
 {
 	if (!Actor) return nullptr;

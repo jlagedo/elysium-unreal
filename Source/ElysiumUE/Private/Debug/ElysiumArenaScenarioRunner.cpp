@@ -2481,6 +2481,40 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			Done.Text = FString::Printf(TEXT("entity_call Use done usetype=%d value=%g"), UseType, UseValue);
 			return true;
 		}
+		if (Action.Function == TEXT("GetVelocity") || Action.Function == TEXT("VPhysicsDestroyObject"))
+		{
+			FElysiumEntity* VelocityReceiver = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (!VelocityReceiver || VelocityReceiver->IsDead())
+			{
+				OutError = FString::Printf(TEXT("no live entity named '%s'"), *Action.Target); return false;
+			}
+			FString VelocityText;
+			if (Action.Function == TEXT("VPhysicsDestroyObject"))
+			{
+				if (!Action.Args.IsEmpty()) { OutError = TEXT("entity_call VPhysicsDestroyObject takes no arguments"); return false; }
+				VelocityReceiver->VPhysicsDestroyObject(); //vampire.dll100b5040/actual225
+				VelocityText = FString::Printf(TEXT("entity_call VPhysicsDestroyObject done object=%d"), VelocityReceiver->VPhysicsGetObject() != nullptr);
+			}
+			else
+			{
+				if (!Action.Args.IsEmpty() && (Action.Args.Num() != 2 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::Bool
+					|| Action.Args[1].Value.Type != FElysiumArenaValue::EType::Bool))
+				{ OutError = TEXT("entity_call GetVelocity takes [] or [linear bool, angular bool]"); return false; }
+				const bool bVelocityLinear = Action.Args.IsEmpty() || Action.Args[0].Value.bBool;
+				const bool bVelocityAngular = Action.Args.IsEmpty() || Action.Args[1].Value.bBool;
+				const FVector VelocitySentinel(98765, -43210, 11223);
+				FVector VelocityLinear = VelocitySentinel, VelocityAngular = VelocitySentinel;
+				VelocityReceiver->GetVelocity(bVelocityLinear ? &VelocityLinear : nullptr, bVelocityAngular ? &VelocityAngular : nullptr);
+				const bool bVelocityWritten = (!bVelocityLinear || VelocityLinear != VelocitySentinel) && (!bVelocityAngular || VelocityAngular != VelocitySentinel);
+				const bool bVelocityUnrequestedPreserved = (bVelocityLinear || VelocityLinear == VelocitySentinel) && (bVelocityAngular || VelocityAngular == VelocitySentinel);
+				VelocityText = FString::Printf(TEXT("entity_call GetVelocity done object=%d requested=%d,%d written=%d unrequested_preserved=%d linear_moving=%d linear=%s angular=%s"),
+					VelocityReceiver->VPhysicsGetObject() != nullptr, bVelocityLinear, bVelocityAngular, bVelocityWritten, bVelocityUnrequestedPreserved,
+					bVelocityLinear && !VelocityLinear.IsZero(), bVelocityLinear ? *VelocityLinear.ToString() : TEXT("-"), bVelocityAngular ? *VelocityAngular.ToString() : TEXT("-"));
+			}
+			FEvent& VelocityDone = Events.AddDefaulted_GetRef(); StampEvent(VelocityDone, World.NowSeconds());
+			VelocityDone.Kind = ElysiumArenaRunnerDetail::ScriptKind(); VelocityDone.Name = Action.Target; VelocityDone.Text = MoveTemp(VelocityText);
+			return true;
+		}
 		if (Action.Function == TEXT("HasTarget") || Action.Function == TEXT("HasLinkedDoor")
 			|| Action.Function == TEXT("ShouldToggle") || Action.Function == TEXT("BodyTarget")
 			|| Action.Function == TEXT("GetStealthVisionScalar") || Action.Function == TEXT("GetStealthVisionCone")

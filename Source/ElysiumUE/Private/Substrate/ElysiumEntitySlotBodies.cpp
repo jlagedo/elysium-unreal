@@ -629,6 +629,21 @@ int32 FElysiumEntity::PhysicsSolidMaskForEntity() const
 	return ElysiumModelPhysics::SolidMask(Flags, AsPlayer() != nullptr);
 }
 
+void FElysiumEntity::GetVelocity(FVector* Linear, void* Angular)
+{
+	//vampire.dll100ad1a0: current object first; null falls back to local fields without
+	//parent-frame refresh or dirty writes. Both arms write linear before angular.
+	auto* AngularVector = static_cast<FVector*>(Angular);
+	if (PhysicsObject)
+	{
+		ensureMsgf(ElysiumModelPhysics::GetVelocity(PhysicsObject, Linear, AngularVector),
+			TEXT("GetVelocity current physics object has no live native actor"));
+		return;
+	}
+	if (Linear) *Linear = Velocity;
+	if (AngularVector) *AngularVector = AngularVelocity;
+}
+
 FVector FElysiumEntity::BulletSpreadOffset(const FVector& SpreadUnits, const FVector& RightAxis,
 	const FVector& UpAxis)
 {

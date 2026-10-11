@@ -548,6 +548,9 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     189: ("", "`CBaseEntity::GetDamageType` 0x100ad850: constant zero after diagnostic scope; "
               "physics trace 0x10035030 reads the actual damage-type slot "
               "(`ElysiumEntitySlotBodies.cpp`)"),
+    199: ("", "`CBaseEntity::GetVelocity` 0x100ad1a0: current native object40 world linear/body-local "
+              "QAngle angular output or direct local fields, independently nullable; "
+              "animating override remains L1 (`ElysiumEntitySlotBodies.cpp`)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that
@@ -559,6 +562,7 @@ CHAIN_HAND_OWNER: dict[int, str] = {
     144: "FElysiumCombatCharacter",
     301: "FElysiumCombatCharacter",
     105: "FElysiumEntity",
+    199: "FElysiumEntity",
 }
 
 

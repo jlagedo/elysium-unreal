@@ -1,81 +1,77 @@
-# L0 current planning checkpoint
+# L0 restart checkpoint
 
-Planning snapshot: 2026-10-11. The owner has now authorized the main thread to resume under
-the revised [Goal](goal.md), superseding the earlier pause pending review. Main must record
-actual startup/Goal status when it receives the handoff. This is not a worker report, a
-successful gate or an implementation commit.
+Updated 2026-10-11 by main. Full L0 closing gate remains open; the supported Goal is active.
+Read [goal.md](goal.md) at every continuation. Main directly coordinates and accepts each run;
+one fresh Sol High worker at a time, no nested coordinators, no worker commits, never push.
 
-## Main startup and plan acceptance
+## Accepted state
 
-Main inspected the handoff on 2026-10-11: HEAD is the accepted sound commit
-`8f8aea1b0619b5b07711b2174218cba40a1847f8`, the index is empty, and all 34 dirty/untracked
-paths match the separate planning inventory. The owner-authorized execution turn is proceeding
-under `goal.md`; the sound source and receipts are reused. Main reviewed the scope, milestone
-graph, traceability and closing gate before the separate documentation acceptance commit.
+- Accepted base-velocity packet: the local commit containing this checkpoint, parent
+  `5b48bb61fc19cadcc599d0107a12ddfc10777bfc` (34-path plan acceptance).
+  Its exact accepted HEAD/tree/blob receipt is
+  `E:/elysium-work/codex/l0-p1-velocity-20261011/acceptance-checkpoint.json`.
+  Plan parent `8f8aea1b0619b5b07711b2174218cba40a1847f8` is the sound prerequisite.
+- Plan receipt: `E:/elysium-work/codex/l0-delivery-plan-20261011/acceptance-checkpoint.json`.
+  Main independently verified structural coverage, committed blobs and the clean tree.
+- Sound receipt:
+  `E:/elysium-work/codex/l0-sound-producer-implementation-20261011/final-review-r1/checkpoint.json`.
+  Its build, pipeline 191, native 2, affected 21, default 194 and six sound/KV arena records passed.
+  Reuse the accepted evidence; generic sound emission and impact consumers remain open.
+- Supported Goal recovery: `get_goal` returned null; owner-authorized `create_goal` then
+  confirmed active. No internal app storage or prior completion state was edited.
 
-The supported Goal query currently returns `goal: null`. Main has not created a replacement
-Goal, changed Codex internal storage, replaced the app objective or claimed an app-level resume.
-Unattended continuation requires the existing Goal to be resumed or reattached in the app;
-this app-state limitation does not block the authorized implementation turn.
+## Contract closed — D02/P1 base velocity
 
-## Start here
+Fresh worker `/root/l0_p1_velocity` implemented the getter portion of
+`L0.physics.physics-object-contract-2`, retail base slot199 `0x100ad1a0`.
+Packet and oracle: `E:/elysium-work/codex/l0-p1-velocity-20261011/packet.md`.
+Main approved the precode contract after independent oracle and installed public API review.
 
-- Active plan: [delivery-plan.md](delivery-plan.md).
-- Owner-authorized execution instructions: [goal.md](goal.md).
-- Brief ownership/scope: [delivery-map.tsv](delivery-map.tsv).
-- Milestone dependency graph: [milestones.tsv](milestones.tsv).
-- Engine replacement contracts: [service-contract-map.tsv](service-contract-map.tsv).
-- Higher-layer obligations: [handoffs.md](handoffs.md).
-- Planning coverage and validation: [plan-review.md](plan-review.md).
-- Existing evidence: [progress.md](progress.md), [runs.md](runs.md) and the relevant `walks/`
-  sections. Read only the sections needed by the next packet.
+The initial production branch passed 1/1:
+`E:/elysium-work/codex/l0-p1-velocity-20261011/initial-branch-report/index.json`.
+A spawned .phy prop moved 2.38273955 cm; actual native/query world velocity was (101,-53,17)
+cm/s and body-local QAngle rate was (28.648,-42.972,-14.324) degrees/s. This proves the selected
+native getter branch, not P1 or cross-engine trajectory equivalence. Expanded native tests prove
+nullable outputs, angular-last alias ordering, literal rotated QAngle axes independent of inertia
+axes, parented fallback without dirty writes, replacement/clear, recipe independence and alias
+retirement before native release. The original arena failure/source was retained: runtime fixture
+spawn omitted required model annotation/preparation. A bounded initial-row harness repair mirrors
+the baked static annotation and uses the existing production model preparation barrier.
 
-## Implementation snapshot to reconcile in main
+Main independently reviewed the oracle, installed APIs and all changed paths. Build passed
+(`20261011T201857.936745Z-build.json`); default 195/195 with zero failures/not-run/abstentions
+(`reports/tests/20261011T201903.093487Z-elysium-session-elysium-substrate/index.json`).
+Affected arena 5/5 in one boot (`reports/arena/20261011T201945.195623Z/index.json`): velocity,
+solid mask, damage type, baseline anim_prop_event and visual-state regression. All first_unmet
+values are null. Worker ModelPhysics 10/10 and native branch receipts remain in packet scratch.
+Port generator --check and repo policy passed. Only base199's audit row is promoted; broad brief,
+P1/D02 and higher animating/NPC consumers remain open. Full arm/full arena/repeated boot-order
+gates are still required at their closing scope; no full story closure is claimed here.
 
-- Last observed HEAD: `8f8aea1b0619b5b07711b2174218cba40a1847f8` (live sound-script source
-  and native audio readiness). Main committed this packet while the planning review ran.
-  Planning documents remain separate uncommitted work; do not include them in a code packet.
-- Main's newly written `progress.md` entry reports native audio 2/2, affected 21/21, default
-  194/194 and six sound/KV arena records passing, with actual playback/lifetime evidence linked
-  in `walks/L0-sound-producer.md`. The packet is now committed at the HEAD above. Reuse those
-  receipts; this side review did not rerun the gates or certify the whole audio subsystem.
-- Historical original-run acceptance: r001–r021, r029 and r030 (23 runs). Preserve that evidence;
-  do not infer that every appended parked requirement or subsystem is closed.
-- No implementation status or audit verdict was changed by this planning pass. No engine jobs,
-  code edits, commits, pushes, Goal changes or worker dispatch were performed by this pass.
+## Remaining foundation and next witness
 
-## Next milestone after plan acceptance
+Next packet: [next-packet.md](next-packet.md). Reconcile P1's existing body ownership/lifetime evidence:
+model, static bbox and shadow caller arms; real enumeration/replacement/removal; stale callback
+and alias fences; required native saved state. Select the first concrete unmet consumer contract
+from source and retained receipts. Do not append GetCollideable/P2 to this run.
 
-First read the committed sound packet's checkpoint and review/commit the planning changes
-separately, as directed in `goal.md`. Then close **D02 physical entity
-foundation** through P1, E2/P2 and P3. Reuse the accepted body/material/shadow work and confirmed
-walks. The first dispatch packet must name the smallest remaining observable gap from the
-current code and receipts. A narrow source inspection found the base velocity query and
-GetCollideable still stubbed; [next-packet.md](next-packet.md) prepares a bounded P1 getter
-candidate with its precise oracle-confirmation and producer checks. This is not a full code audit
-or a dispatched task.
+Then close E2/P2 and integrated P3: actual filters/query results/material association, mutation
+phase, think/removal fences, shadow targets versus solved poses, publication timing and
+parent/local/absolute/bounds through the required live caller. Existing contact/frame/material
+discrepancies remain unaccepted. An IVP clone is never a prerequisite.
 
-Known open contracts in the latest recorded evidence: broader body/swap/filter lifetime,
-query/contact callback equivalence, moving/shared-edge authored material association,
-gameplay timing/publication, and the integrated transform/bounds consumer that blocked r022.
-The committed sound packet has the reported native evidence above; generic emission and impact
-consumer boundaries remain open. These are milestone requirements; they are not permission
-to reconstruct IVP or implement higher layers.
+## Authority and scope
 
-## Scope and owner decisions
+- [delivery-plan.md](delivery-plan.md), [milestones.tsv](milestones.tsv),
+  [delivery-map.tsv](delivery-map.tsv), [service-contract-map.tsv](service-contract-map.tsv).
+- [handoffs.md](handoffs.md) for higher layers; [spec.md](spec.md) for the full closing gate.
+- Retained walks/history: [walks/L0-physics-producer.md](walks/L0-physics-producer.md),
+  [walks/L0-sound-producer.md](walks/L0-sound-producer.md), [progress.md](progress.md),
+  [runs.md](runs.md). Read only relevant sections; historical run counts are not progress percentages.
+- Retail-save import/dry runs/retail roster conversion excluded. Native save/load/travel and
+  faithful L0 state remain required. Account for the four retained scope-review briefs before
+  full closure. No gameplay divergence is approved. No owner decision is currently pending.
 
-- Retail-save import, dry-run decoder work and retail roster conversion are excluded by the
-  owner. Native persistence and safe rejection of unsupported native saves stay in scope.
-- Higher-layer parked remainders are explicit handoffs in the map; verify/register the exact
-  hook and recipient obligation before claiming L0 closure. Do not implement those layers here.
-- Retained non-core constraint/animation-link family and generic physics-asset bake obligations
-  need core-dependency/scope accounting. Keep them visible; no silent deletion or expansion.
-- No gameplay divergence is accepted by the replan. Routine faithful implementation, Unreal
-  API choice and producer/test repairs need no additional owner approval.
-
-## Update after each accepted implementation run
-
-Replace this snapshot with accepted HEAD, active milestone, exact contract closed and receipt,
-first unmet condition, remaining gate requirements, next bounded packet and any genuine owner
-decision. Preserve the historical logs by link. Do not replace this file with an accumulating
-transcript or report original run count as percent complete.
+Full closure still requires every active record in one arena run, required repeated boot orders,
+default and arm zero failures, baseline preservation, owned audit verdicts, observable engine
+contracts, registered higher hooks and disposition of every mapped requirement.
