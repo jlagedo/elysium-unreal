@@ -3995,7 +3995,7 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 					if (ElysiumModelPhysics::GameDataForObject(ElysiumModelPhysics::ActorIdentity(NativeComponent)) == Entity) ++Out.Number;
 			}
 			else if (Field == TEXT("physics.shadow_member")) Out.bBool = World->PhysicsShadows().Contains(Entity->Handle);
-			else if (Field == TEXT("physics.query_shapes"))
+			else if (Field == TEXT("physics.query_shapes") || Field == TEXT("physics.sim_shapes"))
 			{
 				auto* Body = ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(Object));
 				if (!Body) { OutError = FString::Printf(TEXT("%s %s: no registered native body"), *Who, *Field); return false; }
@@ -4003,7 +4003,8 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 				FPhysicsCommand::ExecuteRead(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
 				{
 					TArray<FPhysicsShapeHandle> Shapes; Body->GetAllShapes_AssumesLocked(Shapes);
-					for (const auto& Shape : Shapes) if (FPhysicsInterface::IsQueryShape(Shape)) ++Out.Number;
+					for (const auto& Shape : Shapes)
+						if (Field == TEXT("physics.query_shapes") ? FPhysicsInterface::IsQueryShape(Shape) : FPhysicsInterface::IsSimulationShape(Shape)) ++Out.Number;
 				});
 			}
 			else
@@ -4011,6 +4012,7 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 				FElysiumSavedPhysicsBody State;
 				if (!ElysiumModelPhysics::Capture(Object, State)) { OutError = FString::Printf(TEXT("%s %s: cannot capture current registered body"), *Who, *Field); return false; }
 				if (Field == TEXT("physics.static")) Out.bBool = State.Recipe.bStatic;
+				else if (Field == TEXT("physics.shadow_installed")) Out.bBool = State.Shadow.bInstalled;
 				else if (Field == TEXT("physics.kind"))
 				{
 					switch (State.Recipe.Kind)
@@ -4238,7 +4240,10 @@ bool FElysiumArenaScenarioRunner::CompareCheckpoint(const FElysiumArenaAction& A
 		const FElysiumArenaValue* After = Saved->Applied.Find(Key);
 		if (!Before || !After || !ElysiumArenaScenario::WitnessEqual(ElysiumArenaScenario::RebaseWitness(Word.Field, *Before, Saved->SaveBase, Saved->RestoreBase), *After, Word.Tolerance))
 		{ OutError = FString::Printf(TEXT("restore equality failed %s.%s: saved=%s applied=%s"), *Word.Who, *Word.Field,
-			Before ? *Before->Describe() : TEXT("unavailable"), After ? *After->Describe() : TEXT("unavailable")); return false; }
+			Before ? *Before->Describe() : TEXT("unavailable"), After ? *After->Describe() : TEXT("unavailable"));
+			if (Before && After && Before->Type == FElysiumArenaValue::EType::Number && After->Type == FElysiumArenaValue::EType::Number)
+				OutError += FString::Printf(TEXT(" exact_saved=%.17g exact_applied=%.17g delta=%.17g"), Before->Number, After->Number, After->Number-Before->Number);
+			return false; }
 	}
 	return true;
 }

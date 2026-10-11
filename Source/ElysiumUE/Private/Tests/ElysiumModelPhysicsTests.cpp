@@ -32,6 +32,7 @@
 #include "ElysiumWorldCollisionActor.h"
 #include "Misc/ScopeExit.h"
 #include "Components/BoxComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Physics/PhysicsInterfaceCore.h"
 #include <limits>
 
@@ -553,6 +554,41 @@ bool FElysiumPhysicsBboxRecipeTest::RunTest(const FString&)
 	TestFalse(TEXT("failed replacement has no native static actor"), Component->GetBodyInstance()->IsValidBodyInstance());
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelShadowInputsTest, "Elysium.Substrate.ModelPhysics.ModelShadowInputs",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelShadowInputsTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> Ids = {
+		TEXT("vtmb:model:scenery/structural/doorknoboffice/doorknoboffice"),
+		TEXT("vtmb:model:scenery/vehicles/lightningbird/trunklid"),
+		TEXT("vtmb:model:scenery/structural/ceiling_fan/ceiling_fan_blades"),
+		TEXT("vtmb:model:scenery/structural/doorknoba/doorknoba"),
+		TEXT("vtmb:model:scenery/structural/doorknoba/drknobantique"),
+		TEXT("vtmb:model:scenery/structural/doorknoba/drknobantiquel") };
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+	auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+	if (!Prepared) { AddError(Error); return false; }
+	for (int32 Index = 0; Index < Ids.Num(); ++Index)
+	{
+		const auto* Mesh = Prepared->StaticMesh(Ids[Index], Error);
+		const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh);
+		AddInfo(FString::Printf(TEXT("model-shadow input: id=%s mesh=%s inputs=%p selected=%p source=%d"),
+			*Ids[Index], *GetPathNameSafe(Mesh), Inputs, Inputs ? Inputs->SelectedBody.Get() : nullptr, Inputs && Inputs->bSourceBody));
+		if (!TestNotNull(*FString::Printf(TEXT("authentic typed admission %s"), *Ids[Index]), Inputs)) continue;
+		TestEqual(TEXT("source absence distinct from stale metadata"), Inputs->bSourceBody, Index < 3);
+		if (Index < 3) TestTrue(TEXT("first authored .phy has real selected cook"), Inputs->SelectedBody && Inputs->SelectedBody->AggGeom.ConvexElems.Num() == 1);
+	}
+	ElysiumPreparedProps::Release(Map);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStaticModelCallerTest, "Elysium.Substrate.ModelPhysics.StaticModelCaller",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumStaticModelCallerTest::RunTest(const FString&)
@@ -736,6 +772,7 @@ bool FElysiumStaticModelCallerTest::RunTest(const FString&)
 	FHitResult CompiledBboxHit;
 	Fixture.World->LineTraceSingleByChannel(CompiledBboxHit, BboxCenter - FVector(1000,0,0), BboxCenter + FVector(1000,0,0), ElysiumCollision::SightChannel, SelectedQuery);
 	TestTrue(TEXT("analytic static query remains active after actual compilation callback"), CompiledBboxHit.GetComponent() == BboxCarrier);
+
 #endif
 	Shadow->VPhysicsSwapObject(nullptr);
 	TestFalse(TEXT("actual shadow OWNER null Swap removes owner membership"), EntityWorld.PhysicsShadows().Contains(ShadowHandle));
@@ -2196,6 +2233,282 @@ bool FElysiumBaseVelocityTest::RunTest(const FString&)
 	VelocityEntity->GetVelocity(&VelocityQueryLinear, &VelocityQueryAngular);
 	TestEqual(TEXT("destroyed owner query uses local linear fallback"), VelocityQueryLinear, VelocityEntity->Velocity);
 	TestNotNull(TEXT("retiring first body preserves replacement body's own identity"), VelocitySecond->VPhysicsGetObject());
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelShadowCallerTest, "Elysium.Substrate.ModelPhysics.ModelShadowCaller",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelShadowCallerTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> Ids = {
+		TEXT("vtmb:model:scenery/structural/doorknoboffice/doorknoboffice"),
+		TEXT("vtmb:model:scenery/vehicles/lightningbird/trunklid"),
+		TEXT("vtmb:model:scenery/structural/ceiling_fan/ceiling_fan_blades"),
+		TEXT("vtmb:model:scenery/structural/doorknoba/doorknoba"),
+		TEXT("vtmb:model:scenery/structural/doorknoba/drknobantique"),
+		TEXT("vtmb:model:scenery/structural/doorknoba/drknobantiquel") };
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+	auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+	if (!Prepared.IsValid()) { AddError(Error); return false; }
+	FElysiumWorldServices Services; Services.Embodiment = Map;
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("model_shadow_native");
+	FElysiumEntityDef Parent; Parent.Classname = TEXT("func_door"); Parent.TargetName = TEXT("real_parent");
+	Parent.Model = 1; Parent.Origin = FVector(2500,4000,5000); Parent.Keys.Add(TEXT("model"), TEXT("*1"));
+	FElysiumConvexHull ParentHull;
+	for (float X : {0.f,120.f}) for (float Y : {-10.f,10.f}) for (float Z : {-10.f,10.f}) ParentHull.Vertices.Add(FVector(X,Y,Z));
+	Parent.Hulls.Add(ParentHull); Defs.Defs.Add(Parent);
+	auto MakeDef = [&](int32 ModelIndex, const TCHAR* Name, bool bParent, const TCHAR* Solid)
+	{
+		FElysiumEntityDef Result; Result.Classname = TEXT("prop_dynamic"); Result.TargetName = Name;
+		Result.ModelMesh = FString(TEXT("models/")) + Ids[ModelIndex].RightChop(11) + TEXT(".mdl");
+		Result.Origin = FVector(3000 + ModelIndex * 2000, 4000, 5000);
+		if (!bParent) Result.Origin = FVector(17000 + Defs.Defs.Num() * 1000, 12000, 5000);
+		Result.Keys.Add(TEXT("model"), Result.ModelMesh); Result.Keys.Add(TEXT("solid"), Solid);
+		Result.Keys.Add(TEXT("angles"), TEXT("17 31 23"));
+		if (bParent) Result.Keys.Add(TEXT("parentname"), TEXT("real_parent"));
+		return Result;
+	};
+	for (int32 Index = 0; Index < Ids.Num(); ++Index)
+		Defs.Defs.Add(MakeDef(Index, *FString::Printf(TEXT("child%d"), Index), true, TEXT("6")));
+	Defs.Defs.Add(MakeDef(0, TEXT("static_control"), false, TEXT("6")));
+	Defs.Defs.Add(MakeDef(0, TEXT("bbox_control"), false, TEXT("2")));
+	Defs.Defs.Add(MakeDef(0, TEXT("prop_alias"), false, TEXT("0")));
+	FElysiumEntityDef Point; Point.Classname = TEXT("info_target"); Point.TargetName = TEXT("base_alias"); Defs.Defs.Add(Point);
+	FElysiumEntityDefs DestinationDefs = Defs;
+	FElysiumEntityDefs TravelDefs = Defs;
+	FElysiumEntityWorld World(Map, nullptr, Services); World.Load(MoveTemp(Defs));
+	auto ComponentShapeFlags = [&](UPrimitiveComponent* PhysicsComponent)
+	{
+		FIntPoint Flags(0,0);
+		if (auto* Native = ElysiumModelPhysics::Identity(PhysicsComponent))
+			FPhysicsCommand::ExecuteRead(Native->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
+			{
+				TArray<FPhysicsShapeHandle> Shapes; Native->GetAllShapes_AssumesLocked(Shapes);
+				for (const auto& Shape : Shapes) { Flags.X += FPhysicsInterface::IsQueryShape(Shape); Flags.Y += FPhysicsInterface::IsSimulationShape(Shape); }
+			});
+		return Flags;
+	};
+	auto ShapeFlags = [&](void* Object) { return ComponentShapeFlags(ElysiumModelPhysics::ComponentFor(Object)); };
+	for (int32 Index = 0; Index < Ids.Num(); ++Index)
+	{
+		auto* Child = static_cast<FElysiumProp*>(World.FindByName(*FString::Printf(TEXT("child%d"), Index)));
+		if (!Child) return false;
+		void* Object = Child->VPhysicsGetObject();
+		if (Index >= 3)
+		{
+			TestNull(TEXT("reached studio3 genuine no-binary returns null"), Object);
+			TestEqual(TEXT("genuine no-binary list exact count0"), Child->VPhysicsGetObjectList(nullptr, 1), 0);
+			TestFalse(TEXT("null studio3 has no shadow membership"), World.PhysicsShadows().Contains(Child->Handle));
+			Child->ScriptHide(); Child->ScriptUnhide();
+			TestTrue(TEXT("no-binary remains alive after hide/unhide"), World.Resolve(Child->Handle) == Child);
+		}
+		else
+		{
+			if (!TestNotNull(TEXT("reached selected dynamic creator assigned native object"), Object)) return false;
+			auto* Component = ElysiumModelPhysics::ComponentFor(Object); auto* Native = ElysiumModelPhysics::Identity(Component);
+			const auto* Inputs = UElysiumModelPhysicsInputs::Find(Prepared->StaticMesh(Ids[Index], Error));
+			const auto* Recipe = ElysiumModelPhysics::RecipeFor(Object); const auto* Shadow = ElysiumModelPhysics::ShadowFor(Object);
+			if (!Native || !Inputs || !Recipe || !Shadow) return false;
+			TestTrue(TEXT("actual body uses selected cook independently of logical art"), Native->GetBodySetup() == Inputs->SelectedBody && !Component->IsVisible());
+			TestFalse(TEXT("selected model shadow recipe is dynamic"), Recipe->bStatic);
+			TestEqual(TEXT("neutral dynamic mass parser retains authored mass"), Recipe->MassKg, Inputs->MassKg);
+			TestEqual(TEXT("dynamic parser retains authored inertia"), Recipe->InertiaScale, Inputs->InertiaScale);
+			TestTrue(TEXT("native selected geometry query and simulation shapes"), ShapeFlags(Object) == FIntPoint(1,1));
+			TestTrue(TEXT("100a6150 installed no-move no-rotate controller"), Shadow->bInstalled && !Shadow->bAllowMovement && !Shadow->bAllowRotation);
+			TestEqual(TEXT("controller original authored mass"), Shadow->SavedMassKg, Inputs->MassKg);
+			TestEqual(TEXT("linear max speed converts inches to centimeters"), Shadow->LinearDesiredLimitCm, 25400.f);
+			TestTrue(TEXT("native game data and owner registry"), ElysiumModelPhysics::GameDataForObject(Object) == Child && World.PhysicsShadows().Contains(Child->Handle));
+			const FTransform Initial(ElysiumModelPhysics::SourceRotation(Child->GetAbsAngles()), Child->GetAbsOrigin());
+			TestTrue(TEXT("absolute native pose precedes initial target"), Native->GetUnrealWorldTransform().Equals(Initial, .001) && Shadow->Target.Equals(Initial, .001) && Shadow->RemainingSeconds == 0.f);
+			if (Index == 1)
+			{
+				bool bSkeletalArt = false; TInlineComponentArray<USkeletalMeshComponent*> SkeletalComponents(Map);
+				for (const auto* Art : SkeletalComponents)
+					if (Art->GetSkeletalMeshAsset() == Prepared->SkeletalMesh(Ids[Index], Error) && Art->IsVisible()) bSkeletalArt = true;
+				TestTrue(TEXT("authentic TrunkLid selected carrier also has skeletal art"), bSkeletalArt);
+			}
+			AddInfo(FString::Printf(TEXT("model-shadow native: id=%s selected=%p actor=%p mass=%g originalmass=%g query=1 sim=1"), *Ids[Index], Inputs->SelectedBody.Get(), Object, Recipe->MassKg, Shadow->SavedMassKg));
+		}
+		TInlineComponentArray<UStaticMeshComponent*> ArtComponents(Map);
+		for (auto* Art : ArtComponents)
+			if (Art->GetStaticMesh() == Prepared->StaticMesh(Ids[Index], Error) && Art->GetComponentLocation().Equals(Child->GetAbsOrigin(), .01)
+				&& Art != ElysiumModelPhysics::ComponentFor(Object))
+			{
+				TestTrue(TEXT("logical static/skeletal proxy art has no active query/simulation geometry"), ComponentShapeFlags(Art) == FIntPoint(0,0));
+#if WITH_EDITOR
+				Art->PreStaticMeshCompilation(); Art->PostStaticMeshCompilation();
+#endif
+				Art->RecreatePhysicsState();
+				void* ArtActor = ElysiumModelPhysics::ActorIdentity(Art);
+				TestTrue(TEXT("actual art callbacks preserve zero query/simulation flags and no gameplay association"), ComponentShapeFlags(Art) == FIntPoint(0,0)
+					&& (!ArtActor || (ArtActor != Object && !ElysiumModelPhysics::GameDataForObject(ArtActor) && !ElysiumModelPhysics::RecipeFor(ArtActor))));
+			}
+	}
+	auto* Child = World.FindByName(TEXT("child0")); auto* Removed = World.FindByName(TEXT("child2"));
+	auto* BaseAlias = World.FindByName(TEXT("base_alias")); auto* PropAlias = World.FindByName(TEXT("prop_alias"));
+	void* Object = Child->VPhysicsGetObject(); auto* Component = ElysiumModelPhysics::ComponentFor(Object); auto* Native = ElysiumModelPhysics::Identity(Component);
+	const FTransform PriorPose = Native->GetUnrealWorldTransform();
+	Child->SetRuntimeOrigin(Child->GetAbsOrigin() + FVector(100,50,25));
+	TestTrue(TEXT("logical transform does not teleport selected solved body"), Native->GetUnrealWorldTransform().Equals(PriorPose, .001));
+	World.Activate(0.);
+	Child->UpdatePhysicsShadowToCurrentPosition(.02f); //actual232 target producer, not a logical-transform teleport.
+	World.BeginNativePhysicsFrame(.02, .02);
+	const auto* Submitted = ElysiumModelPhysics::ShadowFor(Object);
+	TestTrue(TEXT("real transaction submits logical absolute target independently"), Submitted && Submitted->Target.GetLocation().Equals(Child->GetAbsOrigin(), .001));
+	TestTrue(TEXT("target submission never copies target onto native solved pose"), Native->GetUnrealWorldTransform().Equals(PriorPose, .001));
+	auto* Solver = Native->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>(); const double BeforeTime = Solver->GetSolverTime();
+	if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+	World.FinishNativePhysicsFrame();
+	TestTrue(TEXT("production frame advances actual native solver"), Solver->GetSolverTime() > BeforeTime);
+	if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+	for (int32 Index = 3; Index < Ids.Num(); ++Index)
+	{
+		auto* Negative = World.FindByName(*FString::Printf(TEXT("child%d"), Index));
+		const auto* Mesh = Prepared->StaticMesh(Ids[Index], Error);
+		const FVector Center = Negative->GetAbsOrigin() + Mesh->GetBounds().Origin;
+		FHitResult Hit; const FCollisionQueryParams Params(FName(TEXT("StudioNoBinary")), false);
+		TestFalse(TEXT("native scene query passes through reached no-binary studio art"), Fixture.World->LineTraceSingleByChannel(Hit, Center-FVector(500,0,0), Center+FVector(500,0,0), ElysiumCollision::SightChannel, Params));
+	}
+	TestNotNull(TEXT("completed frame keeps native controller incarnation"), ElysiumModelPhysics::ShadowFor(Object));
+#if WITH_EDITOR
+	const auto CompilationToken = ElysiumModelPhysics::CaptureIdentity(Object);
+	auto* SelectedCarrier = Cast<UElysiumPhysicsPropComponent>(Component);
+	SelectedCarrier->PreStaticMeshCompilation(); SelectedCarrier->PostStaticMeshCompilation();
+	TestTrue(TEXT("actual public render callbacks preserve invisible selected body and controller"), ElysiumModelPhysics::IsCurrentOutput(CompilationToken) && Child->VPhysicsGetObject() == Object && ElysiumModelPhysics::ShadowFor(Object));
+#endif
+	Child->ScriptHide(); TestTrue(TEXT("actual Hide clears query and simulation flags"), ShapeFlags(Object) == FIntPoint(0,0));
+	BaseAlias->VPhysicsSetObject(Object); PropAlias->VPhysicsSetObject(Object);
+	auto* OwnerSwap = World.FindByName(TEXT("child1")); void* SwappedObject = OwnerSwap->VPhysicsGetObject();
+	OwnerSwap->VPhysicsSwapObject(nullptr);
+	TestTrue(TEXT("owner null Swap retains actual actor/controller but removes membership"), ElysiumModelPhysics::ComponentFor(SwappedObject) && ElysiumModelPhysics::ShadowFor(SwappedObject) && !World.PhysicsShadows().Contains(OwnerSwap->Handle));
+	OwnerSwap->VPhysicsSetObject(SwappedObject);
+	TestFalse(TEXT("SetObject rebind does not recreate owner membership"), World.PhysicsShadows().Contains(OwnerSwap->Handle));
+	ElysiumModelPhysics::RemoveShadow(Removed->VPhysicsGetObject()); World.RemovePhysicsShadow(*Removed);
+	TestNull(TEXT("own public RemoveShadowController leaves no controller"), ElysiumModelPhysics::ShadowFor(Removed->VPhysicsGetObject()));
+	TestNotNull(TEXT("controller removal retains own dynamic model recipe"), ElysiumModelPhysics::RecipeFor(Removed->VPhysicsGetObject()));
+	auto* NoBody = World.FindByName(TEXT("child3"));
+	const int32 ChildIndex = Child->Handle.Index, BaseIndex = BaseAlias->Handle.Index, PropIndex = PropAlias->Handle.Index;
+	const int32 RemovedIndex = Removed->Handle.Index, NoBodyIndex = NoBody->Handle.Index;
+	const int32 SwapIndex = OwnerSwap->Handle.Index;
+	FElysiumSavedPhysicsBody Before; if (!ElysiumModelPhysics::Capture(Object, Before)) return false;
+	FElysiumSavedPhysicsBody BeforeSwap; if (!ElysiumModelPhysics::Capture(SwappedObject, BeforeSwap)) return false;
+	TestEqual(TEXT("actual hidden native flags captured independently of component collision profile"), Before.ModelShapeFlags, TArray<uint8>({0}));
+	for (int32 InvalidArm = 0; InvalidArm < 3; ++InvalidArm)
+	{
+		FElysiumSavedPhysicsBody Invalid = Before;
+		if (InvalidArm == 0) Invalid.ModelShapeFlags.Reset();
+		if (InvalidArm == 1) Invalid.ModelShapeFlags.Add(0);
+		if (InvalidArm == 2) Invalid.ModelShapeFlags[0] = 4;
+		auto* InvalidCarrier = NewObject<UElysiumPhysicsPropComponent>(Map);
+		InvalidCarrier->SetVisibility(false); InvalidCarrier->RegisterComponent(); Map->AddInstanceComponent(InvalidCarrier);
+		FString InvalidError;
+		TestFalse(TEXT("model saved flags require actual selected cook count and legal semantic bits"), ElysiumModelPhysics::Restore(InvalidCarrier, World.PhysicsSurfaces(), Invalid, InvalidError));
+		TestFalse(TEXT("rejected selected-cook reconstruction leaves no native geometry"), InvalidCarrier->GetBodyInstance()->IsValidBodyInstance());
+		TestTrue(TEXT("failed reconstruction preserves existing field/controller/member"), Child->VPhysicsGetObject() == Object && ElysiumModelPhysics::ShadowFor(Object) && World.PhysicsShadows().Contains(Child->Handle));
+		if (InvalidArm == 2)
+		{
+			TArray<uint8> InvalidBytes; FMemoryWriter InvalidWriter(InvalidBytes, true); InvalidWriter << Invalid;
+			FElysiumSavedPhysicsBody InvalidRead; FMemoryReader InvalidReader(InvalidBytes, true); InvalidReader << InvalidRead;
+			TestTrue(TEXT("typed archive refuses unknown model native shape flag bits"), InvalidReader.IsError());
+		}
+		InvalidCarrier->DestroyComponent();
+	}
+	FElysiumMapSnapshot Snapshot; World.Freeze(Snapshot);
+	if (!TestFalse(TEXT("joined real model-shadow native save admission"), Snapshot.bPhysicsSaveFailed)) return false;
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes, true); FElysiumSaveArchive SaveAr(Writer, FElysiumSaveVersion::Latest); SaveAr << Snapshot;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes, true); FElysiumSaveArchive LoadAr(Reader, FElysiumSaveVersion::Latest); LoadAr << Persisted;
+	if (!TestFalse(TEXT("real typed Physics archive decodes"), Reader.IsError())) return false;
+	const auto OldToken = ElysiumModelPhysics::CaptureIdentity(Object); World.Teardown();
+	TestFalse(TEXT("source teardown fences old incarnation"), ElysiumModelPhysics::IsCurrentOutput(OldToken));
+	FElysiumEntityWorld Destination(Map, nullptr, Services); Destination.Load(MoveTemp(DestinationDefs)); Persisted.PhysicsBodies.Reset();
+	if (!TestTrue(TEXT("inactive reconnect reads Physics bytes"), Destination.ApplySnapshot(Persisted) >= 0)) return false;
+	auto ResolveSaved = [&](int32 Index) { return Destination.Resolve(FElysiumEntityHandle(Index, Destination.GetEpoch())); };
+	auto* Restored = ResolveSaved(ChildIndex); auto* RestoredBase = ResolveSaved(BaseIndex); auto* RestoredProp = ResolveSaved(PropIndex);
+	auto* RestoredRemoved = ResolveSaved(RemovedIndex); auto* RestoredAbsent = ResolveSaved(NoBodyIndex);
+	if (!Restored || !RestoredBase || !RestoredProp || !RestoredRemoved || !RestoredAbsent) return false;
+	auto CheckIndependentFields = [&](FElysiumEntityWorld& RestoringWorld, const TArray<FElysiumEntity*>& SavedFields)
+	{
+	for (auto* SavedEntity : SavedFields)
+	{
+		FElysiumSavedPhysicsBody Actual;
+		if (!TestTrue(TEXT("independent saved field allocated actual selected native body"), ElysiumModelPhysics::Capture(SavedEntity->VPhysicsGetObject(), Actual))) return false;
+		TestTrue(TEXT("independent native field retains solved pose and controller target"), Actual.Pose.Equals(Before.Pose, .001) && Actual.Shadow.Target.Equals(Before.Shadow.Target, .001));
+		TestTrue(TEXT("independent native current mechanics roundtrip before first think"), Actual.LinearVelocity.Equals(Before.LinearVelocity, .001) && Actual.AngularVelocityRadians.Equals(Before.AngularVelocityRadians, .001)
+			&& Actual.CurrentMassKg == Before.CurrentMassKg && Actual.CurrentInertia == Before.CurrentInertia && Actual.CurrentInverseInertia == Before.CurrentInverseInertia
+			&& Actual.CurrentMassFrame.Equals(Before.CurrentMassFrame, 1.e-6) && Actual.CurrentSurface == Before.CurrentSurface
+			&& Actual.CurrentLinearDamping == Before.CurrentLinearDamping && Actual.CurrentAngularDamping == Before.CurrentAngularDamping && Actual.bGravity == Before.bGravity && Actual.bAsleep == Before.bAsleep);
+		TestTrue(TEXT("independent controller originals permission limits and arrival roundtrip"), Actual.Shadow.bInstalled == Before.Shadow.bInstalled && Actual.Shadow.bActive == Before.Shadow.bActive
+			&& Actual.Shadow.bAllowMovement == Before.Shadow.bAllowMovement && Actual.Shadow.bAllowRotation == Before.Shadow.bAllowRotation && Actual.Shadow.bGravityMode == Before.Shadow.bGravityMode
+			&& Actual.Shadow.RemainingSeconds == Before.Shadow.RemainingSeconds && Actual.Shadow.SavedMassKg == Before.Shadow.SavedMassKg
+			&& Actual.Shadow.SavedInertia == Before.Shadow.SavedInertia && Actual.Shadow.SavedInverseInertia == Before.Shadow.SavedInverseInertia && Actual.Shadow.SavedMassFrame.Equals(Before.Shadow.SavedMassFrame, 1.e-6)
+			&& Actual.Shadow.SavedLinearDamping == Before.Shadow.SavedLinearDamping && Actual.Shadow.SavedAngularDamping == Before.Shadow.SavedAngularDamping && Actual.Shadow.bSavedGravity == Before.Shadow.bSavedGravity
+			&& Actual.Shadow.LinearDesiredLimitCm == Before.Shadow.LinearDesiredLimitCm && Actual.Shadow.AngularDesiredLimitRadians == Before.Shadow.AngularDesiredLimitRadians
+			&& Actual.Shadow.LinearDampingLimitCm == Before.Shadow.LinearDampingLimitCm && Actual.Shadow.AngularDampingLimitRadians == Before.Shadow.AngularDampingLimitRadians
+			&& Actual.Shadow.PredictedPosition.Equals(Before.Shadow.PredictedPosition, .001) && Actual.Shadow.TeleportDistanceCm == Before.Shadow.TeleportDistanceCm);
+		TestTrue(TEXT("owner field membership independently persists"), RestoringWorld.PhysicsShadows().Contains(SavedEntity->Handle) == (SavedEntity == SavedFields[0]));
+		TestTrue(TEXT("independent saved hidden native field retains actual query/sim flags"), ShapeFlags(SavedEntity->VPhysicsGetObject()) == FIntPoint(0,0));
+	}
+	return true;
+	};
+	if (!CheckIndependentFields(Destination, {Restored, RestoredBase, RestoredProp})) return false;
+	TestTrue(TEXT("saved alias fields allocate independently"), Restored->VPhysicsGetObject() != RestoredBase->VPhysicsGetObject() && Restored->VPhysicsGetObject() != RestoredProp->VPhysicsGetObject() && RestoredBase->VPhysicsGetObject() != RestoredProp->VPhysicsGetObject());
+	TestTrue(TEXT("removed-controller dynamic Model restores actual body without controller/member"), RestoredRemoved->VPhysicsGetObject() && !ElysiumModelPhysics::ShadowFor(RestoredRemoved->VPhysicsGetObject()) && !Destination.PhysicsShadows().Contains(RestoredRemoved->Handle));
+	TestNull(TEXT("count0 studio field never recreates body on reconnect"), RestoredAbsent->VPhysicsGetObject());
+	auto* RestoredSwap = ResolveSaved(SwapIndex);
+	TestTrue(TEXT("actual model owner Swap absence persists native controller without membership"), RestoredSwap && RestoredSwap->VPhysicsGetObject() && ElysiumModelPhysics::ShadowFor(RestoredSwap->VPhysicsGetObject()) && !Destination.PhysicsShadows().Contains(RestoredSwap->Handle));
+	FElysiumSavedPhysicsBody AfterSwap; if (!ElysiumModelPhysics::Capture(RestoredSwap->VPhysicsGetObject(), AfterSwap)) return false;
+	TestEqual(TEXT("selected TrunkLid current native mass restored without geometry recalculation drift"), AfterSwap.CurrentMassKg, BeforeSwap.CurrentMassKg);
+	void* RestoredObject = Restored->VPhysicsGetObject(); auto* RestoredComponent = ElysiumModelPhysics::ComponentFor(RestoredObject);
+	const auto RestoredToken = ElysiumModelPhysics::CaptureIdentity(RestoredObject);
+	const auto FormerPropToken = ElysiumModelPhysics::CaptureIdentity(RestoredProp->VPhysicsGetObject());
+	RestoredBase->VPhysicsSetObject(RestoredObject); RestoredProp->VPhysicsSetObject(RestoredObject);
+	int32 BeforeRelease = 0;
+	Destination.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+	{
+		if (Event.Kind != TEXT("physics_retire")) return; ++BeforeRelease;
+		TestTrue(TEXT("pre-release callbacks observe all aliases null"), !Restored->VPhysicsGetObject() && !RestoredBase->VPhysicsGetObject() && !RestoredProp->VPhysicsGetObject());
+		TestTrue(TEXT("pre-release callbacks observe controller recipe and member retired"), !ElysiumModelPhysics::ShadowFor(RestoredObject) && !ElysiumModelPhysics::RecipeFor(RestoredObject) && !Destination.PhysicsShadows().Contains(Restored->Handle));
+		TestTrue(TEXT("callbacks occur before actual native release"), RestoredComponent->GetBodyInstance()->IsValidBodyInstance());
+	});
+	RestoredBase->VPhysicsDestroyObject(); Destination.SetAiTraceSink({});
+	TestEqual(TEXT("borrowed225 visits all three actual references"), BeforeRelease, 3);
+	TestFalse(TEXT("borrowed225 releases native and fences stale output"), RestoredComponent->GetBodyInstance()->IsValidBodyInstance() || ElysiumModelPhysics::IsCurrentOutput(RestoredToken));
+	Restored->ScriptHide(); Restored->ScriptUnhide(); Restored->SetRuntimeOrigin(FVector(11,22,33));
+	TestFalse(TEXT("later art gates cannot resurrect retired native model"), RestoredComponent->GetBodyInstance()->IsValidBodyInstance());
+	TestTrue(TEXT("unrelated borrowed retirement preserves prop alias former owned producer"), ElysiumModelPhysics::IsCurrentOutput(FormerPropToken));
+	RestoredProp->Kill(); TestFalse(TEXT("Kill releases former owned producer even when current field was cleared"), ElysiumModelPhysics::IsCurrentOutput(FormerPropToken));
+	const auto ReplacementToken = ElysiumModelPhysics::CaptureIdentity(RestoredRemoved->VPhysicsGetObject());
+	RestoredRemoved->SetRuntimeModel(TEXT("models/scenery/structural/doorknoboffice/doorknoboffice.mdl"));
+	TestTrue(TEXT("real SetModel replaces own removed-controller producer"), RestoredRemoved->VPhysicsGetObject() && !ElysiumModelPhysics::IsCurrentOutput(ReplacementToken));
+	const auto FailedToken = ElysiumModelPhysics::CaptureIdentity(RestoredRemoved->VPhysicsGetObject());
+	RestoredRemoved->SetRuntimeModel(TEXT("models/scenery/structural/doorknoba/doorknoba.mdl"));
+	TestTrue(TEXT("genuine no-binary SetModel retires former producer without fallback"), !RestoredRemoved->VPhysicsGetObject() && !ElysiumModelPhysics::IsCurrentOutput(FailedToken));
+	AddInfo(FString::Printf(TEXT("model-shadow joined: archive_bytes=%d independent_fields=3 hidden_native_flags=0 removed_controller_body=1 count0=1 callbacks=%d"), Bytes.Num(), BeforeRelease));
+	Destination.Teardown();
+	FElysiumEntityWorld Travel(Map, nullptr, Services); Travel.Load(MoveTemp(TravelDefs));
+	if (!TestTrue(TEXT("level-transition reconnect consumes same typed Physics block"), Travel.ApplySnapshot(Persisted, 0., true) >= 0)) return false;
+	auto ResolveTravel = [&](int32 Index) { return Travel.Resolve(FElysiumEntityHandle(Index, Travel.GetEpoch())); };
+	auto* TravelOwner = ResolveTravel(ChildIndex); auto* TravelBase = ResolveTravel(BaseIndex); auto* TravelProp = ResolveTravel(PropIndex);
+	auto* TravelRemoved = ResolveTravel(RemovedIndex); auto* TravelSwap = ResolveTravel(SwapIndex); auto* TravelAbsent = ResolveTravel(NoBodyIndex);
+	if (!TravelOwner || !TravelBase || !TravelProp || !TravelRemoved || !TravelSwap || !TravelAbsent) return false;
+	if (!CheckIndependentFields(Travel, {TravelOwner, TravelBase, TravelProp})) return false;
+	TestTrue(TEXT("level transition preserves independent saved native allocations"), TravelOwner->VPhysicsGetObject() != TravelBase->VPhysicsGetObject()
+		&& TravelOwner->VPhysicsGetObject() != TravelProp->VPhysicsGetObject() && TravelBase->VPhysicsGetObject() != TravelProp->VPhysicsGetObject());
+	TestTrue(TEXT("level transition retains removed-controller model without member"), TravelRemoved->VPhysicsGetObject() && !ElysiumModelPhysics::ShadowFor(TravelRemoved->VPhysicsGetObject()) && !Travel.PhysicsShadows().Contains(TravelRemoved->Handle));
+	TestTrue(TEXT("level transition retains owner Swap controller without member"), TravelSwap->VPhysicsGetObject() && ElysiumModelPhysics::ShadowFor(TravelSwap->VPhysicsGetObject()) && !Travel.PhysicsShadows().Contains(TravelSwap->Handle));
+	FElysiumSavedPhysicsBody TravelSwapState; if (!ElysiumModelPhysics::Capture(TravelSwap->VPhysicsGetObject(), TravelSwapState)) return false;
+	TestEqual(TEXT("level transition retains exact current native TrunkLid mass"), TravelSwapState.CurrentMassKg, BeforeSwap.CurrentMassKg);
+	TestNull(TEXT("level transition respects exact count0 studio field"), TravelAbsent->VPhysicsGetObject());
+	const auto TravelToken = ElysiumModelPhysics::CaptureIdentity(TravelOwner->VPhysicsGetObject());
+	Travel.Teardown(); TestFalse(TEXT("level-transition teardown fences selected native output"), ElysiumModelPhysics::IsCurrentOutput(TravelToken));
+	AddInfo(TEXT("model-shadow level-transition: typed Physics block restored before first think, three independent hidden fields, removed controller, owner Swap absence, count0"));
+	ElysiumPreparedProps::Release(Map);
 	return true;
 }
 #endif

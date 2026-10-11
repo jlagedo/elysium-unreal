@@ -2249,3 +2249,59 @@ are stored. Angular `101c17e0` has the matching arithmetic over Source QAngles.
 The host mover must not round duration before deadline or divide centimetre-vector
 length by an already converted centimetre speed. Rebound setup follows the local
 velocity write. The ordinary no-motion equality arm writes type/destination before133.
+
+### Reached parented studio selected-model shadow and native field archive (2026-10-11)
+
+CDynamicProp Spawn101905e0 ->223101907e0 ->InitStatic100a5bb0 resolves its serial parent
+before ordinary solid selection. A resolved parent delegates InitShadow100a6150(false,false,null).
+InitStatic's Setup225 precedes InitShadow's own Setup225; edict failure preserves the prior
+field. InitShadow rejects solid0, samples absolute origin217 then angles219, and its nonbbox
+branch calls1002e3a0 with null explicit parameters.1002e210 supplies the already recovered
+ordered first-solid/default parameters; this dynamic env#7 branch has neither the static
+creator's final inertia1 override nor prop_physics massbias/override. Success associates the
+actual model/body, assigns100a6490, installs45(10000inches/s,10000degrees/s,false,false), submits
+46(absolute pose,false,0seconds), then registers1002edd0. Initial native pose precedes the
+controller; later232 submissions retain target separately from solved pose.
+
+The null arm's modeltype check at100a62b7 is exactly1. Only that type takes bad-collision
+debug/removal, with the retained asm passing literal sm_oceanhouse_2 then current map to
+Q_stristr. Studio3 classification is retained in wielded_weapons.md's CBaseAnimating
+SetModel10095030 section (modelinfo type3); the admitted office knob, TrunkLid, fan and three
+no-binary knobs are .mdl studio inputs. Their no-binary arm returns null without removal,
+render fallback, controller or membership. Generic brush type1 failure remains separate.
+
+The port's separate invisible selected carrier preserves art/target/solved independence for
+both static and skeletal art. Actual TrunkLid admission exposed selected cook present with
+render_compiling1 and physics_state0: installed StaticMeshComponent.cpp2310 deferred creation
+on render compilation. The invisible selected carrier uses public primitive admission over
+its ready selected UBodySetup; public compilation callbacks preserve that service. Visible
+ordinary model/art components retain their engine path. This is an Unreal service prerequisite,
+not a substitute cook, compilation wait or replacement solver.
+
+Native Physics10043c70/100443e0 saves each current field independently; base and prop aliases
+must restore native hidden state despite their own unrelated logical visibility. The actual
+typed archive exposed lost native query/simulation flags on owner/base/prop independent fields.
+Model capture now reads public actual native shape flags under the physics read lock. Semantic
+query bit0/simulation bit1 accompany the existing model asset recipe in selected cook order;
+restore validates legal bits/count against that selected cook before native state changes,
+validates recreated actual shape count before flag writes, and applies flags after component
+mechanics/filter updates. Failure retires unpublished native state. This records semantic native
+state, without claiming IVP allocation layout or cross-engine shape topology equivalence.
+
+RemoveShadow2601a920 leaves a live dynamic Model recipe eligible for the same field archive;
+restore admits that supported controller-absent state. Owner Swap100a68f0 retains body/controller,
+removes owner membership, and SetObject rebind does not re-add it. Creation-owned carrier cleanup
+also covers a null/replaced current field and teardown. RetireNative clears controller/recipe/
+membership/current aliases before callbacks and actual native release, fencing stale incarnations.
+The typed Physics block is consumed by inactive ApplySnapshot both for ordinary reconnect and
+the existing level-transition flag before first think, including three independently restored
+hidden fields, removed controller, owner Swap membership absence and exact count0.
+The real arena TrunkLid roundtrip exposed component mass recomputation changing saved current
+mass1000000.0625kg to1000000.125kg. Restore retains the strict saved-output comparison and writes
+the captured dynamic mass through public FPhysicsInterface::SetMass_AssumesLocked under the
+physics write lock after component updates; authored recipe/controller originals remain separate.
+Actual art compilation callbacks/recreation can leave inert Unreal allocations; their native query/simulation
+flags and gameplay associations remain absent, rather than treating allocation count as a contract.
+The bounded arena/native fixtures cover this P1 producer/save slice. Integrated parent movement,
+motion/clock/pose feedback/P3, P2 contact/filter parity, remaining callers/metadata and full P1/D02
+closure remain open.

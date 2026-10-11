@@ -76,6 +76,7 @@ struct FElysiumSavedPhysicsBody
 	uint8 CollisionMask = 0;
 	TArray<uint8> CollisionResponses; // native query response channels, observed by sight/traces
 	uint8 BboxCollisionEnabled = 3; // ECollisionEnabled::QueryAndPhysics; one analytic shape
+	TArray<uint8> ModelShapeFlags; // selected native cook order: query bit0, simulation bit1
 	FElysiumPhysicsShadowState Shadow;
 	bool bShadowMember = false; // serial entity registry belongs to owner field, not native alias
 };

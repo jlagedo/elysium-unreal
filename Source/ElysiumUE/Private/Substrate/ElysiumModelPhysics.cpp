@@ -609,6 +609,10 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	Ar << State.CurrentInertia << State.CurrentInverseInertia << State.CurrentMassFrame;
 	Ar << State.CurrentSurface;
 	Ar << State.CollisionProfile << State.CollisionMask << State.CollisionResponses << State.BboxCollisionEnabled;
+	int32 ModelShapeCount = State.ModelShapeFlags.Num(); Ar << ModelShapeCount;
+	if (ModelShapeCount < 0 || ModelShapeCount > 65536) { Ar.SetError(); return Ar; }
+	if (Ar.IsLoading()) State.ModelShapeFlags.SetNum(ModelShapeCount);
+	for (uint8& Flags : State.ModelShapeFlags) { Ar << Flags; if (Flags > 3) Ar.SetError(); }
 	Ar << State.Shadow.bInstalled << State.Shadow.bActive << State.Shadow.bAllowMovement << State.Shadow.bAllowRotation << State.Shadow.bGravityMode;
 	Ar << State.Shadow.Target << State.Shadow.PredictedPosition << State.Shadow.RemainingSeconds;
 	Ar << State.Shadow.LinearDampingLimitCm << State.Shadow.LinearDesiredLimitCm << State.Shadow.AngularDampingLimitRadians << State.Shadow.AngularDesiredLimitRadians;
@@ -1087,6 +1091,14 @@ bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutStat
 		OutState.CollisionResponses.Add(static_cast<uint8>(Component->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Channel))));
 	if (Recipe->Kind == EElysiumPhysicsRecipeKind::Bbox)
 		OutState.BboxCollisionEnabled = static_cast<uint8>(NativeBody->GetShapeCollisionEnabled(0));
+	OutState.ModelShapeFlags.Reset();
+	if (Recipe->Kind == EElysiumPhysicsRecipeKind::Model)
+		FPhysicsCommand::ExecuteRead(NativeBody->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
+		{
+			TArray<FPhysicsShapeHandle> Shapes; NativeBody->GetAllShapes_AssumesLocked(Shapes);
+			for (const auto& Shape : Shapes)
+				OutState.ModelShapeFlags.Add((FPhysicsInterface::IsQueryShape(Shape) ? 1 : 0) | (FPhysicsInterface::IsSimulationShape(Shape) ? 2 : 0));
+		});
 	OutState.Shadow = ShadowFor(Actor) ? *ShadowFor(Actor) : FElysiumPhysicsShadowState();
 	return true;
 }
@@ -1632,7 +1644,9 @@ bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceP
 	FBodyInstance* Body = ElysiumModelPhysics::Identity(Component);
 	if (!Body)
 	{
-		OutError = TEXT("Chaos body creation failed");
+		const UStaticMesh* SelectedMesh = Proxy ? Proxy->GetStaticMesh().Get() : nullptr;
+		OutError = FString::Printf(TEXT("Chaos body creation failed (selected=%d render_compiling=%d physics_state=%d)"),
+			Proxy && Proxy->bUseSelectedBody, SelectedMesh && SelectedMesh->IsCompiling(), Component->IsPhysicsStateCreated());
 		ElysiumModelPhysics::Destroy(Component); return false;
 	}
 	if (Recipe.bMassCenter)
@@ -1680,6 +1694,17 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 		|| State.CollisionResponses.ContainsByPredicate([](uint8 Response) { return Response > ECR_Block; })
 		|| (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox && State.BboxCollisionEnabled > ECollisionEnabled::QueryAndProbe))
 	{ OutError = TEXT("invalid saved native query filter state"); return false; }
+	if (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Model)
+	{
+		// The selected cook is the association key. Reject before restoring any native mechanics;
+		// a saved flag array cannot be applied to another cook or to render collision shapes.
+		const UStaticMesh* SavedMesh = LoadObject<UStaticMesh>(nullptr, *State.Recipe.ModelAsset);
+		const auto* SavedInputs = UElysiumModelPhysicsInputs::Find(SavedMesh);
+		if (!SavedInputs || !SavedInputs->bSourceBody || !SavedInputs->SelectedBody
+			|| State.ModelShapeFlags.Num() != SavedInputs->SelectedBody->AggGeom.GetElementCount()
+			|| State.ModelShapeFlags.IsEmpty() || State.ModelShapeFlags.ContainsByPredicate([](uint8 Flags) { return Flags > 3; }))
+		{ OutError = TEXT("saved model shape flags do not match selected native collision cook"); return false; }
+	}
 	const int32 CurrentSurfaceIndex = Surfaces.GetSurfaceIndex(State.CurrentSurface);
 	const auto* CurrentSurface = Surfaces.GetSurfaceData(CurrentSurfaceIndex);
 	if (State.CurrentSurface.IsEmpty() || CurrentSurfaceIndex < 0 || !CurrentSurface)
@@ -1692,6 +1717,8 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 	if (!State.CollisionProfile.IsNone()) Component->SetCollisionProfileName(State.CollisionProfile);
 	Component->SetMaskFilterOnBodyInstance(State.CollisionMask);
 	if (!CreatePhysicsRecipe(Component, Surfaces, State.Recipe, State.bAsleep, OutError)) return false;
+	bool bRestoreSucceeded = false;
+	ON_SCOPE_EXIT { if (!bRestoreSucceeded) Destroy(Component); };
 	if (!State.CollisionProfile.IsNone()) Component->SetCollisionProfileName(State.CollisionProfile);
 	if (State.CollisionResponses.Num() == NativeResponseChannelCount)
 		for (int32 Channel = 0; Channel < NativeResponseChannelCount; ++Channel)
@@ -1711,10 +1738,36 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 	}
 	if (!State.Recipe.bStatic)
 	{
+		// Component override recomputes selected geometry's mass and can change a saved native
+		// scalar by a float ULP. Restore the captured current mechanics through the public GT API
+		// after recalculating component updates; keep the authored recipe and override separately.
+		FPhysicsCommand::ExecuteWrite(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
+		{
+			FPhysicsInterface::SetMass_AssumesLocked(NativeActor, State.CurrentMassKg);
+		});
 		Body->SetLinearVelocity(State.LinearVelocity, false);
 		Body->SetAngularVelocityInRadians(State.AngularVelocityRadians, false);
 		if (State.bAsleep) Body->PutInstanceToSleep();
 		else Body->WakeInstance();
 	}
+	if (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Model)
+	{
+		bool bMatchingShapes = false;
+		FPhysicsCommand::ExecuteWrite(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
+		{
+			TArray<FPhysicsShapeHandle> Shapes; Body->GetAllShapes_AssumesLocked(Shapes);
+			if (Shapes.Num() != State.ModelShapeFlags.Num()) return;
+			bMatchingShapes = true;
+			// Apply last: component material/response/mass updates above may republish filter flags.
+			for (int32 ShapeIndex = 0; ShapeIndex < Shapes.Num(); ++ShapeIndex)
+			{
+				FPhysicsInterface::SetIsQueryShape(Shapes[ShapeIndex], (State.ModelShapeFlags[ShapeIndex] & 1) != 0);
+				FPhysicsInterface::SetIsSimulationShape(Shapes[ShapeIndex], (State.ModelShapeFlags[ShapeIndex] & 2) != 0);
+			}
+			if (FPhysScene* Scene = Body->GetPhysicsScene()) Scene->UpdateActorInAccelerationStructure(NativeActor);
+		});
+		if (!bMatchingShapes) { OutError = TEXT("restored native shapes do not match saved selected cook"); return false; }
+	}
+	bRestoreSucceeded = true;
 	return true; // 100443e0 re-registers only the actual successful reconstructed object.
 }

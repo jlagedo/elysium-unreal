@@ -1874,3 +1874,23 @@ creator/caller reconciliation precede full P1 witness.100a5bb0/1002e580/101907e0
 generic render proxies never proved the service. Next packet identifies that actual dependency;
 P2/P3 remain in order, no IVP prerequisite. No owner decision or accepted gameplay divergence.
 Full L0 closing gate stays open. See checkpoint.md for compact restart and next-packet.md.
+
+### Reached parented studio model-shadow checkpoint — 2026-10-11
+
+D02/P1 resolved-parent nonbbox studio creation now uses the actual selected dynamic Chaos
+service, independent art/target/solved state and retail parameter/order/controller/member rules.
+Authentic office knob/TrunkLid/fan plus three genuine no-binary controls join typed reload and
+level-transition native restoration, independent hidden aliases, removed controller, owner
+Swap membership absence, count0, Kill/SetModel/teardown and pre-release stale fencing.
+Exactly six required public imports refreshed stale metadata; all3455 unselected entries stable.
+Ready selected cook/render-compilation prerequisite repaired through public component APIs.
+Native flags and exact current dynamic mass restored after component updates; no solver clone.
+
+Main build223321 passed; default198/198; affected arena7/7 in one boot with baseline records.
+Worker family13/13; generator/policy checks pass. Exact receipt:
+E:/elysium-work/codex/l0-p1-model-shadow-20261011/acceptance-checkpoint.json.
+Source/artifact hashes independently verified. Existing startup errors/warnings retained.
+P1 remains open for required metadata coverage, generic type1 and other caller/flag contracts;
+P2/P3 automatic motion/timing/contact/bounds remain open. No full arm/closing arena/boot-order
+gate or whole-function closure claimed. Next packet reconciles the first unmet P1 observer.
+No owner decision, accepted gameplay divergence or push. Full L0 Goal remains active.

@@ -819,3 +819,14 @@ Closed `physics.*` witnesses read actual current/list/creation-owner registratio
 recipe/material/mass/pose, actual query shapes and shadow-owner membership. Missing native state
 fails admission/read; no generic state setters or fabricated recipes are provided. Other stale
 static asset metadata, parented model-shadow, P2 and P3 remain open; this record cannot close P1.
+
+`l0_physics_model_shadow_body` advances the reached resolved-parent studio model creator
+100a5bb0 ->100a6150 ->1002e3a0. It uses the real office knob, animated TrunkLid and fan
+selected cooks, three genuine studio3 no-binary inputs, independently saved hidden base/prop
+aliases, owner Swap membership absence and count0 borrowed225. The normal save/load transaction
+checks native state before first think with static/bbox controls. `physics.sim_shapes` reads actual
+native simulation flags, and `physics.shadow_installed` reads the registered controller; these
+are closed observations beside the existing query-shape word. Native ModelShadowCaller also
+checks selected cook, current/controller mechanics, actual232 target versus solved pose, public
+compilation callbacks and pre-release retirement. Integrated parent motion/cadence, P2, P3,
+generic type1 failure and remaining stale model metadata stay open; this record cannot close P1.

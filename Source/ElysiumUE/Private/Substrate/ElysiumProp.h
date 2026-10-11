@@ -28,6 +28,7 @@ bool ElysiumPropBodiesEnabled();
 class FElysiumProp : public FElysiumEntity
 {
 public:
+	virtual ~FElysiumProp() override;
 	int32 Skin = 0;
 
 	// CDynamicProp's animation keyfields (datamap `0x1058d4f8`, 12 records at `0x1058d53c`). There is
@@ -96,6 +97,7 @@ private:
 	void BuildBody(bool bFromSetModel);
 	void BuildBoxCollisionProxy(UPrimitiveComponent* Mesh);
 	void BuildStaticModelBody(UStaticMeshComponent* Mesh);
+	void BuildModelShadowBody(UStaticMeshComponent* Mesh);
 	void GateVisual();
 
 	// Exactly one representation is live. Ordinary props retain the baked static mesh; a model in
@@ -121,6 +123,11 @@ private:
 	bool bStaticModelRequested = false;
 	bool bStaticModelRetired = false;
 	bool bRestoredStaticModel = false;
+	//100a5bb0 resolved parent ->100a6150: selected dynamic service remains independent of art.
+	UElysiumPhysicsPropComponent* ModelShadowPhysics = nullptr;
+	bool bModelShadowRequested = false;
+	bool bModelShadowRetired = false;
+	bool bRestoredModelShadow = false;
 	// The resolved `solid` keyfield, kept so GateVisual can tell whether the fallback-path `Visual`'s
 	// collision is solid-driven (and must be regated with it) or was always NoCollision (solid 0).
 	int32 SolidValue = 0;

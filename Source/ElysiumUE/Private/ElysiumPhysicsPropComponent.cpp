@@ -18,21 +18,29 @@ bool UElysiumPhysicsPropComponent::ShouldCreatePhysicsState() const
 {
 	// An analytic RecipeBody owns its actual geometry. The invisible mesh carrier's render
 	// compilation is not a physics input (game Load can encounter an asynchronously compiling Cube).
-	return RecipeBody ? UPrimitiveComponent::ShouldCreatePhysicsState() : Super::ShouldCreatePhysicsState();
+	return HasIndependentPhysicsInputs() ? UPrimitiveComponent::ShouldCreatePhysicsState() : Super::ShouldCreatePhysicsState();
+}
+
+bool UElysiumPhysicsPropComponent::HasIndependentPhysicsInputs() const
+{
+	if (RecipeBody) return true;
+	if (!bUseSelectedBody || IsVisible()) return false;
+	const auto* Inputs = UElysiumModelPhysicsInputs::Find(GetStaticMesh());
+	return Inputs && Inputs->bSourceBody && Inputs->SelectedBody && Inputs->SelectedBody->AggGeom.GetElementCount() > 0;
 }
 
 #if WITH_EDITOR
 void UElysiumPhysicsPropComponent::PreStaticMeshCompilation()
 {
-	if (!RecipeBody || IsVisible()) Super::PreStaticMeshCompilation();
+	if (!HasIndependentPhysicsInputs() || IsVisible()) Super::PreStaticMeshCompilation();
 }
 
 void UElysiumPhysicsPropComponent::PostStaticMeshCompilation()
 {
-	if (RecipeBody && !IsVisible())
+	if (HasIndependentPhysicsInputs() && !IsVisible())
 	{
 		// This render-only carrier has no geometry to rebuild. Super would recreate the
-		// already published analytic actor, retiring its recipe/controller/current aliases.
+		// already published selected/analytic actor, retiring its recipe/controller/current aliases.
 		return;
 	}
 	Super::PostStaticMeshCompilation();

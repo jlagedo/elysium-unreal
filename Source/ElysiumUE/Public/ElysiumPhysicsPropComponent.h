@@ -23,4 +23,6 @@ public:
 	UFUNCTION() void NativeSleep(UPrimitiveComponent* Component, FName BoneName);
 protected:
 	virtual bool ShouldCreatePhysicsState() const override;
+private:
+	bool HasIndependentPhysicsInputs() const;
 };
