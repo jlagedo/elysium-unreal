@@ -4907,4 +4907,209 @@ bool FElysiumFuncBrushNativeContractTest::RunTest(const FString&)
 	return true;
 }
 
+namespace ElysiumInitNormalTest
+{
+	class FVirtualProbe final : public FElysiumEntity
+	{
+	public:
+		mutable TArray<FString> Calls;
+		UStaticMeshComponent* Carrier = nullptr;
+		bool bObservedPublishedAsleep = false;
+		void VPhysicsDestroyObject() override { Calls.Add(TEXT("225")); FElysiumEntity::VPhysicsDestroyObject(); }
+		const FVector& GetAbsAngles() const override { Calls.Add(TEXT("219")); return FElysiumEntity::GetAbsAngles(); }
+		const FVector& GetAbsOrigin() const override { Calls.Add(TEXT("217")); return FElysiumEntity::GetAbsOrigin(); }
+		int32 GetModelIndex() const override { Calls.Add(TEXT("8")); return FElysiumEntity::GetModelIndex(); }
+		void SetMoveType(int32 Type, int32 Collide) override
+		{
+			Calls.Add(TEXT("93"));
+			FElysiumSavedPhysicsBody State;
+			bObservedPublishedAsleep = Type == 7 && VPhysicsGetObject()
+				&& ElysiumModelPhysics::GameDataForObject(VPhysicsGetObject()) == this
+				&& ElysiumModelPhysics::Capture(VPhysicsGetObject(), State) && State.bAsleep;
+			FElysiumEntity::SetMoveType(Type, Collide);
+		}
+	};
+	TUniquePtr<FElysiumEntity> MakeProbe() { return MakeUnique<FVirtualProbe>(); }
+	FElysiumClassRegistrar Registrar(TEXT("elysium_test_initnormal"), TEXT("info_target"), &MakeProbe, [](FElysiumClassDesc&) {});
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInitNormalContractTest, "Elysium.Substrate.ModelPhysics.InitNormalContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumInitNormalContractTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> Ids = { ElysiumModelPhysicsTest::BodyId, ElysiumModelPhysicsTest::AbsentId };
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+	auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+	if (!TestTrue(TEXT("real PreparedForOwner selected-source producer"), Prepared && ElysiumPreparedProps::ForOwner(Map) == Prepared)) return false;
+	FElysiumWorldServices Services; Services.Embodiment = Map;
+	FElysiumEntityWorld World(Map, nullptr, Services); World.Load(FElysiumEntityDefs());
+	auto Def = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("normal_probe"));
+	Def.Classname = TEXT("elysium_test_initnormal"); Def.Origin = FVector(30000,20000,10000); Def.Keys.Add(TEXT("angles"),TEXT("17 31 23"));
+	auto* Probe = static_cast<ElysiumInitNormalTest::FVirtualProbe*>(World.Resolve(World.SpawnRuntimeEntity(Def)));
+	if (!Probe) return false;
+	Probe->SetRuntimeModel(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"));
+	FElysiumPlacedModelRequest Request;
+	Request.ModelPath = Probe->Model; Request.StaticStem = Def.ModelMesh; Request.Location = Probe->Origin;
+	Request.Rotation = ElysiumModelPhysics::SourceRotation(Probe->Angles); Request.Physics = EElysiumPlacedModelPhysics::SimulatedProxy;
+	const auto Produced = Map->BuildPlacedModelBody(Request); Probe->Carrier = Produced.PhysicsProxy;
+	if (!TestNotNull(TEXT("actual prepared physics carrier"), Probe->Carrier)) return false;
+	Probe->Calls.Reset();
+	void* Object = Probe->VPhysicsInitNormal(6, 0x120, false, Probe->Carrier, nullptr, &Error);
+	if (!TestNotNull(TEXT("real normal selected geometry creates native"), Object)) { AddError(Error); return false; }
+	TestEqual(TEXT("virtual reads and final writes retain retail order"), FString::Join(Probe->Calls,TEXT(",")), FString(TEXT("225,219,217,8,93")));
+	TestTrue(TEXT("virtual93 observes published sleeping body and creation GameData before wake"), Probe->bObservedPublishedAsleep);
+	FElysiumSavedPhysicsBody State;
+	if (!ElysiumModelPhysics::Capture(Object, State)) return false;
+	TestFalse(TEXT("false third argument explicitly wakes after93"), State.bAsleep);
+	TestEqual(TEXT("normal writes supplied solid flags"), Probe->GetSolidFlags(), 0x120);
+	TestTrue(TEXT("native pose is full absolute pose"), State.Pose.GetLocation().Equals(Probe->Origin,.001)
+		&& State.Pose.GetRotation().Equals(ElysiumModelPhysics::SourceRotation(Probe->Angles),.001));
+	const auto Previous = ElysiumModelPhysics::CaptureIdentity(Object);
+	Probe->Calls.Reset(); Probe->bEdictAttached = false;
+	TestNull(TEXT("missing edict returns null before cleanup"), Probe->VPhysicsInitNormal(0,4,true,Probe->Carrier));
+	TestTrue(TEXT("missing edict preserves current body solid flags and move words"), ElysiumModelPhysics::IsCurrentOutput(Previous)
+		&& Probe->VPhysicsGetObject() == Object && Probe->GetSolid() == 6 && Probe->GetSolidFlags() == 0x120 && Probe->GetMoveType() == 7 && Probe->Calls.IsEmpty());
+	Probe->bEdictAttached = true; Probe->Calls.Reset();
+	TestNull(TEXT("Solid0 returns null after admitted cleanup"), Probe->VPhysicsInitNormal(0,8,true,Probe->Carrier));
+	TestEqual(TEXT("Solid0 stops before pose/model virtual reads"), FString::Join(Probe->Calls,TEXT(",")), FString(TEXT("225")));
+	TestTrue(TEXT("Solid0 retires previous body but preserves movement word"), !ElysiumModelPhysics::IsCurrentOutput(Previous)
+		&& !Probe->VPhysicsGetObject() && Probe->GetSolid() == 0 && Probe->GetSolidFlags() == 8 && Probe->GetMoveType() == 7);
+	FElysiumPhysicsBodyRecipe Explicit;
+	Explicit.MassKg = 13.f; Explicit.Surface = TEXT("metal"); Explicit.InertiaScale = 2.f;
+	Explicit.LinearDamping = .6f; Explicit.AngularDamping = .7f;
+	Explicit.bMassCenter = true; Explicit.MassCenterCm = FVector(7,-11,3);
+	Object = Probe->VPhysicsInitNormal(6,0,true,Probe->Carrier,&Explicit,&Error);
+	if (!TestNotNull(TEXT("explicit parameters retain real source geometry"),Object) || !ElysiumModelPhysics::Capture(Object,State)) return false;
+	TestTrue(TEXT("true third argument leaves actual body asleep"),State.bAsleep);
+	TestEqual(TEXT("explicit mass bypasses source parsed mass"),State.CurrentMassKg,13.f);
+	TestEqual(TEXT("explicit damping bypasses source parsed damping"),State.CurrentLinearDamping,.6f);
+	TestEqual(TEXT("explicit surface retained in recipe"),State.Recipe.Surface,FString(TEXT("metal")));
+	const FVector InitialInertia=State.CurrentInertia;
+	const FTransform InitialMassFrame=State.CurrentMassFrame;
+	if (!TestTrue(TEXT("post-init caller mass write uses current native adapter"),ElysiumModelPhysics::SetMass(Object,26.f))
+		|| !ElysiumModelPhysics::Capture(Object,State)) return false;
+	TestTrue(TEXT("post-init mass retains authored COM/frame asleep state and native inertia multiplier"),State.CurrentMassFrame.Equals(InitialMassFrame,.001)
+		&& State.bAsleep && State.CurrentInertia.Equals(InitialInertia*2.,.01));
+	TestEqual(TEXT("post-init mass synchronizes semantic reconstruction recipe"),State.Recipe.MassKg,26.f);
+	auto ShapeFlags = [&]()
+	{
+		TArray<FPhysicsShapeHandle> Shapes; Probe->Carrier->GetBodyInstance()->GetAllShapes_AssumesLocked(Shapes);
+		FIntPoint Count(0,0); for(const auto& Shape:Shapes)
+		{ Count.X+=FPhysicsInterface::IsQueryShape(Shape); Count.Y+=FPhysicsInterface::IsSimulationShape(Shape); }
+		return Count;
+	};
+	const FIntPoint AdmittedShapes=ShapeFlags();
+	TestTrue(TEXT("real selected carrier has query and simulation shapes"),AdmittedShapes.X>0&&AdmittedShapes.Y>0);
+	const FElysiumSavedPhysicsBody BeforeMove=State;
+	Probe->SetSolid(0); Probe->SetMoveType(5,2);
+	if(!ElysiumModelPhysics::Capture(Object,State)) return false;
+	TestTrue(TEXT("changed93 with owner Solid0 disables native shapes without changing sleeping mechanics"),ShapeFlags()==FIntPoint(0,0)
+		&&State.bAsleep==BeforeMove.bAsleep&&State.CurrentMassKg==BeforeMove.CurrentMassKg&&State.CurrentInertia==BeforeMove.CurrentInertia
+		&&State.CurrentMassFrame.Equals(BeforeMove.CurrentMassFrame,.001)&&State.LinearVelocity==BeforeMove.LinearVelocity&&State.AngularVelocityRadians==BeforeMove.AngularVelocityRadians);
+	Probe->SetSolid(6); Probe->SetMoveType(6,1); TestTrue(TEXT("changed93 solid owner restores existing geometry"),ShapeFlags()==AdmittedShapes);
+	Probe->SetSolidFlags(4); Probe->SetMoveType(5,2); TestTrue(TEXT("changed93 with FSOLID_NOT_SOLID disables geometry"),ShapeFlags()==FIntPoint(0,0));
+	Probe->SetSolidFlags(0); Probe->SetMoveType(5,9);
+	TestTrue(TEXT("unchanged93 leaves movecollide and native eligibility untouched"),Probe->GetMoveCollide()==2&&ShapeFlags()==FIntPoint(0,0));
+	Probe->SetMoveType(6,1); TestTrue(TEXT("changed93 flags0 read enables geometry"),ShapeFlags()==AdmittedShapes);
+	FElysiumEntityDef AliasDef; AliasDef.Classname=TEXT("info_target");
+	auto* Alias=World.Resolve(World.SpawnRuntimeEntity(AliasDef)); if(!Alias) return false;
+	Alias->VPhysicsSetObject(Object); Alias->SetSolid(0); Alias->SetSolidFlags(4); Alias->SetMoveType(7,0);
+	TestTrue(TEXT("object25 uses actual creation owner despite non-solid current alias caller"),ShapeFlags()==AdmittedShapes&&ElysiumModelPhysics::GameDataForObject(Object)==Probe);
+	Alias->VPhysicsSwapObject(nullptr);
+	ElysiumModelPhysics::Wake(Probe->Carrier);
+	auto* NativeBody=ElysiumModelPhysics::Identity(Probe->Carrier);
+	NativeBody->SetLinearVelocity(FVector(71,-13,9),false); NativeBody->SetAngularVelocityInRadians(FVector(.2,.3,-.4),false);
+	FElysiumSavedPhysicsBody MovingBefore; if(!ElysiumModelPhysics::Capture(Object,MovingBefore)) return false;
+	Probe->SetSolidFlags(4); Probe->SetMoveType(5,0); if(!ElysiumModelPhysics::Capture(Object,State)) return false;
+	TestTrue(TEXT("object25 eligibility preserves actual nonzero native velocity and awake state"),!State.bAsleep&&State.LinearVelocity==MovingBefore.LinearVelocity
+		&&State.AngularVelocityRadians==MovingBefore.AngularVelocityRadians&&State.CurrentMassKg==MovingBefore.CurrentMassKg);
+	Probe->SetSolidFlags(0);
+	const auto ExplicitToken=ElysiumModelPhysics::CaptureIdentity(Object);
+	Explicit.MassKg=0.f; Probe->Calls.Reset();
+	TestNull(TEXT("admitted invalid native parameters fail after cleanup"),Probe->VPhysicsInitNormal(6,0,true,Probe->Carrier,&Explicit,&Error));
+	TestTrue(TEXT("failed creation retires former native and skips93/final relink"),!ElysiumModelPhysics::IsCurrentOutput(ExplicitToken)
+		&& !Probe->VPhysicsGetObject() && FString::Join(Probe->Calls,TEXT(","))==TEXT("225,219,217,8"));
+	Probe->Carrier->SetStaticMesh(Prepared->StaticMesh(ElysiumModelPhysicsTest::AbsentId,Error));
+	TestNull(TEXT("genuine source absence rejects explicit parameter geometry too"),Probe->VPhysicsInitNormal(6,0,true,Probe->Carrier,&Explicit,&Error));
+	TestTrue(TEXT("source absence has precise producer result"),Error.Contains(TEXT("no source VPhysics body")));
+	Probe->Carrier->SetStaticMesh(Prepared->StaticMesh(ElysiumModelPhysicsTest::BodyId,Error));
+	Object=Probe->VPhysicsInitNormal(6,0,true,Probe->Carrier);
+	if (!Object) return false;
+	const auto Retiring=ElysiumModelPhysics::CaptureIdentity(Object);
+	Probe->QueueRemove(); World.PurgeEntityRemovals();
+	TestFalse(TEXT("real pending release fences normal native incarnation"),ElysiumModelPhysics::IsCurrentOutput(Retiring));
+	Probe=nullptr; World.Teardown(); ElysiumPreparedProps::DestroyVisual(Produced.Visual);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInitNormalCoreTest, "Elysium.Substrate.ModelPhysics.InitNormalCore",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumInitNormalCoreTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map=Fixture.SpawnMapActorDeferred(); ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	auto* Placed=LoadObject<UElysiumPlacedModelCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins=LoadObject<UElysiumPropSkinCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> Ids={ElysiumModelPhysicsTest::BodyId,ElysiumModelPhysicsTest::AbsentId};
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed,Skins,Ids,Paths,Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for(const auto& Path:Paths) Assets.Add(Path.TryLoad());
+	auto Prepared=FElysiumPreparedPropModels::Create(Map,1,Placed,Skins,Ids,Assets,Error);
+	if(!Prepared) { AddError(Error); return false; }
+	FElysiumWorldServices Services; Services.Embodiment=Map;
+	FElysiumEntityWorld World(Map,nullptr,Services); World.Load(FElysiumEntityDefs());
+	const TCHAR* Model=TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl");
+	auto SleepDef=ElysiumModelPhysicsTest::Def(Model,TEXT("normal_sleep")); SleepDef.Origin=FVector(40000,30000,10000);
+	SleepDef.Keys.Add(TEXT("Damagetype"),TEXT("1")); SleepDef.Keys.Add(TEXT("massbias"),TEXT("2")); SleepDef.Keys.Add(TEXT("override_mass"),TEXT("9"));
+	auto AwakeDef=ElysiumModelPhysicsTest::Def(Model,TEXT("normal_awake")); AwakeDef.Origin=FVector(42000,30000,10000); AwakeDef.Keys.Add(TEXT("spawnflags"),TEXT("0"));
+	auto* Sleep=static_cast<FElysiumPhysProp*>(World.Resolve(World.SpawnRuntimeEntity(SleepDef)));
+	auto* Awake=static_cast<FElysiumPhysProp*>(World.Resolve(World.SpawnRuntimeEntity(AwakeDef)));
+	FElysiumSavedPhysicsBody SleepState,AwakeState;
+	if(!Sleep||!Awake||!ElysiumModelPhysics::Capture(Sleep->VPhysicsGetObject(),SleepState)||!ElysiumModelPhysics::Capture(Awake->VPhysicsGetObject(),AwakeState)) return false;
+	TestTrue(TEXT("actual core Spawn joins normal sleeping/gameflags/mass contract"),SleepState.bAsleep&&SleepState.CurrentGameFlags==1&&SleepState.CurrentMassKg==9.f
+		&& Sleep->GetSolid()==6&&Sleep->GetSolidFlags()==0&&Sleep->GetMoveType()==7&&Sleep->bSimulating);
+	TestEqual(TEXT("actual core current mass writes synchronize native reconstruction recipe"),SleepState.Recipe.MassKg,9.f);
+	TestFalse(TEXT("actual core spawnflags0 wakes"),AwakeState.bAsleep);
+	const auto Outputs=ElysiumModelPhysics::ActiveOutputs(World);
+	TestTrue(TEXT("production active consumer sees only awake normal object"),Outputs.ContainsByPredicate([&](const auto& Row){return Row.Actor==Awake->VPhysicsGetObject();})
+		&& !Outputs.ContainsByPredicate([&](const auto& Row){return Row.Actor==Sleep->VPhysicsGetObject();}));
+	if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+	if (!ElysiumModelPhysics::Capture(Sleep->VPhysicsGetObject(),SleepState)||!ElysiumModelPhysics::Capture(Awake->VPhysicsGetObject(),AwakeState)) return false;
+	TestTrue(TEXT("real native publication frame preserves selected asleep and awake arms"),SleepState.bAsleep&&!AwakeState.bAsleep);
+	FHitResult Hit; const FVector Center=UElysiumModelPhysicsInputs::Find(Sleep->Visual->GetStaticMesh())->SelectedBody->AggGeom.CalcAABB(SleepState.Pose).GetCenter();
+	const FCollisionQueryParams SelectedQuery(FName(TEXT("InitNormalCoreSelectedBody")),false);
+	Fixture.World->LineTraceSingleByChannel(Hit,Center-FVector(1000,0,0),Center+FVector(1000,0,0),ElysiumCollision::SightChannel,SelectedQuery);
+	TestTrue(TEXT("real native selected shape supports sight query while asleep"),Hit.GetComponent()==Sleep->Visual);
+	const int32 SleepIndex=Sleep->Handle.Index,AwakeIndex=Awake->Handle.Index;
+	const auto OldSleep=ElysiumModelPhysics::CaptureIdentity(Sleep->VPhysicsGetObject()),OldAwake=ElysiumModelPhysics::CaptureIdentity(Awake->VPhysicsGetObject());
+	FElysiumMapSnapshot Snapshot; World.Freeze(Snapshot); if(Snapshot.bPhysicsSaveFailed) return false;
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive SaveAr(Writer,FElysiumSaveVersion::Latest); SaveAr<<Snapshot;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive LoadAr(Reader,FElysiumSaveVersion::Latest); LoadAr<<Persisted;
+	if(!TestFalse(TEXT("normal core native archive decode"),Reader.IsError())) return false;
+	World.Teardown(); TestTrue(TEXT("teardown fences both normal actors"),!ElysiumModelPhysics::IsCurrentOutput(OldSleep)&&!ElysiumModelPhysics::IsCurrentOutput(OldAwake));
+	FElysiumEntityWorld Destination(Map,nullptr,Services); Destination.Load(FElysiumEntityDefs()); Persisted.PhysicsBodies.Reset();
+	if(!TestTrue(TEXT("Physics block reconstructs normal core producers"),Destination.ApplySnapshot(Persisted)>=0)) return false;
+	auto* RestoredSleep=static_cast<FElysiumPhysProp*>(Destination.Resolve(FElysiumEntityHandle(SleepIndex,Destination.GetEpoch())));
+	auto* RestoredAwake=static_cast<FElysiumPhysProp*>(Destination.Resolve(FElysiumEntityHandle(AwakeIndex,Destination.GetEpoch())));
+	if(!RestoredSleep||!RestoredAwake||!ElysiumModelPhysics::Capture(RestoredSleep->VPhysicsGetObject(),SleepState)||!ElysiumModelPhysics::Capture(RestoredAwake->VPhysicsGetObject(),AwakeState)) return false;
+	TestTrue(TEXT("normal core saved current parameters sleep and movement restored"),SleepState.bAsleep&&SleepState.CurrentMassKg==9.f&&SleepState.CurrentGameFlags==1&&!AwakeState.bAsleep
+		&&RestoredSleep->GetSolid()==6&&RestoredSleep->GetMoveType()==7);
+	const auto Replaced=ElysiumModelPhysics::CaptureIdentity(RestoredSleep->VPhysicsGetObject());
+	RestoredSleep->SetRuntimeModel(TEXT("models/scenery/structural/society/chair.mdl"));
+	TestTrue(TEXT("core failed replacement writes Solid0/MoveType0 and retires previous incarnation"),!RestoredSleep->VPhysicsGetObject()&&!ElysiumModelPhysics::IsCurrentOutput(Replaced)
+		&&RestoredSleep->GetSolid()==0&&RestoredSleep->GetMoveType()==0&&!RestoredSleep->bSimulating);
+	RestoredSleep->SetRuntimeModel(Model);
+	TestTrue(TEXT("core later successful replacement rejoins normal producer"),RestoredSleep->VPhysicsGetObject()&&RestoredSleep->GetSolid()==6&&RestoredSleep->GetMoveType()==7);
+	return true;
+}
+
 #endif

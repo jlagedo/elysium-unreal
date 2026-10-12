@@ -27,7 +27,8 @@ namespace ElysiumModelPhysics
 	void RefreshContactOutputs(FElysiumEntityWorld& World); //safe completed-native-frame snapshot
 	FElysiumEntity* GameDataForObject(void* Actor); //object6 creation-owned serial game data
 	bool Create(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
-		float MassBias, float OverrideMass, bool bStartAsleep, FString& OutError);
+		float MassBias, float OverrideMass, bool bStartAsleep, FString& OutError,
+		const FElysiumPhysicsBodyRecipe* ExplicitParameters = nullptr);
 	bool CreateStaticModel(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		FString& OutError); //1002e580: selected .phy, parsed parameters then inertia=1, env#8
 	// 1002dfe0/1002e7e0: bounds are authored local-space inputs, never visual mesh bounds.
@@ -64,6 +65,7 @@ namespace ElysiumModelPhysics
 	void RecordNativeOutput(UPrimitiveComponent* Component);
 	void RecordNativeActivity(UPrimitiveComponent* Component, bool bAwake);
 	void Wake(UPrimitiveComponent* Component);
+	bool SetMass(void* Actor, float MassKg); //10191510 current mass write; retain selected authored COM/recipe
 	bool GetPosition(void* Actor, FVector& OriginCm, FRotator& SourceAngles);
 	//100ad1a0 ->object40/26017f50: world cm/s and body-local Source QAngle degrees/s.
 	bool GetVelocity(void* Actor, FVector* LinearCmPerSecond, FVector* SourceAngularDegrees);

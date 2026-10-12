@@ -7,87 +7,73 @@ one run at a time, no nested agents. Never push. No genuine owner decision curre
 
 ## Latest accepted run
 
-The local commit containing this checkpoint closes the bounded native query/use producer,
-collision-pair/constraint and switch behavior packet. Exact accepted HEAD/tree/path hashes
-are recorded after commit in:
-E:/elysium-work/codex/l0-p1-rotating-reconcile-20261012/acceptance-checkpoint.json.
-Parent HEAD7e515bc439be1e1974a11475915b2c80fce7e027, tree9dba7fe699f934c228595559a5ef807b607129b1.
-Previous acceptance: E:/elysium-work/codex/l0-p1-brush-native-20261012/acceptance-checkpoint.json.
-Reuse parent selected36/body/material/shadow/velocity, sound8f8aea1b and plan5b48bb61.
-Worker /root/l0_p1_rotating_reconcile stopped; no live jobs or next worker.
-All filenames below live in E:/elysium-work/codex/l0-p1-rotating-reconcile-20261012.
+The local commit containing this checkpoint accepts the bounded normal initialization/core
+PhysProp packet. Exact accepted HEAD/tree/path hashes are recorded after commit in:
+E:/elysium-work/codex/l0-p1-initnormal-main-20261012/acceptance-checkpoint.json.
+Parent HEAD4ae7b7e5bf7748107ea17d8905381e2947c363b2, tree2828bcf7e5e0d6835aa32993af67f927173f3dd2.
+Worker /root/l0_initnormal_contract stopped; all worker/main jobs terminal, no next worker.
+Worker packet/freeze: E:/elysium-work/codex/l0-p1-initnormal-20261012/{packet.md,freeze.json}.
+Main review and caller disposition: E:/elysium-work/codex/l0-p1-initnormal-main-20261012/
+{selection-review.md,frozen-review.md,caller-ownership.json,arm-baseline-review.json}.
 
-## Contracts closed by this run
+## Contract and limits
 
-- Actual tutorial697 switch, terminals124/1857 and hub277, button523 and signs33/1282:
-  prepared Source studio bounds produce Unreal BBOX/OBB query geometry, current serial
-  attribution and separate physical use/visual attachment carriers; semantic Physics null
-  where retail requires it. Terminal10217880, button10215750, sign10211b40 Spawn words/order;
-  model replacement preserves subsequent state; restore/deferred admission retains saved
-  bounds/flags. Setters/pose changes relink center/extent/gates; native offset trigger touch.
-- Simple query pass/owner/group/bilateral virtual order and finite progress; native counted
-  pair/contact projection with actual identity/GameData/lifetime. Real constraint endpoint
-  ownership/sharing/restore/failure/retirement. InputBreak deactivation then sound/self-self
-  output/queue then removal; switch source clock/finished latch/skin/output order.
-- Forward Activate after reverse OnRestore. CCollisionProperty10560c20 original11-row map
-  confirms VECTOR GLOBAL|SAVE bounds, SHORT SAVE solid flags and FLOAT SAVE radius;
-  these four bindings now preserve native state. Global metadata alone does not implement
-  global merging. OccludesSound bool SAVE and button false backed; D03 audio policy open.
-- Actual absent-to-resident terminal dispatcher produces admitted query/visual and real
-  hit component/current serial/fraction. Test pumps real native loader/world/global callbacks
-  and selected public animation compilation barrier; no direct callback substitution.
-  Native terminal disabled collision, semantic enabled/disabled use, saved Solid0 visual,
-  actual80u miss/160u hit, Sight occlusion and archive/lifecycle assertions pass.
+- 100a5ea0 setup refuses absent edict before cleanup; admitted225 precedes solid/flags.
+Solid0 returns null. Real model creation reads219/217/8, publishes GameData/current identity,
+then93(7,0), then conditional Wake. Relink100b3b00 has profiling only, no game-state obligation.
+Explicit parameters require real source geometry. Native positive/negative/alias/lifetime proof.
+- Actual core10191510 now receives its model-index writer before initialization. Every null
+creation sets Solid0/MoveType0; success applies Damagetype==1, bias/clamp, then override after
+normal initialization. Native mass adapter preserves authored COM/inertia and saved recipe.
+Actual prepared core producer, active output, simple Sight, frame sleep/awake, native Physics
+bytes/reconstruction and failed/successful model replacement are joined.
+- Changed93 projects current body's collision eligibility through actual creation GameData,
+without waking/recalculating mass/velocity; equal type preserves movecollide and skips callback.
+Full pair/filter equivalence is unproven:100a5ea0/100aad70 remain firm:partial. Solid/flags25
+branches and waking RecheckCollisionFilter remain P2. Other caller Spawn coverage not implied.
 
-## Authoritative review and gates
+## Acceptance evidence
 
-Worker door-elevator-freeze.md/-hashes.json/-terminal.json:41 paths frozen;31 runtime,
-6 tests,4 docs. Main independently verified every hash and actual executed test state.
-Review: main-terminal-producer-implementation-review.md, main-terminal-query-review-20261012.md,
-main-use-consumer-dependency-review.md and main-collision-save-datamap-review.json.
-Main final gates, all terminal exit0:
-- Build185241.640668Z-build.json (75s).
-- Default185405.142119Z-test.json/index185405.299822:213/213Success,errors0/notRun0/inProcess0.
-- Affected185501.819521Z-test.json/index185633.035971:71/71Success,errors0/notRun0/inProcess0.
-- Arena185715.428486Z-arena.json/index185715.749608Z:18/18pass,four boots,all host exit0,
-  first_unmet null/scenario errors0. Existing experimental editor Python AgentSkill errors
-  remain; every Error log line was LogPython, no new scenario failure.
-- Arm190103.135278Z-test.json/index190104.684387:1671/1671Success,errors0/notRun0/inProcess0.
-- Generator185600.619631Z-research.json and doctor185600.624649Z-doctor.json pass;
-  doctor21existing policy warnings. No oracle ledger regeneration.
-All prior accepted213 default and1663 arm names still pass; no missing/regressed test.
-Earlier failed diagnostic/default receipts remain history, not acceptance. Default184536
-DoorElevator failure was invented fixture model/no prepared header; minimal test-only actual
-button523 admission retained every anchor/parent/state/I/O assertion; combined18501018/18pass.
-Detailed preceding checkpoint archived as checkpoint-before-local-acceptance-20261012T1902.md;
-prior checkpoint-before-terminal-sign-gates-20261012T183114.md preserves the full earlier history.
+All receipts below are E:/elysium-work/logs/<filename>.
+- Main build20261012T193348.909419Z-build.json exit0.
+- Default20261012T193357.820880Z-test.json:215/215 Success,errors0/notRun0/inProcess0.
+ Index E:/elysium-work/reports/tests/20261012T193357.978133Z-elysium-session-elysium-substrate/index.json.
+- Worker final family20261012T193122.822384Z-test.json:30/30 Success,errors0/notRun0/inProcess0;
+ independently read raw index and frozen9/9 hashes. Default also executes this family.
+- Arena20261012T193441.019079Z-arena.json:18/18pass,fourboots,allhostexit0,first_unmetnull/errors0.
+ Index E:/elysium-work/reports/arena/20261012T193441.299393Z/index.json.
+ Existing editor Python AgentSkill limitation retained:124 Error log lines,nonPython0.
+- Arm20261012T193847.465837Z-test.json:1671/1671 Success,errors0/notRun0/inProcess0.
+ Index E:/elysium-work/reports/tests/20261012T194041.852082Z-elysium-arm/index.json.
+- Doctor20261012T193415.320319Z-doctor.json repo-only0warnings;
+ generator20261012T193910.801021Z-research.json matches generated shape; no ledger regeneration.
+All prior213 default and1671 arm names pass; no missing/regressed. git diff --check clean.
+Failed development compile/query receipts retained in worker freeze. Query fixture changed
+simple params and native publication together; no isolated cause claimed or hit assertion weakened.
 
-## Content prerequisites and protection
+## Prior acceptance / protection
 
-Exact NONFORCE terminal/button3 refresh172224 and sign2 refresh180740 closed required typed
-inputs. Positive TerminalStudioInputs172529 and SignStudioInputs181313. Previous switch refresh
-retained. No further imports. Main before/after full-root and semantic reviews are retained.
-Final door-elevator-final-preservation-comparison.json proves zero subsequent changes/adds/removes:
-native77173/staged3464/source4445/corpus14447; manifest rows/keep/selection unchanged.
-Materials/slots/skins/LODs/previous collision contracts preserved; bodyInputs metadata legitimately
-added by refresh. No unselected/source/corpus changes. No retail install writes.
+Native query/use, collision-pair/constraint/switch and four collision SAVE bindings remain
+accepted at4ae7b7e5: E:/elysium-work/codex/l0-p1-rotating-reconcile-20261012/acceptance-checkpoint.json.
+Full preceding checkpoint and next packet archived in main scratch as prior-checkpoint.md and
+prior-next-packet.md. Reuse brush7e515bc, selected36/body/material/shadow/velocity,
+sound8f8aea1b and plan5b48bb61 receipts. No imports/content/corpus refresh in this run.
+No retail writes. Retain all earlier source/content protection proofs and authored material rules.
 
-## Remaining requirements / next witness
+## Remaining / next witness
 
-P1 required core callers/writers beyond this packet remain open. Before the next fresh worker,
-reconcile exact remaining P1 audit/service/caller rows against accepted receipts and select one
-bounded real producer/consumer witness; reuse confirmed walks, no general reconstruction.
-Then E2/P2 and integrated P3 in dependency order. E2 Kill100acf90 is not closed by QueueRemove;
-CNotify target40/pair, Aim10000 membership/delete and PhysicsAnimlink1014ec70 ownership/lifetime
-and higher recipients remain. Base180 partial/L2 act-store/L4 Nav hooks pending.
-P2 filter/query/material results; P3 simulation timing/parent/bounds/native landmark travel and
-remaining collision SAVE/global merge. FuncRotating mid51 is D07/P3; CPhysBox17 is D08/I1,
-neither unreachable nor IVP prerequisites. I2 impact10151c00/fullBreak, wider constraints,
-ragdoll and four retained D09 scope-review dispositions remain. Generic non-studio usable .phy
-publication is not proven by the selected sign OBB witness. D03 audio occlusion policy remains.
-Registered higher10340650/10327790/default APawn branches are not higher gameplay closure.
-
-Full gate remains all active L0/integration in one arena, required repeated boot orders,
-default+arm0fail/baseline preservation, owned auditdone or owneraccepted named divergence,
-observable engine contracts, registered hooks and complete mapped disposition. Never mark
-complete for this packet/subsystem. No IVP internals or retail-save import prerequisites.
+P1 required core caller/writer/lifecycle disposition still needs final reconciliation after this
+normal producer. Reuse exact helper caller roster; mid/tail families and higher Spawn chains
+remain explicit owners, not hidden core/IVP prerequisites. If no missing core body producer
+remains, advance E2/P2; do not declare P1 closed from these two new tests alone.
+E2 Kill100acf90 not closed by QueueRemove; CNotify target40/pair, Aim10000 membership/delete,
+PhysicsAnimlink1014ec70 ownership/lifetime/higher recipients; base180/L2 act-store/L4 Nav hooks.
+P2 filter/query/material results, current-body25 pairs and missing Solid/flags notifications.
+P3 timing/parent/bounds/native landmark travel, remaining collision SAVE/global merge.
+FuncRotating mid51 D07/P3; CPhysBox17 D08/I1; I2 impact10151c00/fullBreak/wider constraints,
+ragdoll/four D09 scope-review dispositions. Generic non-studio usable .phy not proved by sign OBB.
+D03 audio occlusion policy open. Registered higher10340650/10327790/APawn branches remain hooks.
+Full gate: all active L0/integration in one arena, repeated boot orders, default+arm0fail/baselines,
+owned auditdone or owneraccepted named divergence, observable engine contracts, registered hooks
+and complete mapped disposition. Never mark complete for a packet/subsystem. No IVP clone or
+retail-save import prerequisites. See next-packet.md for serial selection.

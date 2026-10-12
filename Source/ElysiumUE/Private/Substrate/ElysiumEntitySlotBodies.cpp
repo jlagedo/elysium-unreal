@@ -1048,12 +1048,18 @@ FVector FElysiumEntity::BodyTarget(const FVector& /*PosSrc*/, bool /*bNoisy*/, b
 void FElysiumEntity::SetMoveType(int32 MoveType, int32 MoveCollide)
 {
 	// `CBaseEntity::SetMoveType` `0x100aad70`, slot 93: `m_MoveType` and `m_MoveCollide` are written
-	// only when the type differs, and then the physics object is notified (its slot 25). **SEAM**:
-	// this runtime stands no `IPhysicsObject`, so the notify is a refusal.
+	// only when the type differs, then current object25 refreshes collision eligibility.
 	if (RetailMoveType != MoveType)
 	{
 		RetailMoveType = MoveType;
 		RetailMoveCollide = MoveCollide;
+		if (void* Object = VPhysicsGetObject())
+		{
+			//The object callback reads creation GameData, independently of mutable field aliases.
+			//Use the existing no-wake shape adapter; full P2 pair/filter callbacks remain open.
+			if (auto* Owner = ElysiumModelPhysics::GameDataForObject(Object))
+				ElysiumModelPhysics::GateStaticModelCollision(ElysiumModelPhysics::ComponentFor(Object), !Owner->IsRetailNotSolid());
+		}
 	}
 }
 

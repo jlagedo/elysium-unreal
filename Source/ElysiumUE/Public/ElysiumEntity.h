@@ -17,6 +17,8 @@ class UElysiumBrushComponent;
 class FElysiumDoorBase;
 class FElysiumLockableEntity;
 class IElysiumCameraOverrideSource;
+class UStaticMeshComponent;
+struct FElysiumPhysicsBodyRecipe;
 
 // Next-think sentinel: an entity with this next-think never runs Think(). Matches VtMB's
 // `0x7f7fffff` (FLT_MAX) write in CBaseEntity::ScriptHide (entity_io.md).
@@ -151,6 +153,11 @@ public:
 	// m_pPhysicsObject (+0x36c): the actual backend actor identity, independent of the
 	// embodiment/component and logical pose. Assignment never destroys the previous body.
 	void VPhysicsSetObject(void* Object); // vampire.dll 0x100a6490
+	//100a5ea0: ModelBody is the admitted Unreal carrier for the entity's selected model.
+	//ExplicitParameters replaces parsed solid parameters, never source geometry.
+	void* VPhysicsInitNormal(int32 SolidType, uint16 SolidFlags, bool bStartAsleep,
+		UStaticMeshComponent* ModelBody, const FElysiumPhysicsBodyRecipe* ExplicitParameters = nullptr,
+		FString* OutError = nullptr);
 	void VPhysicsSwapObject(void* Object); //100a68f0, reference operation, never destroys
 	virtual void OnPhysicsActorRetired() {} // native release invalidates producer gameplay state
 	virtual bool RestoreSavedPhysics(const struct FElysiumSavedPhysicsBody& State, FString& OutError);

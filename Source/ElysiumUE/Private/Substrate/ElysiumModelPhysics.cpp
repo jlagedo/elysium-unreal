@@ -1188,6 +1188,21 @@ const FElysiumPhysicsBodyRecipe* ElysiumModelPhysics::RecipeFor(void* Actor)
 	return nullptr;
 }
 
+bool ElysiumModelPhysics::SetMass(void* Actor, float MassKg)
+{
+	UPrimitiveComponent* Component = ComponentFor(Actor);
+	FBodyInstance* NativeBody = Identity(Component);
+	auto* Entry = PhysicsRecipeAssociations.FindByPredicate([Actor](const auto& Row) { return Row.Actor == Actor; });
+	if (!NativeBody || !Entry || Entry->Recipe.bStatic || !FMath::IsFinite(MassKg) || MassKg <= 0.f) return false;
+	const FTransform MassFrame = NativeBody->GetMassSpaceLocal();
+	//UE's mass update recalculates the selected geometry tensor at the current authored scale.
+	//It also recalculates COM; restore the already-adapted authored mass frame afterward.
+	Component->SetMassOverrideInKg(NAME_None, MassKg, true);
+	NativeBody->SetMassSpaceLocal(MassFrame);
+	Entry->Recipe.MassKg = MassKg; //retain the accepted semantic reconstruction recipe.
+	return true;
+}
+
 bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutState)
 {
 	UPrimitiveComponent* Component = ComponentFor(Actor);
@@ -1614,7 +1629,8 @@ void ElysiumModelPhysics::GateStaticModelCollision(UPrimitiveComponent* Componen
 }
 
 bool ElysiumModelPhysics::Create(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
-	float MassBias, float OverrideMass, bool bStartAsleep, FString& OutError)
+	float MassBias, float OverrideMass, bool bStartAsleep, FString& OutError,
+	const FElysiumPhysicsBodyRecipe* ExplicitParameters)
 {
 	OutError.Reset();
 	if (!Component) { OutError = TEXT("missing placed component"); return false; }
@@ -1645,6 +1661,14 @@ bool ElysiumModelPhysics::Create(UStaticMeshComponent* Component, FElysiumPhysic
 	Recipe.Drag = Inputs->Drag;
 	Recipe.RollingDrag = Inputs->RollingDrag;
 	Recipe.SolidPairsJson = Inputs->SolidPairsJson;
+	//1002e3a0: explicit solid parameters bypass parsing, but still select actual model geometry.
+	if (ExplicitParameters)
+	{
+		Recipe = *ExplicitParameters;
+		Recipe.Kind = EElysiumPhysicsRecipeKind::Model;
+		Recipe.bStatic = false; //env#7, regardless of an adapter recipe's prior use.
+		Recipe.ModelAsset = Mesh->GetPathName();
+	}
 	return CreatePhysicsRecipe(Component, Surfaces, Recipe, bStartAsleep, OutError);
 }
 

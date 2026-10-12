@@ -16,9 +16,41 @@
 #include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
 
 #include "Components/PrimitiveComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityBase, Log, All);
+
+void* FElysiumEntity::VPhysicsInitNormal(int32 SolidType, uint16 SolidFlags, bool bStartAsleep,
+	UStaticMeshComponent* ModelBody, const FElysiumPhysicsBodyRecipe* ExplicitParameters, FString* OutError)
+{
+	if (OutError) OutError->Reset();
+	//100a5ad0: absence of the edict rejects before virtual225 or any collision-word write.
+	if (!bEdictAttached) return nullptr;
+	VPhysicsDestroyObject();
+	//Setup's Relink100b3b00 is scope profiling only; no semantic/native write.
+	SetSolid(SolidType);
+	SetSolidFlags(SolidFlags);
+	if (SolidType == 0) return nullptr; //the Solid0 Relink is profiling only too.
+	//100a604b/6056/6061: callback-bearing virtual reads in this exact order.
+	const FVector AbsoluteAngles = GetAbsAngles();
+	const FVector AbsoluteOrigin = GetAbsOrigin();
+	const int32 SelectedModelIndex = GetModelIndex();
+	FString Error;
+	if (!World || !World->ModelTableHasModel(SelectedModelIndex) || !ModelBody)
+	{ if (OutError) *OutError = TEXT("normal initialization has no admitted model carrier"); return nullptr; }
+	ModelBody->SetWorldLocationAndRotation(AbsoluteOrigin, ElysiumModelPhysics::SourceRotation(AbsoluteAngles));
+	//env#7 creates sleeping.100a6096 wakes only AFTER publication and virtual93.
+	if (!ElysiumModelPhysics::Create(ModelBody, World->PhysicsSurfaces(), 0.f, 0.f, true, Error, ExplicitParameters))
+	{ if (OutError) *OutError = MoveTemp(Error); return nullptr; }
+	void* Object = ElysiumModelPhysics::ActorIdentity(ModelBody);
+	ElysiumModelPhysics::SetGameData(Object, *this);
+	VPhysicsSetObject(Object);
+	SetMoveType(7, 0);
+	if (!bStartAsleep) ElysiumModelPhysics::Wake(ModelBody);
+	//Final Relink100b3b00 is profiling only.
+	return Object;
+}
 
 void FElysiumEntity::VPhysicsSetObject(void* Object)
 {

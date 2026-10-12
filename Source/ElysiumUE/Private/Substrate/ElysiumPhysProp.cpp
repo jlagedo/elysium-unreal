@@ -34,6 +34,9 @@ static TAutoConsoleVariable<int32> CVarPhysicsProps(
 
 void FElysiumPhysProp::Spawn()
 {
+	//10191450 ->1018f340 ->1018df70 virtual105: the selected model index is
+	//published before virtual223 enters10191510/100a5ea0's GetModelIndex read.
+	if (World && !Model.IsEmpty()) SetModelIndex(World->ModelTableIndex(Model));
 	BuildBody();
 }
 
@@ -54,16 +57,17 @@ void FElysiumPhysProp::RetireModelBody()
 
 bool FElysiumPhysProp::CreateModelBody(FString& OutError)
 {
-	RetireModelBody();
-	if (!ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
-		MassBias, MassOverride, (SpawnFlags & 1) != 0, OutError)) return false;
+	void* Object = VPhysicsInitNormal(6, 0, (SpawnFlags & 1) != 0, Visual, nullptr, &OutError);
+	if (!Object) return false;
 	//10191510: exact authored equality; this is independent of GetDamageType slot189.
-	//Mass is configured inside Create before publication; its callbacks only record activity.
-	if (DamageType == 1 && !ElysiumModelPhysics::AddGameFlags(ElysiumModelPhysics::ActorIdentity(Visual), 1))
+	if (DamageType == 1 && !ElysiumModelPhysics::AddGameFlags(Object, 1))
 	{ OutError = TEXT("created physics prop has no current game flag association"); RetireModelBody(); return false; }
-	// 0x100a5ea0 / 0x100a6490: publish only the successfully created actual body.
-	ElysiumModelPhysics::SetGameData(ElysiumModelPhysics::ActorIdentity(Visual), *this);
-	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Visual));
+	//10191510: caller writes flags, positive bias/clamp, then positive override after normal init.
+	if (MassBias > 0.f && !ElysiumModelPhysics::SetMass(Object,
+		FMath::Clamp(Visual->GetMass() * MassBias, .5f, 1000000.f)))
+	{ OutError = TEXT("physics prop massbias has no supported current native mass"); RetireModelBody(); return false; }
+	if (MassOverride > 0.f && !ElysiumModelPhysics::SetMass(VPhysicsGetObject(), MassOverride))
+	{ OutError = TEXT("physics prop override_mass has no supported current native mass"); RetireModelBody(); return false; }
 	return true;
 }
 
@@ -249,31 +253,26 @@ void FElysiumPhysProp::BuildBody()
 
 	// 1002e3a0/10191510: source body presence is distinct from a cooked visual fallback box.
     FString BodyError;
-    if (!Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0)
-    {
-        SetSolid(6);
-        SetSolidFlags(0); // 100a5ea0 writes these before calling the model creator.
-    }
     bSimulating = !Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0 &&
         CreateModelBody(BodyError);
     if (!bSimulating)
     {
         Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (!Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0)
+		{
+			SetSolid(0);
+			SetMoveType(0, 0); //10191510: every failed normal creation, not just absent .phy.
+			//The caller's final Relink100b3b00 is profiling only.
+		}
         const auto* Inputs = UElysiumModelPhysicsInputs::Find(Visual->GetStaticMesh());
         if (Inputs && !Inputs->bSourceBody)
         {
-            SetSolid(0);
-            SetMoveType(0, 0); // 10191510's source-absent outcome, not a host bake failure.
             UE_LOG(LogElysiumProp, Log, TEXT("%s source model has no VPhysics body"), *DebugString());
         }
         else if (!Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0)
         {
             UE_LOG(LogElysiumProp, Warning, TEXT("%s Chaos adapter unavailable: %s"), *DebugString(), *BodyError);
         }
-    }
-    else
-    {
-        SetMoveType(7, 0); // VPhysicsInitNormal 100a5ea0.
     }
 
 	if (IsInert() || bBroken)

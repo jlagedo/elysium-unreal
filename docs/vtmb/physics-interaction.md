@@ -1568,9 +1568,9 @@ ratio2 against the same Chaos base body. Neither IVP's internal base tensor nor 
 rotinertialimit operation is reconstructed. Native COM uses the authored converted location
 and component scale; full recreation reapplies it because native mass updates can forget COM.
 
-10191510 supplies spawnflags bit1 as start-asleep; missing source body writes SOLID_NONE and
-MOVETYPE_NONE. Successful100a5ea0 writes solid6/flags0 before model creation, then movetype7
-after body creation. Positive massbias multiplies source mass and clamps to[0.5,1000000];
+10191510 supplies spawnflags bit1 as start-asleep; any null normal-init result writes SOLID_NONE
+and MOVETYPE_NONE. Successful100a5ea0 writes solid6/flags0 before model creation, then movetype7
+after object publication and before optional wake. Positive massbias multiplies current mass and clamps to[0.5,1000000];
 positive override_mass wins last. These are real CPhysicsProp key/save fields, not inferred
 model properties. The production adapter distinguishes retail source absence from missing
 userdata/stale cook or unsupported Chaos input (diagnostic reimport/failure).
@@ -1681,9 +1681,9 @@ Spawn/SetModel creation and is saved independently; a runtime field write does n
 existing body's flags. `GetDamageType` slot189 remains the separate constant-zero selector.
 The tutorial has54 prop_physics rows and no authored Damagetype; hub has0. The positive fixture
 supplies the actual registered key1 on an admitted selected native body, not a claimed shipped1.
-The adapter configures mass inside native creation before publishing the flag. Native wake/sleep
-callbacks only record activity and transform callbacks only record output; no intervening flag
-reader, game callback or native frame observes that setup sequence.
+The normal-init producer now publishes the parsed source body, dispatches movetype7 and optional
+wake, then applies this caller's flag and mass writes in the recovered order. Native mass updates
+retain the authored mass frame/inertia multiplier and synchronize the reconstruction recipe.
 
 Vphysics save `26018f20` copies the current WORD to Physics template[17]. Restore `26019070`
 constructs/initializes the object then writes object slot7 from that saved value before later
@@ -2745,3 +2745,56 @@ admission; it proves native geometry/gates, not prepared art. The host rejects a
 or StaticMesh in art.visible probes. These witnesses address this producer only, not full P1/D02/L0.
 P2/P3, integrated parent motion/cadence, true host travel, I2/Break, D09 brief scopes and the
 17-map CPhysBox D08/I1 obligation remain open.
+
+## Normal initialization and the core prop producer (2026-10-12)
+
+VPhysicsInitNormal `100a5ea0` first calls setup `100a5ad0`. Missing edict at+0x2e0
+returns false before cleanup or writes. Admitted setup dispatches virtual225, then Relink
+`100b3b00`. That Relink body only pushes/pops its scope profiler; it has no semantic state.
+Normal initialization then writes the supplied solid and uint16 flags. Solid0 returns null.
+Otherwise `100a604b/6056/6061` dispatches virtual219 (absolute angles),217 (absolute origin),
+8 (model index), then model helper `1002e3a0`. Explicit solid parameters bypass parser
+`1002e210` but still require actual selected model collision. The existing prepared selected
+geometry and Chaos adapter supply that body; no visual bounds or explicit parameter record
+invents missing source geometry.
+
+A successful body is published through SetObject before virtual93(7,0), then optionally
+woken. The decompiler's final `(char)param_1` is incorrect: `100a608a MOV AL,[ESP+0x14]`
+after ESI/EDI pushes reads the third argument, start-asleep; false calls body slot19 Wake.
+Creation starts asleep, so the actual93 callback sees the published sleeping body and its
+GameData even in the eventual awake arm. Failure skips93/wake. The final Relink remains
+profiling only and needs no production event or artificial touch callback.
+
+The real core writer is CPhysicsProp `10191510`. Its spawn chain `10191450 ->1018f340
+->1018df70` calls virtual105 SetModel at `1018dfa8`, before virtual223 normal init, supplying
+the model index read by virtual8. The port now joins that missing index writer to its admitted
+prepared prop. Any null InitNormal result writes Solid0 then virtual93(0,0), warning and
+profiling Relink. Success writes exact Damagetype==1 flags, then positive massbias times current
+mass clamped[.5,1000000], then positive override_mass. Native current mass updates preserve the
+already adapted authored mass frame and tensor multiplier and update the saved recipe's mass.
+The native query/Physics archive uses the actual body, including its current sleep, flags and mass.
+
+Changed SetMoveType `100aad70` writes both words and calls current object25; unchanged type
+preserves movecollide and does not call it. Its selected no-wake eligibility projection reads the
+object's actual creation GameData rather than a mutable alias field. Native model/bbox/brush
+carriers share the existing shape adapter. Tests observe Solid0, flags0 and FSOLID_NOT_SOLID,
+unchanged/changed type, foreign owner alias, nonzero native velocity, awake/sleep and mass.
+This does not establish complete pair rebuild equivalence. Existing SetSolid/SetSolidFlags
+object25 branches and the separate waking UpdatePhysicsFilterData helper remain P2 obligations.
+
+`Elysium.Substrate.ModelPhysics.InitNormalContract` uses a real PreparedForOwner carrier with
+a callback observer to prove setup rejection/cleanup,219/217/8/93 order, solid0, actual absence,
+explicit parameters, sleeping publication/wake, mass frame/tensor retention and lifetime.
+`InitNormalCore` uses actual registered prop_physics Spawn, active outputs, real native selected
+simple sight query, a publication frame, typed Physics bytes/reconstruction and replacement.
+The first query receipt `20261012T192844.493852Z-test.json` failed the sight assertion; that
+fixture lacked explicit simple-query parameters and a native publication frame. Both were added
+together, so the failed receipt does not isolate either cause. The corrected fixture proves the
+actual selected-simple branch with the same false-complex parameters as accepted selected-body
+tests and retains the actual sight-hit assertion. Both arms retain their sleep/activity state across
+the real publication frame. These are routine witnesses, not complete P1/D02/D08 closure.
+
+Other InitNormal callers remain independently owned: L0 mid CPropDestructable/CPhysBox and
+other mid callers; tail haunted prop/padlock/pushable; L2 weapon/inventory and higher grenade,
+cannister and player producers. Their required Spawn chains are not claimed by generic normal
+coverage. Simulation P3, pair/contact P2, impact/Break I2, IVP internals and higher gameplay remain open.
