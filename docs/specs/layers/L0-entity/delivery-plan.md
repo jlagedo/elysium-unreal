@@ -115,6 +115,16 @@ the current code and accepted receipts. Do not restart the IVP construction walk
   If a specific STEP/pusher arm is required here, assign that arm explicitly to this milestone
   and retain its later full M2/M3 gate. Do not stub it, or require all movement to close first.
 
+P2 also owns the minimum physical touch event producer required by filter mutation. The
+2026-10-12 bounded recovery distinguishes native44 contact snapshots and226 trigger discovery
+from100315c0/100316f0 physical StartTouch/EndTouch, their immediate/queued phase and event-driven
+link lifetime. Resolve the backend recheck-to-game listener bridge before claiming setter
+callback equivalence; backend pair insertion/deletion is not itself proof of a game event.
+Join the complete reached1002f1e0 native predicate, not only Simple/SP query rules. This is a
+specific M1 producer assigned to P2, not a prerequisite on full M1 or a change to Chaos ownership.
+Full motion/trigger touch integration remains M1 after P3. See next-packet.md and
+physics-interaction.md §Current-body recheck callback frontier; no runtime closure claimed.
+
 P3 closes on an entity being parented, moved, solved, queried, teleported/unlinked and removed
 without stale bounds, pose feedback loops or misplaced callbacks. It must exercise the consumer
 that invalidated the earlier r022a attempt, not just the five formerly passing cache records.

@@ -4,7 +4,7 @@ E1	D01	H1	Construction identity keyfields registries base slots and model metada
 P1	D02	E1,S1	Production body inputs identity lifecycle velocity/replacement and owned native saved state
 S1	D11	E1	Native block registry archive identity/fixup and ordered restore phases
 E2	D01	E1,P1,S1	Think modes/deadlines stamps clock/RNG state spawn/remove and physical deletion fences
-P2	D02	P1	Real query/filter/result material-selection and mutation notification contracts
+P2	D02	P1	Real query/filter/result material-selection and mutation notification contracts; required physical touch event producer phase/lifetime from M1
 P3	D02	P2,E2	Integrated shadow/pose/frame/parent/bounds contract including required live caller arms
 A1	D04	E1	Authored sound source resolution and actual Unreal asset readiness/lifetime
 A2	D04	A1,P3,E2,S1	Real sound emission update/stop ambient/scheme lifetime and owned saved state

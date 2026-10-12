@@ -77,3 +77,26 @@ Full gate: all active L0/integration in one arena, repeated boot orders, default
 owned auditdone or owneraccepted named divergence, observable engine contracts, registered hooks
 and complete mapped disposition. Never mark complete for a packet/subsystem. No IVP clone or
 retail-save import prerequisites. See next-packet.md for serial selection.
+
+## P2 bounded recovery checkpoint — 2026-10-12
+
+This local documentation commit accepts recovered callback phase/order evidence, not runtime
+closure. Runtime HEAD remains348959fe206f600a3d55e9e7ecb3d08bf742aef6; its gates above remain
+unchanged. Previous goal turn was no progress toward implementation (literal Goal retrieval);
+this continuation reviews evidence that changes the next dependency and checkpoints it.
+Worker /root/l0_collision_recheck_contract terminal, no runtime/audit edits or live jobs.
+Worker freeze/captures: E:/elysium-work/codex/l0-p2-collision-recheck-20261012/.
+Main independent review and post-commit receipt:
+E:/elysium-work/codex/l0-p2-collision-recheck-main-20261012/.
+All13 frozen source/evidence hashes matched. Main read vampire.dll callback/frame/filter bodies
+and independently verified10030910 friction→touch→damage order from corpus. No native tests
+run for these documentation-only changes; repository check and diff check are the gates.
+
+First unmet: concrete backend recheck listener bridge to game physical touch callbacks remains
+unrecovered. Native44 snapshots/226 trigger overlap are not solid-body event-driven touch proof.
+Confirmed immediate/queued gate, post226/229 drain order andFFFFFFFF link stamps are retained
+in physics-interaction.md §Current-body recheck callback frontier. Complete reached1002f1e0
+native filter inputs are also required; accepted Simple/SP formula is only one branch.
+P2 now explicitly includes its minimum M1 physical event producer; full M1 remains later,
+without a whole movement dependency or IVP clone. Next packet resolves one bridge question,
+then implements actual Chaos-to-game contact/filter contract. No owner decision; Goal ACTIVE.

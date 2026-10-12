@@ -1295,6 +1295,55 @@ SetCollisionGroup remains open until a real Chaos body/contact adapter propagate
 observable filter mutations and callbacks in order. The IVP broadphase itself is oracle
 mechanism evidence, not a required implementation.
 
+#### Current-body recheck callback frontier (2026-10-12, bounded recovery)
+
+The current-object25 setters cannot close by shape eligibility and native44 contact readback
+alone. The required game observer is the event-driven physical touch link/callback of actual
+solid native bodies, including removal and reentry after a filter mutation. This is distinct
+from `PhysicsTouchTriggers100a53d0`, whose current port collects trigger brushes during226,
+and from the completed native44 friction-contact roster.
+
+The vampire.dll collision handler `CCollisionEvent::StartTouch100315c0` and
+`EndTouch100316f0` read both native endpoints' slot6 GameData and require both nonnull.
+They dispatch immediately when handler+13c is clear; when set, they append a touch event
+with type0/start or type1/end. Start retains the contact point/normal; end supplies zero
+vectors. `PhysFrame1002ea40` writes `DAT_106b8814=1` at1002eb7a before environment26
+simulation, runs native active226 then shadow229, and clears it at1002ecf3 before
+`CCollisionEvent::FrameUpdate10030910`. The handler is `DAT_106b86d8`, so this is exactly
+its+13c gate. FrameUpdate runs friction, touch, then damage events. Touch drain10030d50
+walks insertion order from index0, rereads the live count on each iteration, dispatches by
+type, and clears the count only after the drain. A blanket next-frame queue would change
+the clear-gate arm; a callback from the Chaos physics thread would violate the queued arm.
+
+DispatchStartTouch10030ba0 builds the contact trace and calls
+`PhysicsMarkEntitiesAsTouchingEventDriven1003e4e0`: first endpoint then second, writing
+each successfully returned touchlink stamp to `0xffffffff`. The existing documented
+1003d490 sentinel arm never expires that link through ordinary stamp reconciliation.
+DispatchEndTouch10030cb0 notifies first endpoint of second, then second of first via
+1003d640. Endpoint order and callback mutation/lifetime therefore need the event producer,
+not a query-created trigger link with the current ordinary touch stamp.
+
+The actual native physics predicate is also broader than Simple:
+`CCollisionEvent::ShouldCollide1002f1e0` has same-GameData/native-pair, native GameFlags,
+object10 flag40/helper1002f820, virtual224, owner/root, solid/move/flags, game-rules77,
+bilateral contents and virtual68 branches. This walk only identifies these required arms;
+it does **not** recover their complete producers or declare them implemented. The accepted
+stateless SP group formula remains reusable at the reached rules77 branch. Projecting that
+formula alone would omit the other same-L0 inputs.
+
+Still unrecovered by this bounded question: which concrete listener installed in the
+environment+162/+164 list receives recheck insertion26048fb3, and how pair deletion26048f6d
+reaches the above game touch handlers (or only backend pair maintenance). The PE confirms
+reverse obsolete deletion before reverse candidate/listener insertion, but that ordering
+must not be relabeled as direct StartTouch/EndTouch delivery without the missing link.
+This is the stop boundary for the current-body packet, not an IVP reconstruction requirement.
+Before implementing object25 closure, join the real native candidate/pair-to-event adapter
+and the complete reached L0 filter inputs; retain higher gameplay overrides as explicit hooks.
+
+No runtime code or audit verdict changed in this bounded recovery. Evidence is retained in
+`E:/elysium-work/codex/l0-p2-collision-recheck-20261012/`: packet, vampire.dll decompilation,
+raw recheck26048b00 PE, and freeze receipt. No native build/test claim follows from it.
+
 `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` executes StandardFilterRules `0x101d3080`,
 pass rules `0x101d2fc0`, **candidate slot 91**, candidate BCC targetable/script-hidden gate,
 actual rules slot 77, then **candidate slot 68 before pass slot 68**, with short-circuiting.
