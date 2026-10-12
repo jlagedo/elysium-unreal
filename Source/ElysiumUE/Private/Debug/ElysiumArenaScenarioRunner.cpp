@@ -7,6 +7,7 @@
 #include "ElysiumClassRegistry.h"            // `entity_field`: a class datamap row by its name
 #include "ElysiumDlg.h"                      // `dialog_choose`: the open turn's response band
 #include "ElysiumEntity.h"
+#include "ElysiumBrushComponent.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumContentPaths.h"             // `KeyValues_LoadFile`: the corpus behind the fixture file system
@@ -3989,15 +3990,17 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 			if (!Parent || !Parent->Class) { OutError = Who + TEXT(" has no resolved registered parent"); return false; }
 			Out.String = Field == TEXT("parent.name") ? Parent->TargetName : Parent->Class->ClassName.ToString();
 		}
-		else if ((Field == TEXT("art.kind") || Field == TEXT("art.asset")) && Entity)
+		else if ((Field == TEXT("art.kind") || Field == TEXT("art.asset") || Field == TEXT("art.visible")) && Entity)
 		{
 			UPrimitiveComponent* Art = Entity->GetAttachBody();
+			if (Entity->Body) Art = Entity->Body->GetVisual();
 			const auto* StaticArt = Cast<UStaticMeshComponent>(Art);
 			const auto* SkeletalArt = Cast<USkeletalMeshComponent>(Art);
 			UObject* Asset = StaticArt ? static_cast<UObject*>(StaticArt->GetStaticMesh())
 				: SkeletalArt ? static_cast<UObject*>(SkeletalArt->GetSkeletalMeshAsset()) : nullptr;
 			if (!Asset) { OutError = Who + TEXT(" has no actual static/skeletal attach-body asset"); return false; }
-			Out.String = Field == TEXT("art.kind") ? (SkeletalArt ? TEXT("skeletal") : TEXT("static")) : Asset->GetPathName();
+			if (Field == TEXT("art.visible")) Out.bBool = Art->IsVisible();
+			else Out.String = Field == TEXT("art.kind") ? (SkeletalArt ? TEXT("skeletal") : TEXT("static")) : Asset->GetPathName();
 		}
 		else if (Field.StartsWith(TEXT("physics.")) && Entity)
 		{
@@ -4050,6 +4053,7 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 			}
 		}
 		else if (Field == TEXT("identity") && Entity) Out.String = Entity->Handle.ToString();
+		else if (Field == TEXT("effects") && Entity) Out.Number = Entity->EffectsWord;
 		else if (Field == TEXT("hidden") && Entity) Out.bBool = Entity->IsHidden();
 		else if (Field == TEXT("callback") && Entity) Out.String = Entity->ThinkCallback.ToString();
 		else if (Field == TEXT("callback.saved") && Entity) Out.String = Entity->SavedThinkCallback.ToString();

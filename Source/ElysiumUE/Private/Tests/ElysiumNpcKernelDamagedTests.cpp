@@ -175,7 +175,8 @@ bool FElysiumNpcKernelDamaged19ScriptHideGateTest::RunTest(const FString&)
 	// what prove it did not run.
 	TestEqual(TEXT("0x102c1cfc m_hCine -1 skips to 0x102c1e29: no forced schedule"),
 		C.Jack->ScheduleHost.ForcedSchedule, GDamaged19TestForcedSentinel);
-	TestEqual(TEXT("and no CineCleanup (0x102c1e12)"), C.Jack->RetailSolidSets, SolidSets);
+	TestEqual(TEXT("no CineCleanup: only the unconditional base100a8710 SetSolid lands"),
+		C.Jack->RetailSolidSets, SolidSets + 1);
 	TestTrue(TEXT("0x102c1e2b CBaseEntity::ScriptHide hides the body"), C.Jack->IsHidden());
 	TestTrue(TEXT("0x102c1e48 slot 77 on the active weapon"), C.Weapon->IsHidden());
 	return true;
@@ -231,8 +232,8 @@ bool FElysiumNpcKernelDamaged19ScriptHideScriptStateTest::RunTest(const FString&
 
 	// 0x102c1cf1 SCRIPT enters the warn arm; 0x102c1d32 -> 0x102c1d87 names the cine **UNKNOWN**.
 	C.Jack->ScriptHide();
-	TestEqual(TEXT("0x102c1e12 CineCleanup ran on this NPC (the dead-cine SetSolid)"),
-		C.Jack->RetailSolidSets, SolidSets + 1);
+	TestEqual(TEXT("102c1e12 CineCleanup SetSolid then unconditional base100a8710 SetSolid"),
+		C.Jack->RetailSolidSets, SolidSets + 2);
 	TestEqual(TEXT("0x100a8710 later hide writes4 after cleanup10"), static_cast<int32>(C.Jack->RetailSolidFlags), 4);
 	TestEqual(TEXT("0x102c1e24 m_iForcedSchedule := 0x6b"),
 		C.Jack->ScheduleHost.ForcedSchedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);

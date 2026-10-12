@@ -41,6 +41,7 @@
 #include "Misc/ScopeExit.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Physics/PhysicsInterfaceCore.h"
 #include <limits>
 
@@ -369,7 +370,7 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestEqual(TEXT("Physics saves eligible fields including aliases and absent body"), Snapshot.PhysicsBodies.Num(), 5);
 	const FElysiumSavedPhysicsBody* AbsentField = Snapshot.PhysicsBodies.FindByPredicate(
 		[BodylessIndex](const FElysiumSavedPhysicsBody& State) { return State.EntityIndex == BodylessIndex; });
-	TestTrue(TEXT("actual Physics save carries count0 field state"), AbsentField && !AbsentField->bHasObject);
+	TestTrue(TEXT("actual Physics save carries semantic omitted-null field state"), AbsentField && !AbsentField->bHasObject && !AbsentField->bRebuildFromEntity);
 	TestFalse(TEXT("registered source alias admitted"), Snapshot.bPhysicsSaveFailed);
 	for (const auto& State : Snapshot.PhysicsBodies)
 	{
@@ -404,7 +405,7 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	auto* RestoredBodyless = static_cast<FElysiumPhysProp*>(Destination.Resolve(FElysiumEntityHandle(BodylessIndex, Destination.GetEpoch())));
 	if (!RestoredBodyless) return false;
 	TestNull(TEXT("Destroy Freeze archive ApplySnapshot remains bodyless"), RestoredBodyless->VPhysicsGetObject());
-	TestFalse(TEXT("count0 restore retires baseline Spawn native actor through final reconnect"),
+	TestFalse(TEXT("omitted-null restore retires baseline Spawn native actor through final reconnect"),
 		RestoredBodyless->Visual->GetBodyInstance()->IsValidBodyInstance());
 	if (!Restored || !RestoredSleep || !TestNotNull(TEXT("restored actual native actor"), Restored->VPhysicsGetObject())) return false;
 	FElysiumSavedPhysicsBody RestoredState;
@@ -782,6 +783,7 @@ bool FElysiumStaticModelCallerTest::RunTest(const FString&)
 	Fixture.World->LineTraceSingleByChannel(CompiledBboxHit, BboxCenter - FVector(1000,0,0), BboxCenter + FVector(1000,0,0), ElysiumCollision::SightChannel, SelectedQuery);
 	TestTrue(TEXT("analytic static query remains active after actual compilation callback"), CompiledBboxHit.GetComponent() == BboxCarrier);
 
+
 #endif
 	Shadow->VPhysicsSwapObject(nullptr);
 	TestFalse(TEXT("actual shadow OWNER null Swap removes owner membership"), EntityWorld.PhysicsShadows().Contains(ShadowHandle));
@@ -1082,7 +1084,7 @@ bool FElysiumStaticBboxCallerTest::RunTest(const FString&)
 	TestFalse(TEXT("native query independently honors restored disabled shape"), TraceBody(SavedPose.GetLocation()));
 	Body->SetShapeCollisionEnabled(0, ECollisionEnabled::QueryAndPhysics);
 	TestTrue(TEXT("native query returns after response and shape both enable"), TraceBody(SavedPose.GetLocation()));
-	TestNull(TEXT("count0 static field survives reconnect without resurrection"), RestoredAbsent->VPhysicsGetObject());
+	TestNull(TEXT("omitted-null static field survives reconnect without resurrection"), RestoredAbsent->VPhysicsGetObject());
 	FElysiumMapSnapshot InvalidShape = Snapshot; InvalidShape.BlockStream.Reset();
 	InvalidShape.PhysicsBodies[0].BboxCollisionEnabled = 255;
 	TArray<uint8> InvalidShapeBytes; FMemoryWriter InvalidShapeWriter(InvalidShapeBytes, true);
@@ -2468,7 +2470,7 @@ bool FElysiumModelShadowCallerTest::RunTest(const FString&)
 	if (!CheckIndependentFields(Destination, {Restored, RestoredBase, RestoredProp})) return false;
 	TestTrue(TEXT("saved alias fields allocate independently"), Restored->VPhysicsGetObject() != RestoredBase->VPhysicsGetObject() && Restored->VPhysicsGetObject() != RestoredProp->VPhysicsGetObject() && RestoredBase->VPhysicsGetObject() != RestoredProp->VPhysicsGetObject());
 	TestTrue(TEXT("removed-controller dynamic Model restores actual body without controller/member"), RestoredRemoved->VPhysicsGetObject() && !ElysiumModelPhysics::ShadowFor(RestoredRemoved->VPhysicsGetObject()) && !Destination.PhysicsShadows().Contains(RestoredRemoved->Handle));
-	TestNull(TEXT("count0 studio field never recreates body on reconnect"), RestoredAbsent->VPhysicsGetObject());
+	TestNull(TEXT("omitted-null studio field never recreates body on reconnect"), RestoredAbsent->VPhysicsGetObject());
 	auto* RestoredSwap = ResolveSaved(SwapIndex);
 	TestTrue(TEXT("actual model owner Swap absence persists native controller without membership"), RestoredSwap && RestoredSwap->VPhysicsGetObject() && ElysiumModelPhysics::ShadowFor(RestoredSwap->VPhysicsGetObject()) && !Destination.PhysicsShadows().Contains(RestoredSwap->Handle));
 	FElysiumSavedPhysicsBody AfterSwap; if (!ElysiumModelPhysics::Capture(RestoredSwap->VPhysicsGetObject(), AfterSwap)) return false;
@@ -2498,7 +2500,7 @@ bool FElysiumModelShadowCallerTest::RunTest(const FString&)
 	const auto FailedToken = ElysiumModelPhysics::CaptureIdentity(RestoredRemoved->VPhysicsGetObject());
 	RestoredRemoved->SetRuntimeModel(TEXT("models/scenery/structural/doorknoba/doorknoba.mdl"));
 	TestTrue(TEXT("genuine no-binary SetModel retires former producer without fallback"), !RestoredRemoved->VPhysicsGetObject() && !ElysiumModelPhysics::IsCurrentOutput(FailedToken));
-	AddInfo(FString::Printf(TEXT("model-shadow joined: archive_bytes=%d independent_fields=3 hidden_native_flags=0 removed_controller_body=1 count0=1 callbacks=%d"), Bytes.Num(), BeforeRelease));
+	AddInfo(FString::Printf(TEXT("model-shadow joined: archive_bytes=%d independent_fields=3 hidden_native_flags=0 removed_controller_body=1 omitted_null=1 callbacks=%d"), Bytes.Num(), BeforeRelease));
 	Destination.Teardown();
 	FElysiumEntityWorld Travel(Map, nullptr, Services); Travel.Load(MoveTemp(TravelDefs));
 	if (!TestTrue(TEXT("level-transition reconnect consumes same typed Physics block"), Travel.ApplySnapshot(Persisted, 0., true) >= 0)) return false;
@@ -2513,10 +2515,10 @@ bool FElysiumModelShadowCallerTest::RunTest(const FString&)
 	TestTrue(TEXT("level transition retains owner Swap controller without member"), TravelSwap->VPhysicsGetObject() && ElysiumModelPhysics::ShadowFor(TravelSwap->VPhysicsGetObject()) && !Travel.PhysicsShadows().Contains(TravelSwap->Handle));
 	FElysiumSavedPhysicsBody TravelSwapState; if (!ElysiumModelPhysics::Capture(TravelSwap->VPhysicsGetObject(), TravelSwapState)) return false;
 	TestEqual(TEXT("level transition retains exact current native TrunkLid mass"), TravelSwapState.CurrentMassKg, BeforeSwap.CurrentMassKg);
-	TestNull(TEXT("level transition respects exact count0 studio field"), TravelAbsent->VPhysicsGetObject());
+	TestNull(TEXT("level transition respects exact omitted-null studio field"), TravelAbsent->VPhysicsGetObject());
 	const auto TravelToken = ElysiumModelPhysics::CaptureIdentity(TravelOwner->VPhysicsGetObject());
 	Travel.Teardown(); TestFalse(TEXT("level-transition teardown fences selected native output"), ElysiumModelPhysics::IsCurrentOutput(TravelToken));
-	AddInfo(TEXT("model-shadow level-transition: typed Physics block restored before first think, three independent hidden fields, removed controller, owner Swap absence, count0"));
+	AddInfo(TEXT("model-shadow level-transition: typed Physics block restored before first think, three independent hidden fields, removed controller, owner Swap absence, omitted-null"));
 	ElysiumPreparedProps::Release(Map);
 	return true;
 }
@@ -2701,13 +2703,14 @@ bool FElysiumModelPhysicsHiddenPropBodyTest::RunTest(const FString&)
   TArray<FPhysicsShapeHandle> Shapes; Native->GetAllShapes_AssumesLocked(Shapes); BornHiddenBrushShapes=Shapes.Num();
   for (const auto& Shape:Shapes) if (FPhysicsInterface::IsQueryShape(Shape)||FPhysicsInterface::IsSimulationShape(Shape)) ++BornHiddenBrushActiveShapes;
  });
- // This existing func_brush fixture inherits base223/no native recipe. Preserve its query-only
- // fallback gate; the distinct door below reaches the admitted P1 shadow producer.
- TestTrue(TEXT("born-hidden nonrecipe func_brush retains its original collision and hidden-word gate"),
-  HiddenBrush->bHidden&&HiddenBrush->bSavedPhysicalWordsAvailable&&HiddenBrush->Body->GetCollisionEnabled()==ECollisionEnabled::NoCollision
-  &&!ElysiumModelPhysics::RecipeFor(ElysiumModelPhysics::ActorIdentity(HiddenBrush->Body))&&BornHiddenBrushActiveShapes==0);
+ FElysiumSavedPhysicsBody BornHiddenBrushNative;
+ TestTrue(TEXT("born-hidden func_brush223 retains native/controller and exact hidden words with all shapes gated"),
+  HiddenBrush->bHidden&&HiddenBrush->bSavedPhysicalWordsAvailable&&HiddenBrush->GetSolid()==0
+  &&ElysiumModelPhysics::Capture(HiddenBrush->VPhysicsGetObject(),BornHiddenBrushNative)
+  &&BornHiddenBrushNative.Recipe.Kind==EElysiumPhysicsRecipeKind::Brush&&BornHiddenBrushNative.Shadow.bInstalled
+  &&BornHiddenBrushShapes==1&&BornHiddenBrushActiveShapes==0);
  FHitResult BornHiddenBrushHit;
- TestFalse(TEXT("born-hidden nonrecipe func_brush remains absent from the real use query"),Fixture.TestWorld.GetTestWorld()->LineTraceSingleByChannel(
+ TestFalse(TEXT("born-hidden native func_brush remains absent from the real use query"),Fixture.TestWorld.GetTestWorld()->LineTraceSingleByChannel(
   BornHiddenBrushHit,BrushDef.Origin+FVector(0,0,60),BrushDef.Origin-FVector(0,0,60),ELYSIUM_USE_CHANNEL));
  auto* BornHiddenDoor=World.FindByName(TEXT("born_hidden_door"));
  FElysiumSavedPhysicsBody BornHiddenDoorNative;
@@ -2804,7 +2807,7 @@ bool FElysiumModelPhysicsHiddenPropBodyTest::RunTest(const FString&)
  const int32 ChairIndex=Chair->Handle.Index,PlateIndex=Plate->Handle.Index,PropIndex=PropAlias->Handle.Index,BaseIndex=BaseAlias->Handle.Index,RetiredIndex=Retired->Handle.Index,AbsentIndex=Absent->Handle.Index;
  const auto* HiddenRow=Snapshot.PhysicsBodies.FindByPredicate([&](const FElysiumSavedPhysicsBody& State){return State.EntityIndex==ChairIndex;});
  const auto* Count0=Snapshot.PhysicsBodies.FindByPredicate([&](const FElysiumSavedPhysicsBody& State){return State.EntityIndex==RetiredIndex;});
- TestTrue(TEXT("hidden current field saves count1 and retired field saves count0"),HiddenRow&&HiddenRow->bHasObject&&Count0&&!Count0->bHasObject);
+ TestTrue(TEXT("hidden current field saves count1 and retired field saves semantic omitted-null"),HiddenRow&&HiddenRow->bHasObject&&Count0&&!Count0->bHasObject&&!Count0->bRebuildFromEntity);
  TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive SaveAr(Writer,FElysiumSaveVersion::Latest); SaveAr<<Snapshot;
  FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive LoadAr(Reader,FElysiumSaveVersion::Latest); LoadAr<<Persisted;
  if (!TestFalse(TEXT("actual typed map archive decodes hidden Physics block"),Reader.IsError())) return false;
@@ -2819,8 +2822,8 @@ bool FElysiumModelPhysicsHiddenPropBodyTest::RunTest(const FString&)
   TestTrue(TEXT("type1 independently allocates each hidden current field"),Owner->VPhysicsGetObject()!=Base->VPhysicsGetObject()&&Owner->VPhysicsGetObject()!=Prop->VPhysicsGetObject()&&Base->VPhysicsGetObject()!=Prop->VPhysicsGetObject());
   FElysiumSavedPhysicsBody SleepState; if (!Capture(Sleep,SleepState)) return false;
   TestTrue(TEXT("born-hidden sleeping plate native settings/flags persist"),SameState(SavedPlate,SleepState)); CheckWords(Sleep,true);
-  TestNull(TEXT("typed reload preserves explicit225 count0"),Resolve(RetiredIndex)->VPhysicsGetObject());
-  TestNull(TEXT("typed reload preserves genuine no-binary count0"),Resolve(AbsentIndex)->VPhysicsGetObject());
+  TestNull(TEXT("typed reload preserves explicit225 omitted-null"),Resolve(RetiredIndex)->VPhysicsGetObject());
+  TestNull(TEXT("typed reload preserves genuine no-binary omitted-null"),Resolve(AbsentIndex)->VPhysicsGetObject());
   const auto RestoredToken=ElysiumModelPhysics::CaptureIdentity(Owner->VPhysicsGetObject()); void* Object=Owner->VPhysicsGetObject();
   Owner->ScriptUnhide(); FElysiumSavedPhysicsBody Unhidden; if (!Capture(Owner,Unhidden)) return false;
   TestTrue(TEXT("after reload Unhide keeps reconstructed identity and mechanics"),ElysiumModelPhysics::IsCurrentOutput(RestoredToken)&&SameState(SavedChair,Unhidden,false));
@@ -2995,7 +2998,7 @@ bool FElysiumModelPhysicsBodyGameFlagsTest::RunTest(const FString&)
 		{ if (!CheckFlags(Entity->VPhysicsGetObject(),0x8001)) return false; TestTrue(TEXT("final hidden reconnect retains flags before first think/native frame"),Entity->IsHidden()); }
 		TestTrue(TEXT("type1 independently reconstructs formerly shared fields"),Owner->VPhysicsGetObject()!=Base->VPhysicsGetObject()&&Owner->VPhysicsGetObject()!=Prop->VPhysicsGetObject()&&Base->VPhysicsGetObject()!=Prop->VPhysicsGetObject());
 		ElysiumModelPhysics::AddGameFlags(Base->VPhysicsGetObject(),2); CheckFlags(Base->VPhysicsGetObject(),0x8003); CheckFlags(Owner->VPhysicsGetObject(),0x8001); CheckFlags(Prop->VPhysicsGetObject(),0x8001);
-		TestNull(TEXT("count0 retired field stays absent after reload"),Resolve(RemovedIndex)->VPhysicsGetObject()); TestNull(TEXT("count0 source-no-binary stays absent"),Resolve(AbsentIndex)->VPhysicsGetObject());
+		TestNull(TEXT("omitted-null retired field stays absent after reload"),Resolve(RemovedIndex)->VPhysicsGetObject()); TestNull(TEXT("omitted-null source-no-binary stays absent"),Resolve(AbsentIndex)->VPhysicsGetObject());
 		const auto OldToken=ElysiumModelPhysics::CaptureIdentity(Owner->VPhysicsGetObject());
 		Owner->SetRuntimeModel(ModelPath); CheckFlags(Owner->VPhysicsGetObject(),0);
 		TestFalse(TEXT("SetModel fresh incarnation fences old token even if address is reused"),ElysiumModelPhysics::SetGameFlags(OldToken,0xffff));
@@ -3753,6 +3756,197 @@ bool FElysiumModelPhysicsCorePlaceholderTest::RunTest(const FString&)
 #endif
  AddInfo(TEXT("CORE36_PLACEHOLDER canonical 100cm centered bbox/simple-complex/missing slot/material/precision/recipe verified; incidental public force rewrite retained separately from 3425 unselected models"));
  return true;
+}
+
+namespace ElysiumFuncBrushNativeTest
+{
+	FIntPoint ShapeFlags(UElysiumBrushComponent* Component)
+	{
+		FIntPoint Flags(0, 0);
+		if (auto* Native = ElysiumModelPhysics::Identity(Component))
+			FPhysicsCommand::ExecuteRead(Native->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
+			{
+				TArray<FPhysicsShapeHandle> Shapes; Native->GetAllShapes_AssumesLocked(Shapes);
+				for (const auto& Shape : Shapes) { Flags.X += FPhysicsInterface::IsQueryShape(Shape); Flags.Y += FPhysicsInterface::IsSimulationShape(Shape); }
+			});
+		return Flags;
+	}
+	FElysiumEntityDef Brush(const TCHAR* Name, int32 ModelNumber, const FVector& Position)
+	{
+		FElysiumEntityDef Row; Row.Classname = TEXT("func_brush"); Row.TargetName = Name; Row.Model = ModelNumber;
+		Row.Keys.Add(TEXT("model"), FString::Printf(TEXT("*%d"), ModelNumber)); Row.Origin = Position;
+		FElysiumConvexHull Hull; for (float X : {-20.f, 20.f}) for (float Y : {-20.f, 20.f}) for (float Z : {-20.f, 20.f}) Hull.Vertices.Add(FVector(X,Y,Z));
+		Row.Hulls.Add(Hull); return Row;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFuncBrushNativeCoreTest, "Elysium.Substrate.ModelPhysics.FuncBrushNativeCore",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumFuncBrushNativeCoreTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred(); FElysiumWorldServices Services; Services.Embodiment = Map;
+	int32 CoreBrushCount = 0;
+	for (const TCHAR* MapName : {TEXT("sp_tutorial_1"), TEXT("sm_hub_1")})
+	{
+		FElysiumEntityDefs Core;
+		if (!TestTrue(TEXT("actual deployed core brush producer loads"), ElysiumEntityDefSource::Load(MapName, Core) != EElysiumEntityDefSource::None)) return false;
+		FElysiumEntityDefs Selected; Selected.MapName = MapName; TSet<FString> ParentNames;
+		for (const auto& Row : Core.Defs) if (Row.Classname == TEXT("func_brush"))
+		{
+			Selected.Defs.Add(Row); const FString Parent = Row.Keys.FindRef(TEXT("parentname")); if (!Parent.IsEmpty()) ParentNames.Add(Parent);
+		}
+		const int32 BrushCount = Selected.Defs.Num(); CoreBrushCount += BrushCount;
+		for (const auto& Row : Core.Defs) if (ParentNames.Contains(Row.TargetName) && Row.Classname != TEXT("func_brush")) Selected.Defs.Add(Row);
+		FElysiumEntityWorld World(Map, nullptr, Services); World.Load(MoveTemp(Selected));
+		for (int32 Index = 0; Index < BrushCount; ++Index)
+		{
+			auto* Entity = World.Resolve(FElysiumEntityHandle(Index, World.GetEpoch())); FElysiumSavedPhysicsBody Native;
+			if (!Entity || !TestTrue(TEXT("every actual core brush223 publishes native shadow before first Think"), ElysiumModelPhysics::Capture(Entity->VPhysicsGetObject(), Native))) return false;
+			TestTrue(TEXT("actual core brush recipe uses authored hulls and false/false controller permissions"), Native.Recipe.Kind == EElysiumPhysicsRecipeKind::Brush
+				&& Native.Recipe.BrushHulls.Num() == Entity->Def->Hulls.Num() && Native.Shadow.bInstalled && !Native.Shadow.bAllowMovement && !Native.Shadow.bAllowRotation
+				&& World.PhysicsShadows().Contains(Entity->Handle));
+			const bool Never = Entity->Def->Keys.FindRef(TEXT("Solidity")) == TEXT("1");
+			TestEqual(TEXT("actual core initial flags immediately gate native query and simulation"), ElysiumFuncBrushNativeTest::ShapeFlags(Entity->Body),
+				(Never || Entity->bHidden) ? FIntPoint(0,0) : FIntPoint(Entity->Def->Hulls.Num(), Entity->Def->Hulls.Num()));
+			TestEqual(TEXT("actual core brush name/authored-parent static flag predicate"), (Entity->Flags & 0x1000000) != 0, Entity->TargetName.IsEmpty() || Entity->ParentName.IsEmpty());
+			TestTrue(TEXT("NEVER brush art remains enabled while its native collision is disabled"), !Never || Entity->bHidden || Entity->IsBrushVisualEnabled());
+			TestTrue(TEXT("actual resolved parent preparation precedes brush223"), !Entity->MoveParent.IsSet() || Entity->bHidden || Entity->GetSolid() == 6);
+		}
+		World.Teardown();
+	}
+	TestEqual(TEXT("two accepted core witnesses contain37 native func_brush placements"), CoreBrushCount, 37);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFuncBrushNativeContractTest, "Elysium.Substrate.ModelPhysics.FuncBrushNativeContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumFuncBrushNativeContractTest::RunTest(const FString&)
+{
+	using namespace ElysiumFuncBrushNativeTest;
+	FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred(); FElysiumWorldServices Services; Services.Embodiment = Map;
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("func_brush_native_contract");
+	for (const TCHAR* Name : {TEXT("parent"), TEXT("toggle"), TEXT("never"), TEXT("always"), TEXT("disabled"), TEXT("hidden"), TEXT("retired"), TEXT("saved_child"), TEXT("mover")})
+	{
+		const int32 Index = Defs.Defs.Num(); auto Row = Brush(Name, Index + 1, FVector(5000 + Index * 1000,5000,3000));
+		if (FString(Name) == TEXT("never")) Row.Keys.Add(TEXT("Solidity"), TEXT("1"));
+		if (FString(Name) == TEXT("always") || FString(Name) == TEXT("disabled")) Row.Keys.Add(TEXT("Solidity"), TEXT("2"));
+		if (FString(Name) == TEXT("disabled")) Row.Keys.Add(TEXT("StartDisabled"), TEXT("7"));
+		if (FString(Name) == TEXT("hidden")) Row.bStartHidden = true;
+		if (FString(Name) == TEXT("saved_child")) { Row.Keys.Add(TEXT("parentname"), TEXT("parent")); Row.Keys.Add(TEXT("angles"), TEXT("15 35 25")); }
+		if (FString(Name) == TEXT("mover")) Row.Classname = TEXT("func_door");
+		Defs.Defs.Add(Row);
+	}
+	for (const TCHAR* Name : {TEXT("alias_one"), TEXT("alias_two")}) { FElysiumEntityDef Row; Row.Classname = TEXT("info_target"); Row.TargetName = Name; Defs.Defs.Add(Row); }
+	FElysiumEntityWorld Source(Map, nullptr, Services); Source.Load(FElysiumEntityDefs(Defs));
+	auto Find = [&](const TCHAR* Name) { return Source.FindByName(Name); };
+	auto* Toggle = Find(TEXT("toggle")); auto* Never = Find(TEXT("never")); auto* Always = Find(TEXT("always")); auto* Disabled = Find(TEXT("disabled"));
+	auto* Hidden = Find(TEXT("hidden")); auto* Retired = Find(TEXT("retired")); auto* Child = Find(TEXT("saved_child")); auto* Mover = Find(TEXT("mover"));
+	if (!Toggle || !Never || !Always || !Disabled || !Hidden || !Retired || !Child || !Mover) return false;
+	TestTrue(TEXT("initial toggle and ALWAYS are admitted before first Think"), Toggle->VPhysicsGetObject() && Always->VPhysicsGetObject() && ShapeFlags(Toggle->Body) == FIntPoint(1,1) && ShapeFlags(Always->Body) == FIntPoint(1,1));
+	TestTrue(TEXT("NEVER has native/controller but no active shapes"), Never->VPhysicsGetObject() && ElysiumModelPhysics::ShadowFor(Never->VPhysicsGetObject()) && ShapeFlags(Never->Body) == FIntPoint(0,0));
+	auto* NeverVisual = NewObject<UStaticMeshComponent>(Map); Map->AddInstanceComponent(NeverVisual); Never->Body->SetVisual(NeverVisual); Never->RefreshBrushBodyState();
+	TestTrue(TEXT("NEVER attached visual remains visible independently of native gate"), NeverVisual->IsVisible());
+	TestTrue(TEXT("StartDisabled integer7 ScriptHides ALWAYS before223 and rejects solid0"), Disabled->bHidden && Disabled->GetSolid() == 0 && !Disabled->VPhysicsGetObject() && ShapeFlags(Disabled->Body) == FIntPoint(0,0));
+	const auto* DisabledField = FElysiumClassRegistry::Get().FindField(*Disabled->Class, FName(TEXT("StartDisabled")));
+	if (!DisabledField) return false;
+	TestEqual(TEXT("StartDisabled is the actual saved integer, not bool or enabled latch"), DisabledField->Get(*Disabled).ToInt(), 7);
+	TestTrue(TEXT("StartHidden runs after223 and retains native/controller with disabled shapes"), Hidden->bHidden && Hidden->VPhysicsGetObject() && ElysiumModelPhysics::ShadowFor(Hidden->VPhysicsGetObject()) && ShapeFlags(Hidden->Body) == FIntPoint(0,0));
+	FHitResult Hit;
+	TestFalse(TEXT("NEVER fallback/native real query passes through"), Fixture.World->LineTraceSingleByChannel(Hit, Never->Origin + FVector(0,0,60), Never->Origin - FVector(0,0,60), ELYSIUM_USE_CHANNEL));
+	TestTrue(TEXT("ALWAYS real query reaches native brush"), Fixture.World->LineTraceSingleByChannel(Hit, Always->Origin + FVector(0,0,60), Always->Origin - FVector(0,0,60), ELYSIUM_USE_CHANNEL));
+	void* ToggleObject = Toggle->VPhysicsGetObject(); const auto ToggleIdentity = ElysiumModelPhysics::CaptureIdentity(ToggleObject);
+	auto Input = [&](FElysiumEntity* Entity, const TCHAR* Name) { Source.AcceptInput(Entity->Handle, FName(Name), FElysiumVariant::Void(), {}, {}); };
+	Input(Toggle, TEXT("Disable"));
+	TestTrue(TEXT("Disable invokes ScriptHide and gates native without retiring incarnation"), Toggle->bHidden && (Toggle->EffectsWord & 0x40) && Toggle->VPhysicsGetObject() == ToggleObject && ShapeFlags(Toggle->Body) == FIntPoint(0,0));
+	Input(Toggle, TEXT("Disable")); Input(Toggle, TEXT("Toggle"));
+	TestTrue(TEXT("Toggle uses effects predicate and ScriptUnhide restores native eligibility"), !Toggle->bHidden && !(Toggle->EffectsWord & 0x40) && ElysiumModelPhysics::IsCurrentOutput(ToggleIdentity) && ShapeFlags(Toggle->Body) == FIntPoint(1,1));
+	Input(Never, TEXT("Disable")); Input(Never, TEXT("Enable"));
+	TestTrue(TEXT("NEVER unhide restores visible art and saved nonsolid flags"), NeverVisual->IsVisible() && ShapeFlags(Never->Body) == FIntPoint(0,0) && (Never->GetSolidFlags() & 4));
+	Input(Disabled, TEXT("Enable"));
+	TestTrue(TEXT("Enable does not write saved disabled word or invent a new native"), !Disabled->bHidden && DisabledField->Get(*Disabled).ToInt() == 7 && !Disabled->VPhysicsGetObject());
+	Retired->VPhysicsDestroyObject();
+	Disabled->ScriptHide();
+	TestTrue(TEXT("class223 returns1 even on admitted solid0 rejection"), Disabled->CreateVPhysics() && !Disabled->VPhysicsGetObject());
+	int32 BrushFeedback = 0;
+	Source.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+	{
+		if (Event.Entity == Toggle->Handle && Event.Text.Contains(TEXT("tag=shadow_feedback"))) ++BrushFeedback;
+	});
+	auto* ToggleNative = ElysiumModelPhysics::Identity(Toggle->Body);
+	if (!ToggleNative) return false;
+	Source.Activate(0.); ToggleNative->WakeInstance();
+	Toggle->UpdatePhysicsShadowToCurrentPosition(.02f);
+	Source.BeginNativePhysicsFrame(.02,.02);
+	auto* BrushSolver = ToggleNative->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>();
+	const double BrushSolverTime = BrushSolver->GetSolverTime();
+	if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+	Source.FinishNativePhysicsFrame();
+	TestTrue(TEXT("native brush production frame advances actual solver"), BrushSolver->GetSolverTime() > BrushSolverTime);
+	TestTrue(TEXT("actual awake func_brush receives native shadow feedback callback"), BrushFeedback > 0);
+	TestTrue(TEXT("native frame retains func_brush incarnation and admitted shapes"), ElysiumModelPhysics::IsCurrentOutput(ToggleIdentity)
+		&& Toggle->VPhysicsGetObject() == ToggleObject && ShapeFlags(Toggle->Body) == FIntPoint(1,1));
+	Source.SetAiTraceSink({});
+	Child->SetOrigin(Child->GetOrigin() + FVector(37,41,53)); Child->SetAngles(FRotator(23,75,47));
+	const FVector ChildPosition = Child->GetAbsOrigin(), ChildAngles = Child->GetAbsAngles();
+	const int32 ChildIndex = Child->Handle.Index, MoverIndex = Mover->Handle.Index, HiddenIndex = Hidden->Handle.Index, RetiredIndex = Retired->Handle.Index;
+	auto* AliasOne = Find(TEXT("alias_one")); auto* AliasTwo = Find(TEXT("alias_two")); if (!AliasOne || !AliasTwo) return false;
+	AliasOne->VPhysicsSetObject(Child->VPhysicsGetObject()); AliasTwo->VPhysicsSetObject(Child->VPhysicsGetObject());
+	FElysiumSavedPhysicsBody SharedBefore; if (!ElysiumModelPhysics::Capture(Child->VPhysicsGetObject(), SharedBefore)) return false;
+	FElysiumMapSnapshot Snapshot; Source.Freeze(Snapshot);
+	auto Saved = [&](int32 Index) { return Snapshot.PhysicsBodies.FindByPredicate([&](const FElysiumSavedPhysicsBody& Row) { return Row.EntityIndex == Index; }); };
+	TestTrue(TEXT("nonnull non-saving field stores a rebuild marker without native snapshot"), Saved(ChildIndex) && !Saved(ChildIndex)->bHasObject && Saved(ChildIndex)->bRebuildFromEntity);
+	TestTrue(TEXT("actual null field is semantic omitted-null, never zero-count reconstruction"), Saved(RetiredIndex) && !Saved(RetiredIndex)->bHasObject && !Saved(RetiredIndex)->bRebuildFromEntity);
+	TestTrue(TEXT("hidden non-saving current field retains present zero-count marker"), Saved(HiddenIndex) && Saved(HiddenIndex)->bRebuildFromEntity);
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Saving(Writer, FElysiumSaveVersion::Latest); Saving << Snapshot;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Loading(Reader, FElysiumSaveVersion::Latest); Loading << Persisted;
+	if (!TestFalse(TEXT("real Freeze and typed Physics bytes roundtrip"), Snapshot.bPhysicsSaveFailed || Writer.IsError() || Reader.IsError())) return false;
+	FElysiumSavedPhysicsBody Malformed; Malformed.bHasObject = true; Malformed.bRebuildFromEntity = true;
+	TArray<uint8> BadBytes; FMemoryWriter BadWriter(BadBytes,true); BadWriter << Malformed;
+	TestTrue(TEXT("impossible positive snapshot plus rebuild marker is rejected"), BadWriter.IsError());
+	Source.Teardown(); Persisted.PhysicsBodies.Reset();
+	FElysiumEntityWorld Destination(Map, nullptr, Services); Destination.Load(FElysiumEntityDefs(Defs));
+	int32 ChildCreates = 0, HiddenCreates = 0, RetiredCreates = 0, MoverRetires = 0; bool Applied = false;
+	ElysiumModelPhysics::FNativeOutput ChildAtPhysics{};
+	Destination.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+	{
+		if (Event.Kind == TEXT("physics_retire") && Event.Entity.Index == MoverIndex) ++MoverRetires;
+		if (!Event.Text.Contains(TEXT("func_brush_create_vphysics"))) return;
+		TestFalse(TEXT("class223 rebuild precedes OnSnapshotApplied and first Think"), Applied);
+		if (Event.Entity.Index == ChildIndex)
+		{
+			++ChildCreates; auto* Restored = Destination.Resolve(FElysiumEntityHandle(ChildIndex, Destination.GetEpoch())); FElysiumSavedPhysicsBody State;
+			if (Restored && ElysiumModelPhysics::Capture(Restored->VPhysicsGetObject(), State))
+			{
+				ChildAtPhysics = ElysiumModelPhysics::CaptureIdentity(Restored->VPhysicsGetObject());
+				TestTrue(TEXT("class223 phase reads coherent saved parent and publishes exact absolute pose"), Restored->MoveParent.IsSet() && State.Pose.GetLocation().Equals(ChildPosition,.001)
+					&& State.Pose.GetRotation().Equals(ElysiumModelPhysics::SourceRotation(ChildAngles),.001) && State.Shadow.Target.Equals(State.Pose,.001));
+			}
+			else AddError(TEXT("saved parented brush missing actual native at223 phase"));
+		}
+		if (Event.Entity.Index == HiddenIndex) ++HiddenCreates;
+		if (Event.Entity.Index == RetiredIndex) ++RetiredCreates;
+	});
+	Destination.OnSnapshotApplied = [&]() { Applied = true; };
+	if (!TestTrue(TEXT("typed block restores registered fields before callbacks"), Destination.ApplySnapshot(Persisted, 42.) >= 0)) return false;
+	TestEqual(TEXT("nonnull non-saving parented brush reconstructs class223 exactly once"), ChildCreates, 1);
+	TestEqual(TEXT("present hidden field still dispatches223 once"), HiddenCreates, 1);
+	TestEqual(TEXT("omitted-null field never dispatches223"), RetiredCreates, 0);
+	TestEqual(TEXT("mover baseline retires once; OnPostRestore does not replace new223"), MoverRetires, 1);
+	TestTrue(TEXT("final reconnect retains native created during Physics phase"), ElysiumModelPhysics::IsCurrentOutput(ChildAtPhysics));
+	auto Restored = [&](const TCHAR* Name) { return Destination.FindByName(Name); };
+	TestNull(TEXT("restored hidden false128 solid0 rejects creation after225, unlike live Hide identity"), Restored(TEXT("hidden"))->VPhysicsGetObject());
+	Restored(TEXT("hidden"))->ScriptUnhide(); TestNull(TEXT("unhide never invents native after hidden reload solid0 rejection"), Restored(TEXT("hidden"))->VPhysicsGetObject());
+	TestNull(TEXT("restored actual null non-saving field remains null"), Restored(TEXT("retired"))->VPhysicsGetObject());
+	TestEqual(TEXT("actual saved disabled integer survives restore"), DisabledField->Get(*Restored(TEXT("disabled"))).ToInt(), 7);
+	auto* NewChild = Restored(TEXT("saved_child")); auto* NewOne = Restored(TEXT("alias_one")); auto* NewTwo = Restored(TEXT("alias_two"));
+	TestTrue(TEXT("positive saved aliases and rebuilt owner allocate independent natives"), NewChild->VPhysicsGetObject() && NewOne->VPhysicsGetObject() && NewTwo->VPhysicsGetObject()
+		&& NewChild->VPhysicsGetObject() != NewOne->VPhysicsGetObject() && NewChild->VPhysicsGetObject() != NewTwo->VPhysicsGetObject() && NewOne->VPhysicsGetObject() != NewTwo->VPhysicsGetObject());
+	for (auto* Alias : {NewOne,NewTwo}) { FElysiumSavedPhysicsBody State; if (!ElysiumModelPhysics::Capture(Alias->VPhysicsGetObject(), State)) return false;
+		TestTrue(TEXT("positive independent alias retains saved solved pose and controller target"), State.Pose.Equals(SharedBefore.Pose,.001) && State.Shadow.Target.Equals(SharedBefore.Shadow.Target,.001)); }
+	Destination.SetAiTraceSink({}); Destination.Teardown();
+	return true;
 }
 
 #endif

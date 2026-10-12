@@ -3,6 +3,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumRetailSite.h"
 #include "ElysiumSaveArchive.h"
+#include "ElysiumBrushComponent.h"
 #include "Substrate/ElysiumModelPhysics.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Serialization/MemoryReader.h"
@@ -312,18 +313,21 @@ namespace ElysiumSaveRestore
 					for (const FElysiumEntityState& Row : Snapshot.Entities)
 					{
 						FElysiumEntity* Entity = CaptureWorld->Resolve(FElysiumEntityHandle(Row.Index, CaptureWorld->GetEpoch()));
-						if (!Entity || !Entity->ShouldSavePhysics()) continue;
+						if (!Entity) continue;
 						void* Actor = Entity->VPhysicsGetObject();
 						FElysiumSavedPhysicsBody State;
-						State.bHasObject = Actor != nullptr;
-						if (Actor && !ElysiumModelPhysics::Capture(Actor, State))
+						// IsEmpty10045d50/1019fe10 omits a null field. The host retains a semantic
+						// null marker to clear Spawn baseline fields, distinct from stored count0.
+						State.bHasObject = Actor && Entity->ShouldSavePhysics();
+						State.bRebuildFromEntity = Actor && !State.bHasObject; //10045790 false128
+						if (State.bHasObject && !ElysiumModelPhysics::Capture(Actor, State))
 						{
 							UE_LOG(LogElysiumWorld, Error, TEXT("Physics save #%d: admitted object has no supported native recipe"), Row.Index);
 							Snapshot.bPhysicsSaveFailed = true;
 							continue;
 						}
 						State.EntityIndex = Row.Index;
-						State.bShadowMember = CaptureWorld->PhysicsShadows().Contains(Entity->Handle);
+						State.bShadowMember = State.bHasObject && CaptureWorld->PhysicsShadows().Contains(Entity->Handle);
 						Snapshot.PhysicsBodies.Add(MoveTemp(State));
 					}
 				}
@@ -352,15 +356,27 @@ namespace ElysiumSaveRestore
 				for (const FElysiumSavedPhysicsBody& State : Context->Decoded->PhysicsBodies)
 				{
 					FElysiumEntity* Baseline = Context->World->Resolve(FElysiumEntityHandle(State.EntityIndex, Context->World->GetEpoch()));
-					if (Baseline && Baseline->ShouldSavePhysics() && State.bHasObject) Baseline->VPhysicsDestroyObject();
+					if (Baseline && Context->Decoded->Entities.ContainsByPredicate([&](const FElysiumEntityState& Row) { return Row.Index == State.EntityIndex; }))
+						Baseline->VPhysicsDestroyObject(); //CUSTOM MakeEmpty precedes all reconstruction
 				}
 				TArray<FElysiumEntity*> Reconstructed;
 				for (const FElysiumSavedPhysicsBody& State : Context->Decoded->PhysicsBodies)
 				{
 					FElysiumEntity* Entity = Context->World->Resolve(FElysiumEntityHandle(State.EntityIndex, Context->World->GetEpoch()));
-					if (!Entity) continue; // removed/invalid entity does not reconstruct a body (100440c0).
-					if (!Entity->ShouldSavePhysics() || !State.bHasObject)
-					{ Entity->VPhysicsDestroyObject(); continue; } // 100440c0: false eligibility or saved count<1
+					if (!Entity || Context->Decoded->AbsentEntities.Contains(State.EntityIndex)
+						|| !Context->Decoded->Entities.ContainsByPredicate([&](const FElysiumEntityState& Row) { return Row.Index == State.EntityIndex; }))
+						continue; //100440c0 requires both restored owner and registered field
+					const bool bRegisteredField = State.bHasObject || State.bRebuildFromEntity;
+					if (!bRegisteredField) continue; //omitted custom field: MakeEmpty only, no10045ab0 registration
+					if (State.bRebuildFromEntity || !Entity->ShouldSavePhysics())
+					{
+						//10044305 CALL[EDX+37c] is223 (not225), after restored entity state/fixup.
+						if (Entity->Body)
+							Entity->Body->SetWorldLocationAndRotation(Entity->GetAbsOrigin(), ElysiumModelPhysics::SourceRotation(Entity->GetAbsAngles()), false, nullptr, ETeleportType::TeleportPhysics);
+						Entity->CreateVPhysics(); //leaf return is independent of native creation success
+						Reconstructed.Add(Entity);
+						continue;
+					}
 					FString Error;
 					if (!Entity->RestoreSavedPhysics(State, Error))
 					{

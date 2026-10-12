@@ -484,10 +484,9 @@ private:
 	}
 };
 
-// func_brush — CFuncBrush (19 on the tutorial). A toggleable solid brush. ScriptHide/ScriptUnhide/
-// Kill are the base dormancy switch (the only inputs the tutorial wires); Enable/Disable/Toggle
-// gate its collision, unified with dormancy through the body's one SetDormant switch. Solidity:
-// 0 = toggle (follows enabled), 1 = never solid, 2 = always solid.
+// CFuncBrush: Spawn1013dea0 prepares solidity/model before native2231013e070.
+// Enable/Disable/Toggle1013e450/1013e420/1013e3a0 use effects-bit2411013e480,
+// not a separate enabled latch. NEVER remains drawn with collision participation off.
 
 class FElysiumFuncBrush final : public FElysiumEntity
 {
@@ -498,79 +497,47 @@ public:
 	static constexpr int32 SOLIDITY_ALWAYS = 2;
 
 	int32 Solidity = SOLIDITY_TOGGLE;   // Solidity
-	bool  bStartDisabled = false;       // StartDisabled
+	int32 Disabled = 0;                // m_iDisabled+454, SAVE|KEY StartDisabled
 
-	void InputEnable()  { bEnabled = true;  ApplyBrushSolidity(); }
-	void InputDisable() { bEnabled = false; ApplyBrushSolidity(); }
-	void InputToggle()  { bEnabled = !bEnabled; ApplyBrushSolidity(); }
+	bool IsBrushOn() const { return (EffectsWord & 0x40) == 0; } //1013e480
+	void InputEnable()  { if (!IsBrushOn()) ScriptUnhide(); } //1013e450
+	void InputDisable() { if (IsBrushOn()) ScriptHide(); }   //1013e420
+	void InputToggle()  { if (IsBrushOn()) InputDisable(); else InputEnable(); }
 
 	virtual void Spawn() override
 	{
-		bEnabled = !bStartDisabled;
-		// The brush body is built AFTER the spawn pass, so it can't be gated here — defer the initial
-		// solidity to the first think (a born-hidden brush is already dormant from BuildBrushBody, and
-		// won't think until ScriptUnhide, which re-applies through OnDormancyChanged).
-		NextThink = 0.0f;
+		SetMoveType(8, 0);
+		SetSolid(1); //100dc480 converts parented brush1 to6
+		if (Solidity == SOLIDITY_NEVER) SetSolidFlags(GetSolidFlags() | 4);
+		FString ModelArg = Model;
+		SetModel(ModelArg.GetCharArray().GetData());
+		if (Disabled != 0) InputDisable();
+		if (TargetName.IsEmpty() || ParentName.IsEmpty()) Flags |= 0x1000000;
+		// BuildBrushBody publishes the prepared component and relinks before class223.
 	}
 
-	virtual void Think() override
+	virtual bool CreateVPhysics() override
 	{
-		NextThink = ELYSIUM_NEVER_THINK;   // one-shot: seat the initial solidity once the body exists
-		ApplyBrushSolidity();
+		InitBrushPhysicsShadow(); //1013e070: VPhysicsInitShadow(0,0,0)
+		if (VPhysicsGetObject()) RefreshBrushBodyState(); //gate actual native shapes after allocation
+		if (World) World->EmitRetailSite(*this, TEXT("func_brush_create_vphysics"), TEXT("CreateVPhysics"), 0x1013e070u,
+			TEXT("return1"), FString::Printf(TEXT("native=%d solid=%d flags=%d"), VPhysicsGetObject() != nullptr, GetSolid(), GetSolidFlags()));
+		return true; //retail returns1 independently of creator success
 	}
 
-	// Dormancy and solidity both resolve to the body's collision switch, so combine them here rather
-	// than letting the base toggle collision on its own (which would fight a non-solid func_brush).
-	// Still notifies the retained gizmo layer, as the base does.
-	virtual void OnDormancyChanged() override
+	virtual bool IsBrushBodyEnabled() const override
 	{
-		ApplyBrushSolidity();
-		if (World)
-		{
-			World->NotifyVisualChanged(*this);
-		}
+		return !IsInert() && GetSolid() != 0 && (GetSolidFlags() & 4) == 0;
 	}
-
-	virtual void Serialize(FElysiumSaveArchive& Ar) override
-	{
-		// bEnabled is the runtime Enable/Disable/Toggle latch; bStartDisabled (a saved field) only
-		// seeds it in Spawn(). ApplySnapshot calls OnDormancyChanged unconditionally once every
-		// restored field and this leaf state has landed, and this override already routes it through
-		// ApplyBrushSolidity() — which reads bEnabled — so restoring the member here is enough to
-		// re-seat the body's physical solidity; no separate re-apply hook is needed.
-		Ar << bEnabled;
-	}
+	virtual bool IsBrushVisualEnabled() const override { return !IsInert(); }
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
 		static const TCHAR* Names[] = { TEXT("toggle"), TEXT("never solid"), TEXT("always solid") };
 		Out.Emplace(TEXT("Solidity"), Names[FMath::Clamp(Solidity, 0, 2)]);
-		Out.Emplace(TEXT("Enabled"), bEnabled ? TEXT("yes") : TEXT("no"));
-		Out.Emplace(TEXT("Collides"), IsSolidNow() ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Enabled"), IsBrushOn() ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Collides"), IsBrushBodyEnabled() ? TEXT("yes") : TEXT("no"));
 	}
-
-private:
-	bool IsSolidNow() const
-	{
-		if (IsInert() || Solidity == SOLIDITY_NEVER)
-		{
-			return false;
-		}
-		if (Solidity == SOLIDITY_ALWAYS)
-		{
-			return true;
-		}
-		return bEnabled;   // SOLIDITY_TOGGLE
-	}
-	void ApplyBrushSolidity()
-	{
-		if (Body)
-		{
-			Body->SetDormant(!IsSolidNow());   // dormant == collision off
-		}
-	}
-
-	bool bEnabled = true;
 };
 
 // point_teleport — CPointTeleport (22 on the tutorial). Its Teleport input moves the entity named
@@ -780,7 +747,7 @@ static FElysiumClassRegistrar GRegFuncBrush(
 		D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumFuncBrush&>(E).InputDisable(); });
 		D.Input(TEXT("Toggle"),  [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumFuncBrush&>(E).InputToggle(); });
 		ElysiumAddClassField(D, TEXT("Solidity"),      &FElysiumFuncBrush::Solidity);
-		ElysiumAddClassField(D, TEXT("StartDisabled"), &FElysiumFuncBrush::bStartDisabled);
+		ElysiumAddClassField(D, TEXT("StartDisabled"), &FElysiumFuncBrush::Disabled);
 	});
 
 static FElysiumClassRegistrar GRegPointTeleport(

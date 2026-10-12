@@ -55,6 +55,8 @@ public:
 	// Dormancy: dormant → collision off (cannot be touched/traced) and visual hidden;
 	// active → restore the built solidity and attached visual.
 	void SetDormant(bool bDormant);
+	// Native participation and attached art are independent for NEVER-solid func_brush.
+	void SetParticipation(bool bCollisionEnabled, bool bVisualEnabled);
 	void SetVisual(UStaticMeshComponent* InVisual);
 	UStaticMeshComponent* GetVisual() const { return Visual; }
 

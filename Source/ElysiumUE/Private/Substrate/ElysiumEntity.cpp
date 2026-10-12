@@ -1433,7 +1433,7 @@ void FElysiumEntity::RefreshBrushBodyState()
 	}
 	if (Body)
 	{
-		Body->SetDormant(!bEnabled);
+		Body->SetParticipation(bEnabled, IsBrushVisualEnabled());
 	}
 }
 

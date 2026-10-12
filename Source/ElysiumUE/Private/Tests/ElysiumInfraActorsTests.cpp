@@ -94,7 +94,7 @@ bool FElysiumInfraKeyfieldsRoundTripTest::RunTest(const FString&)
 		{ Enabled, TEXT("true"), TEXT("0") },                 // atoi("true") == 0
 		{ Enabled, TEXT("2"), TEXT("1") },
 		{ MinBounds, TEXT("0  0 72"), TEXT("0 0 72") },       // doubled whitespace
-		{ MinBounds, TEXT("1 2"), TEXT("0 0 0") },            // under three parts reads as zero
+		{ MinBounds, TEXT("1 2"), TEXT("1 2 0") },            // 101d0310 zero-fills only the unparsed tail
 		{ Type, TEXT("Citizen_Idle"), TEXT("Citizen_Idle") },
 	};
 	for (const FCase& Case : Cases)

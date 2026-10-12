@@ -1056,6 +1056,7 @@ public:
 	// Class state such as CBaseTrigger::StartDisabled participates in the same physical gate as
 	// hidden/dead without pretending the entity itself is dormant.
 	virtual bool IsBrushBodyEnabled() const { return !IsInert(); }
+	virtual bool IsBrushVisualEnabled() const { return IsBrushBodyEnabled(); }
 	void RefreshBrushBodyState();
 
 	// `#<idx> <targetname>(<classname>)` — the canonical debug string, used everywhere.

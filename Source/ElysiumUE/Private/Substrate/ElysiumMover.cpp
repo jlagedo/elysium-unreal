@@ -266,14 +266,8 @@ void FElysiumMoverBase::Serialize(FElysiumSaveArchive& Ar)
 void FElysiumMoverBase::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
 	(void)InWorld;
-	// Non-physics-saving mover classes reconstruct at their restored logical pose.
-	if (!ShouldSavePhysics() && Body)
-	{
-		const FVector RestoredOrigin = GetAbsOrigin(); const FVector RestoredAngles = GetAbsAngles();
-		VPhysicsDestroyObject();
-		Body->SetWorldLocationAndRotation(RestoredOrigin, ElysiumModelPhysics::SourceRotation(RestoredAngles), false, nullptr, ETeleportType::TeleportPhysics);
-		InitBrushPhysicsShadow();
-	}
+	//100440c0 reconstructs a registered non-saving field through class223 in Physics,
+	//before OnRestore. An omitted null field has only MakeEmpty; do not invent a body here.
 }
 // Mover sounds — per-mover playback (the `soundgroup` resolver lives in ElysiumMoverSounds.cpp).
 //
@@ -487,7 +481,7 @@ void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 		const EToggleState Saved = static_cast<EToggleState>(State);
 		ToggleState = Saved;
 
-		// OnPostRestore reconstructs native geometry at the saved logical pose. The saved
+		// The Physics block reconstructs registered native geometry at the saved logical pose. The saved
 		// scheduled think remains due at its original time; restoration emits no arrival.
 	}
 }

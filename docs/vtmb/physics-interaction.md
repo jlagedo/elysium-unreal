@@ -1560,8 +1560,8 @@ tree/hash/allocator layout is part of the port contract.
 Physics handler vtable1044943c reaches PreSave10043c40, Save10043c70, header10043f70,
 Restore100440c0 and PostRestore100447f0. Save writes each valid owner PhysObjectHeader and a
 block for each saved object, passing the actual object to environment saving; registered lists
-are cleared after each. Restore validates owner/header, calls ShouldSavePhysics, destroys the
-current object when eligibility is false or count<1, and dispatches the one-object type1 arm
+are cleared after each. Restore validates owner/header and registered field, calls ShouldSavePhysics,
+dispatches class virtual223 when eligibility is false or saved count<1, and dispatches the one-object type1 arm
 to100443e0. That arm rejects an existing object, rebuilds bbox using saved min/max or model
 using saved model name/solid, and re-registers successful reconstruction. Missing geometry or
 failed environment restore reports DevMsg. Other object types and multiobject environment
@@ -1603,8 +1603,10 @@ successful fields in this selected Physics packet are retired and application fa
 truncated rows fail decode and propagate outer archive failure. Unsupported native recipes fence
 saving explicitly. This does not close generic225 shadow/ownership semantics.
 
-Saved absence uses100440c0's count<1 observer invoking owner225. Eligible null fields retain
-a semantic count0 row; restore destroys baseline Spawn's body and skips reconstruction. Native
+Saved actual null fields are omitted by custom IsEmpty10045d50 and field admission1019fe10.
+The host retains a semantic omitted-null row; restore clears baseline Spawn's body and skips
+reconstruction. This is not the stored count-zero observer of100440c0, which invokes owner223
+at10044305 CALL[EDX+37c]. Earlier packets incorrectly identified that call as225. Native
 retirement clears registered references and then calls the PhysProp OnPhysicsActorRetired hook,
 which sets runtime bSimulating=false before native release. The225 override delegates to base;
 it does not itself write this latch. Final art gates do not recreate a missing native actor. Actual Destroy ->Freeze
@@ -1656,7 +1658,7 @@ The separate CPhysBox `1004e500` writer and other flag writers remain outside th
 `Elysium.Substrate.ModelPhysics.BodyGameFlags` observes the registered exact1/default/0/2/-1
 producer, complete WORD/truncating OR/set behavior, unchanged native mechanics, actual alias
 lifetime, hidden native frame, key0/current0x8001 typed archive, independent alias reconstruction,
-ordinary reload and true transition before first think, count0, truncated row, below-floor51,
+ordinary reload and true transition before first think, omitted-null, truncated row, below-floor51,
 SetModel failure/replacement, borrowed225 callbacks, Kill and component/world teardown. Arena
 `l0_physics_body_game_flags` joins the real key/body/alias/hidden host save/reload and retirement
 path. These are bounded producer/persistence/lifetime witnesses; P1/D02/fullL0 and I2 stay open.
@@ -1767,7 +1769,7 @@ inputs and a genuine Chaos static identity. Native shape filter updates preserve
 through hide/unhide; logical visual rotation does not rotate the bbox. Persisted Physics
 recipes carry static mode, actual native pose, response container, mask/profile, shape query
 enabled state, gravity and damping. Reconnect preserves native pose/filter state differing
-from logical Origin/shown state and eligible count0 absence. New saved response count/byte
+from logical Origin/shown state and eligible omitted-null absence. New saved response count/byte
 and shape-enabled enum validation refuses malformed data before native setters.
 
 This does not complete VPhysicsInitStatic's parent/static-model arms, full box helper's
@@ -1816,7 +1818,7 @@ updates every actual native shape handle, preserves actor identity, and disables
 and simulation shapes when hidden. The same saved entity words drive native reconnect;
 there is no new archive field for arbitrary native shape internals. Static solved pose remains
 independent of logical/render pose. The existing Physics block reconstructs Model+bStatic
-before activation, including each independently admitted alias; real count0 remains absent.
+before activation, including each independently admitted alias; actual omitted-null remains absent.
 Borrowed225, failed/successful SetModel replacement, Kill and teardown retire current references,
 recipe and incarnation before native release. Later visibility/transform gates cannot resurrect
 a retired producer. Reference-only SetObject replacement/Swap clear preserve former producers.
@@ -2403,7 +2405,7 @@ also covers a null/replaced current field and teardown. RetireNative clears cont
 membership/current aliases before callbacks and actual native release, fencing stale incarnations.
 The typed Physics block is consumed by inactive ApplySnapshot both for ordinary reconnect and
 the existing level-transition flag before first think, including three independently restored
-hidden fields, removed controller, owner Swap membership absence and exact count0.
+hidden fields, removed controller, owner Swap membership absence and exact omitted-null.
 The real arena TrunkLid roundtrip exposed component mass recomputation changing saved current
 mass1000000.0625kg to1000000.125kg. Restore retains the strict saved-output comparison and writes
 the captured dynamic mass through public FPhysicsInterface::SetMass_AssumesLocked under the
@@ -2565,7 +2567,111 @@ CPhysBox241 `1004e500` (17map/mid) remains a map-specific construction obligatio
 absence from the two core maps is not global unreachability. Fixed-constraint bit2 writers
 `1002c190`/`1002ad20`/`1002af90` and ragdoll bit8 `1019c0b0` retain their separate observer/
 producer disposition; their full endpoint/filter/force ownership is not recovered here.
-Native func_brush223 remains unrecovered/open P1/P3 unless an actual selected caller requires
-it. True host travel, integrated parent motion/cadence, other remaining P1 work, P2/P3/I2/Break and generic E2
+Native func_brush223 was still open in that selected36 packet; the bounded producer and custom-field
+restore roster are recovered below. True host travel, integrated parent motion/cadence, other remaining P1 work, P2/P3/I2/Break and generic E2
 listener/lifecycle stores remain open. Chaos owns native geometry, broadphase, contacts, solving
 and mechanics; the substrate supplies observed authored rules, sequencing and semantic state.
+
+## Native func_brush223 and custom-field restore roster (L0 P1)
+
+Primary vampire.dll `1013e070` is CFuncBrush virtual223: call VPhysicsInitShadow with
+three false arguments, then return1 unconditionally. Native creation failure does not change
+that return. The accepted shared100a6150 service owns edict admission, Setup225 retirement,
+solid0 rejection, authored brush creation, SetObject, shadow caps10000 inches/s and10000
+degrees/s with false/false permission, absolute-pose target with arrival0 seconds, and final
+shadow membership. Attempted type1 native-null retains the accepted developer diagnostic,
+literal/current-map exception and queued-removal sequence; internal IVP allocation/layout or
+solver differences are not producer gaps. Unreal/Chaos continues to own geometry and mechanics.
+
+The actual core observers require this producer: sp_tutorial_1 has19 func_brush rows and
+sm_hub_1 has18. Tutorial includes NEVER305 chopwareportalbrushblack, ALWAYS311–316 window
+pairs, NEVER322 tutwaredoorabrush, hidden NEVER706 chopwndwbroken, ALWAYS720 chopwndwsolid,
+931–934 gun/hack/safe/note brushes, parented935 office_knob_brush,968 knob_buff_brush,
+975 chopdoor_brush,1042 lockpicks_brush, and hidden ALWAYS1213 sheriff_shield. Hub includes
+NEVER589 arcadewndw, ALWAYS1391 garage2gatewindow, hidden2072 taxi_clip, unnamed2436–2441,
+unnamed parented2487, NEVER2540/2542/2544/2546/2548/2550/2552 garage wall/gate rows, and
+ALWAYS2554 garage2gate. All37 lack authored nonzero StartDisabled. The retained source-row
+receipt is `l0-p1-brush-native-20261012/core-brush-entities.json`; it reuses the deployed
+geometry producer without a bake or receipt refresh.
+
+Actual shipped callers include tutorial tutchopdoorc OnOpen hiding720 and unhiding706;
+focusc1 OnAnimationCompleted hides1042; PhysProp OnHealthChanged hides931; game-sign
+OnUseEnd hides975/932/933/934/968; logic_sabbat_setup OnTrigger unhides1213; logic_shot_end
+OnTrigger kills1213. Hub has no direct authored On* brush wires, but its placed collision,
+parent and save fields remain observers. Generic Kill scope remains E2/D09, not closed here.
+
+Spawn1013dea0 is immediate preparation, not a first-Think gate: MoveType8/collide0,
+Solid1, NEVER solidity1 adds FSOLID_NOT_SOLID4, SetModel(GetModelName()), then nonzero
+m_iDisabled invokes helper1013e420. Missing name OR missing authored parent sets flag1000000;
+relink precedes class223. The same-layer parented Solid1 setter can write Solid6. Geometry
+must be prepared and registered before the public class223 call; BuildBrushBody supplies that
+component after the leaf preparation. StartHidden is the separate later100aaf30 dispatch, so
+it gates a native already created by223. NEVER keeps visible art but removes actual native
+query/simulation shape eligibility; collision gating cannot be used as an art-hide predicate.
+
+InputTurnOff1013e420, InputTurnOn1013e450 and InputToggle1013e3a0 use virtual2411013e480:
+on iff effects bit0x40 is clear. They invoke ScriptHide/ScriptUnhide under that predicate.
+They do not write an independent enabled latch, and no recovered input writes m_iDisabled.
+Datamap10579aa8 saves m_iSolidity+450 and the INTEGER m_iDisabled+454 keyed StartDisabled;
+the latter must retain values such as7 rather than narrowing to bool. Live Hide/Unhide and
+Disable/Enable/Toggle gate native shapes without retiring the existing body/controller.
+StartDisabled runs Hide before223, so solid0 rejects creation even for authored ALWAYS.
+
+The restore branch is materially corrected: at100441c5, ShouldSavePhysics slot128 is
+CALL[EAX+200]. False128 or saved count<=0 branches to10044305 CALL[EDX+37c], virtual223,
+not225. Previous docs/receipt descriptions that called this destruction225 or equated any
+native-null marker with retail saved count0 were wrong. Their proved positive independent
+allocations and actual-null outcomes remain historical evidence within their original scope.
+
+The registered base field m_pPhysicsObject+36c is CUSTOM SAVE count1 with type-one
+CPhysObjSaveRestoreOps. Its IsEmpty10045d50 and CSave admission1019fe10 omit an actually
+null field. Such an owner has no Physics header and receives no223 restore call. For a nonnull
+field, Save10045790 appends an owner/name descriptor even when slot128 is false: false128
+writes saved count0 without native state; true128 writes count1 and native recipe/state.
+
+Entities decode101a1b70 first clears fields through virtual+10/101a18a0. A CUSTOM field
+calls MakeEmpty10045d10, which only zeros pointer words and registers nothing. Only a stored
+CUSTOM field invokes ops Restore10045ab0 through101a1520; it registers owner/field destination
+without a128 eligibility filter, then clears the pointer. Physics100440c0 must resolve both
+owner and registered field before selecting223 or the positive object arm; missing owners or
+fields skip. This semantic roster and phase suffice; no packed header/container reconstruction
+is required. Retained bounded primary output is `l0-p1-brush-native-20261012/restore-roster-primary.txt`.
+
+The host's disposable schema54 represents positive native snapshot with bHasObject,
+present zero-count reconstruction with bRebuildFromEntity, and omitted-null with both false.
+Both true is malformed. Capture admits false128 owners only as a rebuild marker when their
+current field is nonnull. Semantic null markers clear authored Spawn baselines but do not
+claim a retail registered header. Restore retires the complete destination cohort before any
+allocation, preserving independent alias lifetimes. Existing positive snapshot allocation and
+mechanics remain unchanged. Class223 runs in Physics after entity fields, saved parents/fixup
+and queue, at restored absolute centimetre position and Source QAngle rotation, before reverse
+OnPostRestore and first Think. The old mover OnPostRestore compensation is removed so it
+cannot replace the correctly rebuilt object twice or invent an omitted-null field.
+
+Live hidden identity and false128 hidden reload differ: a hidden non-saving brush had a
+nonnull field when saved, so its present count0 descriptor dispatches223; restored Solid0 then
+makes shared InitShadow reject after Setup225. The leaf still returns1 and its restored native
+field is null. Later Unhide does not invent a native. Eligible positive hidden aliases instead
+restore their actual native snapshots independently. NEVER restore rebuilds with its saved
+nonsolid flags and keeps art visible, and an actually retired/null brush stays omitted-null.
+
+Focused native witnesses are ModelPhysics.FuncBrushNativeCore (all37 deployed authored
+rows) and FuncBrushNativeContract (initial native/art/query gates, integer disabled field,
+effects inputs, live identity, actual solver frame and emitted shadow-feedback callback,
+actual Freeze/typed Physics bytes, malformed marker, parented
+saved-pose223 phase exactly once, hidden Solid0 rejection, null omission, mover duplicate
+retirement control and positive independent aliases). The existing HiddenPropBody brush
+control now proves native223/controller/shapes rather than a nonrecipe fallback. The host
+scenarios are l0_func_brush_spawn and l0_func_brush_spawn_hub: tutorial305 is the Source PVS visibility backing
+selected by source306 func_areaportalwindow.target, omitted by the existing Unreal visibility
+swap. Its model19 faces12998–13003 are all TOOLS/BLACK with flags0x800 (not SURF_NODRAW);
+existing visibility_backing_models excludes that render-only background, not a missing bake.
+Retained source evidence is brush-visible-source.json and brush19-visibility-backing.json.
+Tutorial311 ALWAYS and hidden706 use actual prepared art,
+while hub589 arcadewndw is the prepared brush6 NEVER art/collision/input witness. They use
+normal host input/save/load and authored hidden reload Solid0 rejection. The deferred native
+core fixture has no prepared brush Resident catalogue, so its art warnings describe fixture
+admission; it proves native geometry/gates, not prepared art. The host rejects absent Visual
+or StaticMesh in art.visible probes. These witnesses address this producer only, not full P1/D02/L0.
+P2/P3, integrated parent motion/cadence, true host travel, I2/Break, D09 brief scopes and the
+17-map CPhysBox D08/I1 obligation remain open.

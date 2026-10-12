@@ -1971,3 +1971,31 @@ P1 remains open for required caller/writer coverage and native func_brush223. CP
 slice has no core witness-map placements: retain explicit map-specific D08/I1 disposition,
 never declare globally unreachable. E2/P2/P3/I2/Break/full travel and four D09 scope briefs
 remain open. No owner decision, accepted gameplay divergence or push.
+
+## 2026-10-12 — native func_brush and registered physics restore
+
+Parent dff37c8b266eaa45dab942a0d46951942a37b432. One Sol High worker; main independent
+retail/diff review and serial gates. Immediate Spawn1013dea0, helpers1013e3a0/1013e420/
+1013e450 and native2231013e070 preserve authored solidity/Disabled/effects/parent flags
+and unconditional return1. Chaos owns brush geometry/mechanics; art and native shape gates
+are separate. Core37 native beforeThink plus both actual tutorial/hub host records.
+Schema54/floor54 distinguishes semantic omitted-null, registered nonnull false128 rebuild
+and positive fields. Retire cohort before allocation; saved absolute parent pose before223
+inside Physics, before OnRestore/Think. Independent aliases; null Unhide invents no body.
+
+Main build045431 PASS; default043243213/213; affected04375751/51; arena04395618/18,
+four actual boots, allfirst_unmetnull; fullarm0454371663/1663,0failed/notRun. Generator/
+doctor043355 pass with21 existing policy warnings. Failed schema guards, original9arm and
+namespace build receipts retained. Six test-only repairs follow accepted vector/NPC/door/
+native prop contracts. Authored START_OPEN door adversary proves direct same-direction
+outputs/order/provenance/prioractivator restoration. Real prepared CopCar proves selected
+native shapes, queries, art and identity; not full Break/I2. Typed teleport cache restore
+retained; unsupported legacy convenience-row migration removed under disposable-save scope.
+Original21 source and138 content hashes unchanged by six arm test-only repairs, supporting
+reuse of main default/affected/arena gates. Frozen27 worker paths reviewed. No imports/bakes/
+content mutations/push. Tutorial305 model19 is existing PVS backing omission, not NODRAW;
+hub589 supplies prepared NEVER-art. Existing warnings/higher stubs retained.
+Exact final commit/tree/review/gates/hashes:
+E:/elysium-work/codex/l0-p1-brush-native-20261012/acceptance-checkpoint.json.
+P1/D02/L0 open; next FuncRotating base223/core caller/writer reconciliation, with retained
+prop_switch697 admission gap, E2/P2/P3/full travel/I2 and four D09 dispositions. No owner decision.

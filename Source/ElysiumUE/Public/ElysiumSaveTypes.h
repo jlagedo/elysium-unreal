@@ -132,6 +132,7 @@ struct FElysiumSaveVersion
 		PhysicsMaterialState = 51, // current semantic selection survives shadow removal
 		PhysicsGameFlags = 52, // current per-native semantic WORD, independent of authored Damagetype
 		EntityRemovalFlags = 53, // full saved EFlags, pending latch independent of released tombstone
+		PhysicsFieldPresence = 54, //nonnull false128 ->223 versus omitted null field; brush actual saved words
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -166,7 +167,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = EntityRemovalFlags; // disposable saves, no migration
+	static constexpr int32 MinSupported = PhysicsFieldPresence; // disposable saves, no migration
 
 	static const FGuid GUID;
 };

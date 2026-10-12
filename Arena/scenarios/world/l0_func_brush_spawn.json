@@ -1,0 +1,627 @@
+{
+  "name": "l0_func_brush_spawn",
+  "about": "Actual tutorial305 NEVER (Source PVS visibility backing omitted by the existing Unreal visibility swap, no brush19 render mesh) and311 ALWAYS native223, 311/706 prepared art and independent collision admission in the initial ready host after real frames (before-first-Think admission is separately proved by FuncBrushNativeCore); real Disable/Enable then normal map-host save/reset/load. Registered non-saving fields rebuild223 before applied fence; authored hidden706 reload Solid0 rejects native while ScriptUnhide restores art only. Native family separately proves incarnation/frame/callback, parent pose, independent aliases and omitted-null distinction. Other P1 producers remain open. Prepared NEVER art is separately proved by the actual hub589 companion.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 24,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "do": "fire",
+      "target": "wndw1",
+      "input": "Disable",
+      "t": 2
+    },
+    {
+      "t": 2.8,
+      "do": "fire",
+      "target": "popup_1",
+      "input": "CloseWindow"
+    },
+    {
+      "do": "fire",
+      "target": "wndw1",
+      "input": "Enable",
+      "t": 3
+    },
+    {
+      "do": "save",
+      "slot": "l0_func_brush_spawn",
+      "checkpoint": "brush_native",
+      "fields": [
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.present"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.kind"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.shadow_installed"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.shadow_member"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "solid.type"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "solid.flags"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "effects"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.present"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.kind"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.shadow_installed"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.shadow_member"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "wndw1",
+          "field": "solid.type"
+        },
+        {
+          "who": "wndw1",
+          "field": "solid.flags"
+        },
+        {
+          "who": "wndw1",
+          "field": "effects"
+        },
+        {
+          "who": "wndw1",
+          "field": "art.visible"
+        },
+        {
+          "who": "wndw1",
+          "field": "art.asset"
+        }
+      ],
+      "t": 4
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "l0_func_brush_spawn",
+      "checkpoint": "brush_native"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "brush_native",
+      "fields": [
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.present"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.kind"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.shadow_installed"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.shadow_member"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "solid.type"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "solid.flags"
+        },
+        {
+          "who": "chopwareportalbrushblack",
+          "field": "effects"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.present"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.kind"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.shadow_installed"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.shadow_member"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "wndw1",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "wndw1",
+          "field": "solid.type"
+        },
+        {
+          "who": "wndw1",
+          "field": "solid.flags"
+        },
+        {
+          "who": "wndw1",
+          "field": "effects"
+        },
+        {
+          "who": "wndw1",
+          "field": "art.visible"
+        },
+        {
+          "who": "wndw1",
+          "field": "art.asset"
+        }
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "chopwareportalbrushblack",
+      "input": "Disable"
+    },
+    {
+      "after": "never_off",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "chopwareportalbrushblack",
+      "input": "Enable"
+    },
+    {
+      "after": "never_on",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "chopwndwbroken",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "live_off",
+      "who": "wndw1",
+      "kind": "input",
+      "match": "Disable",
+      "within": 3
+    },
+    {
+      "label": "live_on",
+      "who": "wndw1",
+      "kind": "input",
+      "match": "Enable",
+      "within": 3
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "never_off",
+      "who": "chopwareportalbrushblack",
+      "kind": "input",
+      "match": "Disable",
+      "within": 3
+    },
+    {
+      "label": "never_on",
+      "who": "chopwareportalbrushblack",
+      "kind": "input",
+      "match": "Enable",
+      "within": 3
+    },
+    {
+      "label": "hidden_unhide",
+      "who": "chopwndwbroken",
+      "kind": "input",
+      "match": "ScriptUnhide",
+      "within": 3
+    }
+  ],
+  "probes": [
+    {
+      "at": 1,
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "brush"
+    },
+    {
+      "at": 1,
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.shadow_installed",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 1
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "brush"
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.shadow_installed",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 1
+    },
+    {
+      "at": 1,
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": 1,
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": 1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "brush"
+    },
+    {
+      "at": "applied",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.shadow_installed",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "brush"
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.shadow_installed",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 1
+    },
+    {
+      "at": 2.1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": 2.1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": 2.1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": false
+    },
+    {
+      "at": 3.1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": 3.1,
+      "who": "wndw1",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": 1,
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "chopwareportalbrushblack",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "chopwndwbroken",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    }
+  ],
+  "cast": [
+    {
+      "name": "chopwareportalbrushblack"
+    },
+    {
+      "name": "wndw1"
+    },
+    {
+      "name": "chopwndwbroken"
+    }
+  ]
+}

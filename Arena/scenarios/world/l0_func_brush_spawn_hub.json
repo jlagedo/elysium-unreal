@@ -1,0 +1,403 @@
+{
+  "name": "l0_func_brush_spawn_hub",
+  "about": "Actual core hub589 arcadewndw Solid1 NEVER with prepared brush6 mesh: native223/current controller persists while query/sim shapes are disabled and art stays visible. Real Disable/Enable toggles art independently; normal map-host save/load rebuilds223 before applied fence and retains saved fields. Companion tutorial fixture proves visibility-backing305 NEVER,311 ALWAYS and hidden706. Before-first-Think native admission is the separate Core37 family. No imports or fabricated art.",
+  "stage": "map:sm_hub_1",
+  "seed": 1,
+  "duration": 20,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sm_hub_1"
+    },
+    {
+      "t": 2,
+      "do": "fire",
+      "target": "arcadewndw",
+      "input": "Disable"
+    },
+    {
+      "t": 3,
+      "do": "fire",
+      "target": "arcadewndw",
+      "input": "Enable"
+    },
+    {
+      "t": 4,
+      "do": "save",
+      "slot": "l0_func_brush_spawn_hub",
+      "checkpoint": "brush_never",
+      "fields": [
+        {
+          "who": "arcadewndw",
+          "field": "physics.present"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.kind"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.shadow_installed"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.shadow_member"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "solid.type"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "solid.flags"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "effects"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "art.visible"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "art.asset"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "l0_func_brush_spawn_hub",
+      "checkpoint": "brush_never"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "brush_never",
+      "fields": [
+        {
+          "who": "arcadewndw",
+          "field": "physics.present"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.kind"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.shadow_installed"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.shadow_member"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "physics.sim_shapes"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "solid.type"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "solid.flags"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "effects"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "art.visible"
+        },
+        {
+          "who": "arcadewndw",
+          "field": "art.asset"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "live_off",
+      "who": "arcadewndw",
+      "kind": "input",
+      "match": "Disable",
+      "within": 3
+    },
+    {
+      "label": "live_on",
+      "who": "arcadewndw",
+      "kind": "input",
+      "match": "Enable",
+      "within": 3
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "probes": [
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "brush"
+    },
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.shadow_installed",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 1
+    },
+    {
+      "at": 1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "brush"
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.shadow_installed",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "brush"
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.shadow_installed",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.sim_shapes",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "solid.type",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    },
+    {
+      "at": 2.1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": 2.1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": false
+    },
+    {
+      "at": 2.1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": 3.1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": 3.1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "art.visible",
+      "equals": true
+    },
+    {
+      "at": 3.1,
+      "who": "arcadewndw",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    }
+  ],
+  "cast": [
+    {
+      "name": "arcadewndw"
+    }
+  ]
+}

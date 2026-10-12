@@ -822,7 +822,7 @@ static asset metadata, parented model-shadow, P2 and P3 remain open; this record
 
 `l0_physics_prop_hidden_body` covers supported PhysProp hide/native lifetime and native host
 save/load: authentic tutorial StartHidden plate5, live core two-hull chairoffice, independent
-hidden base/PhysProp current fields, explicit225 count0 and source-no-binary absence. Hidden
+hidden base/PhysProp current fields, explicit225 omitted-null field and source-no-binary absence. Hidden
 shape eligibility does not imply particle sleep or disabled motion. The ModelPhysics family
 adds full current settings, identity, per-hull saved flags, real hidden awake solve, public
 callbacks and true-transition proof. This is bounded P1 evidence; remaining core metadata,
@@ -839,7 +839,7 @@ bounded P1 producer/persistence evidence makes no gameplay impact parity or full
 `l0_physics_model_shadow_body` advances the reached resolved-parent studio model creator
 100a5bb0 ->100a6150 ->1002e3a0. It uses the real office knob, animated TrunkLid and fan
 selected cooks, three genuine studio3 no-binary inputs, independently saved hidden base/prop
-aliases, owner Swap membership absence and count0 borrowed225. The normal save/load transaction
+aliases, owner Swap membership absence and omitted-null borrowed225. The normal save/load transaction
 checks native state before first think with static/bbox controls. `physics.sim_shapes` reads actual
 native simulation flags, and `physics.shadow_installed` reads the registered controller; these
 are closed observations beside the existing query-shape word. Native ModelShadowCaller also
@@ -877,3 +877,5 @@ selected native cooks, source parameter literals, queries, typed archive reset a
 transition-mode ApplySnapshot. Normal host travel remains open.
 CoreRemainingPlaceholder checks the public force refresh's incidental SM_Missing rewrite.
 The selected36 input gap is bounded evidence; full P1/D02/L0 and other retained obligations remain open.
+
+`l0_func_brush_spawn` uses the actual tutorial map host:305 NEVER is a Source PVS visibility backing omitted by the existing Unreal visibility swap, with no brush19 render mesh, while311 ALWAYS exercises prepared art, real Disable/Enable and normal host save/load. `l0_func_brush_spawn_hub` uses actual hub589 arcadewndw with prepared brush6 art: NEVER keeps that mesh visible while its native shapes are disabled, and real Disable/Enable toggles art before save/load. Present non-saving brush fields rebuild through class223 before the applied fence. Authored hidden706 has a live native before save, but reload restores Solid0 and rejects creation; subsequent ScriptUnhide restores prepared art without inventing native physics. `art.visible` requires a real prepared visual mesh. The focused native family additionally proves before-Think admission, real solver/frame feedback, saved parent pose at the Physics phase, omitted-null versus zero-count markers, malformed marker rejection and independent positive aliases. Other P1 classes and later physics producers remain open.

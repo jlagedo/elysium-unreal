@@ -817,7 +817,7 @@ existing Game block dispatch. Its valid owner PhysObjectHeader identifies the fi
 environment save receives each actual body pointer. This loop does not deduplicate pointers
 across registered owner headers. PreSave10043c40 resets counters, header10043f70 writes version5
 and PhysBlockHeader; heap entries are consumed after saving. Restore100440c0 validates owner,
-eligibility and object count. False eligibility/count<1 destroys the current object through225;
+eligibility and object count. False eligibility/count<1 dispatches class223 at10044305;
 one-object type1 reaches100443e0. That reconstruction arm rejects a preexisting body, resolves
 saved model/solid or bbox bounds, restores through the environment and re-registers success.
 Other types and multiple-object/controller state are not implemented by the selected adapter.
@@ -831,12 +831,16 @@ state; final entity reconnect does not overwrite it with entity creation Origin.
 includes a runtime water damping setter, but fluid enter/exit/cache state remains unfinished.
 
 Base100aa680 now returns true. Recovered false Door/Brush/Rotating/Button/Player overrides remain
-false. Null fields produce explicit semantic count0 records. Every eligible recipe-backed field is saved, including aliases; type1 reconstruction allocates
+false. An actually null custom field is omitted (IsEmpty10045d50/CSave1019fe10); a nonnull
+false128 field still registers a saved descriptor with count0 (10045790) and reconstructs via223.
+Every eligible recipe-backed field is saved, including aliases; type1 reconstruction allocates
 independent actual bodies for these fields. Admitted live objects without a supported recipe log
 an error, mark a transient failure and cause archive saving to fail instead of dropping state.
 Downstream pointer graph fixups remain open. Missing entity
-on restore is ignored; false eligibility retires its body; native reconstruction failure logs
-and refuses application. Malformed row lengths/kinds/field names or duplicate entity keys refuse
+on restore is ignored; false eligibility invokes its class223 creator. Eligible positive snapshot
+reconstruction failure logs and refuses application. A false128 class223 null result retains its
+creator's diagnostic/QueueRemove and leaf return policy, without inventing a Physics decode refusal.
+Malformed row lengths/kinds/field names or duplicate entity keys refuse
 decode. No cross-version migration or Source binary wire compatibility is required.
 
 Finite bbox service tests exercise explicit authored bounds/parameters, live Chaos shape and
@@ -856,10 +860,11 @@ remain open. A later native reconstruction error retires earlier selected recons
 before returning failed application. Persisted malformed-kind/truncated-row tests use the actual
 outer archive; invalid native inertia tests actual ApplySnapshot error cleanup.
 
-The absent-body arm is observable:100440c0 calls owner225 when saved count<1. The selected
-port records an eligible null m_pPhysicsObject as bHasObject=false. Restore retires the baseline
-Spawn body through225 and skips reconstruction. Omitting this row would resurrect an explicitly
-destroyed body because prop bSimulating is runtime-only. Actual Spawn ->VPhysicsDestroyObject
+The historical absent-body adapter outcome is observable but did not prove retail count0:
+the adapter records an actually null m_pPhysicsObject as bHasObject=false and
+bRebuildFromEntity=false, clears the baseline Spawn body and skips reconstruction. Retail's
+initial CUSTOM MakeEmpty10045d10 zeros the destination, and an omitted custom field never
+registers for Physics or dispatches223. Actual Spawn ->VPhysicsDestroyObject
 ->Freeze ->archive ->ApplySnapshot checks null field/no native actor after final reconnect. Prop225
 sets bSimulating=false, preventing GateBody recreation. Null-row recipe/state words are unused.
 
@@ -867,8 +872,9 @@ Fresh-world host preparation also matters for an eligible `func_elevator`: `Load
 brush native before any saved blocks apply. At Physics restore entry the adapter retires all eligible
 saved owners' baseline incarnations before reconstructing any field. This preserves the actual
 100443e0 null-destination requirement and the retained per-field duplicate guard; later baseline
-cleanup cannot destroy an earlier reconstructed alias. False eligibility and saved count0 retain
-their owner225 path. The elevator witness captures in-flight logical/local clocks and independent
+cleanup cannot destroy an earlier reconstructed alias. Schema54 distinguishes omitted null
+from registered non-saving zero-count fields with bRebuildFromEntity; the latter dispatch
+owner223 after Entities/parent fixup and before OnPostRestore. The elevator witness captures in-flight logical/local clocks and independent
 solved state, checks baseline retirement and real brush rebuild, then the first native target and
 once-only arrival. `+0x160 m_flStartFrameLocalTime` and `+0x3fc m_flMoveDoneTime` are unnamed FLOAT
 SAVE rows in `CBaseEntity`; generated save-field registration preserves raw words, with no TIME

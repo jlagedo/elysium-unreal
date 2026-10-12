@@ -48,8 +48,8 @@ bool FElysiumClassFieldsSubclassVectorTest::RunTest(const FString&)
 		FVector(128.0, -32.5, 72.0));
 
 	Acc->Set(Probe, FElysiumVariant::String(TEXT("1 2")));
-	TestEqual(TEXT("fewer than three components reads as zero, as the base field does"), Probe.Point,
-		FVector::ZeroVector);
+	TestEqual(TEXT("101d0310 retains parsed components and zero-fills only the missing tail"), Probe.Point,
+		FVector(1.0, 2.0, 0.0));
 
 	Acc->Set(Probe, FElysiumVariant::Vector(FVector(4.0, 5.0, 6.0)));
 	TestEqual(TEXT("a vector variant is taken as it is"), Probe.Point, FVector(4.0, 5.0, 6.0));

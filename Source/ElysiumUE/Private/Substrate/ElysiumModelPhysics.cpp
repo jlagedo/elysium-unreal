@@ -591,7 +591,8 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	Ar << State.EntityIndex << State.FieldName << Kind;
 	if (Kind > static_cast<uint8>(EElysiumPhysicsRecipeKind::Brush)) Ar.SetError();
 	State.Recipe.Kind = static_cast<EElysiumPhysicsRecipeKind>(Kind);
-	Ar << State.bHasObject;
+	Ar << State.bHasObject << State.bRebuildFromEntity;
+	if (State.bHasObject && State.bRebuildFromEntity) Ar.SetError();
 	Ar << State.Recipe.bStatic << State.Recipe.ModelAsset << State.Recipe.Surface << State.Recipe.BboxMin << State.Recipe.BboxMax;
 	Ar << State.Recipe.BrushSolidity << State.Recipe.BrushContentsSignature;
 	int32 HullCount = State.Recipe.BrushHulls.Num(); Ar << HullCount;

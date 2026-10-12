@@ -5,6 +5,9 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+// Shared native fixture must be included at file scope, including in unity builds.
+#include "Tests/ElysiumPlayerWorldFixture.h"
+
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
 
@@ -532,8 +535,8 @@ bool FElysiumPointTeleportContractTest::RunTest(const FString&)
 		HomePlayer->Origin.Equals(FVector(21.f, 22.f, 23.f))
 		&& HomePlayer->Angles.Equals(ElysiumPlayerView::ToSource(FRotator(4.f, 5.f, 6.f))));
 
-	// The activation cache stays explicit in snapshots. An old record with no leaf recomputes from
-	// the restored live point transform during Activate.
+	// The activation cache stays explicit in the authoritative current typed snapshot blocks.
+	// Saves are disposable: legacy records with missing leaf payloads are not a migration contract.
 	FElysiumMapSnapshot Snapshot;
 	World.Freeze(Snapshot);
 	const FElysiumEntityState* TeleportState = Snapshot.Entities.FindByPredicate(
@@ -556,26 +559,6 @@ bool FElysiumPointTeleportContractTest::RunTest(const FString&)
 		Restored.FindPlayer()->Origin.Equals(FVector(100.f, 200.f, 300.f))
 		&& Restored.FindPlayer()->Angles.Equals(FVector(10.f, 20.f, 30.f)));
 
-	FElysiumMapSnapshot Legacy = Snapshot;
-	if (FElysiumEntityState* LegacyTeleport = Legacy.Entities.FindByPredicate(
-		[](FElysiumEntityState& State) { return State.TargetName == TEXT("tp"); }))
-	{
-		LegacyTeleport->LeafState.Reset();
-	}
-	FElysiumRecordingServices LegacyServices;
-	LegacyServices.bHasPlayer = true;
-	LegacyServices.PlayerLocation = FVector(8.f, 8.f, 8.f);
-	FElysiumEntityWorld LegacyWorld(nullptr, nullptr, LegacyServices.Bundle());
-	LegacyWorld.Load(BuildNormalDefs());
-	const FElysiumEntityHandle LegacyPlayer = LegacyWorld.SpawnPlayer();
-	LegacyWorld.ApplySnapshot(Legacy);
-	LegacyWorld.Activate(0.0);
-	LegacyWorld.EnqueueInput(TEXT("tp"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
-		LegacyPlayer, LegacyPlayer);
-	LegacyWorld.Tick(0.0);
-	TestTrue(TEXT("an older record recomputes from restored live transform"),
-		LegacyWorld.FindPlayer()->Origin.Equals(FVector(900.f, 901.f, 902.f))
-		&& LegacyWorld.FindPlayer()->Angles.Equals(FVector(40.f, 50.f, 60.f)));
 	return true;
 }
 
@@ -1258,7 +1241,6 @@ bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
 
 
 // FPlayerWorldFixture, the transient-game-world preamble every native-actor case below uses.
-#include "Tests/ElysiumPlayerWorldFixture.h"
 
 namespace
 {

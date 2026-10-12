@@ -1,10 +1,20 @@
-// Content-free Substrate automation: animated-prop timing, clip resynchronization, placement, fallback, and relay lifetime.
+// Substrate automation (selected Arm physics cases use prepared resident native content): animated-prop timing, clip resynchronization, placement, fallback, and relay lifetime.
 #include "Misc/AutomationTest.h"
 
 #include "Tests/ElysiumArmTier.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Tests/ElysiumPlayerWorldFixture.h"
+#include "ElysiumModelCatalogues.h"
+#include "ElysiumModelPhysicsInputs.h"
+#include "ElysiumPhysicsPropComponent.h"
+#include "ElysiumCollisionChannels.h"
+#include "Substrate/ElysiumModelPhysics.h"
+#include "Visual/ElysiumPreparedPropModels.h"
+#include "Engine/StaticMesh.h"
+#include "PhysicsEngine/BodySetup.h"
+#include "Physics/PhysicsInterfaceCore.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
 #include "ElysiumAppState.h"
@@ -479,80 +489,130 @@ bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
 }
 
 
-// 8.4a — the fallback (non-catalogue) path's `solid` keyfield. `VPhysicsInitStatic` builds static
-// collision from the model's `.phy` for any nonzero, non-2 value; solid 0 (or the key absent)
-// stays the prior no-collision default.
-
+// 101907e0 ->100a5bb0 ->1002e580 requires actual selected source .phy, never a generic
+// collider on a recording component. Reuse the accepted prepared CopCar/native world producer.
 #if ELYSIUM_WITH_ARM_TESTS
+struct FPropSolidNativeFixture
+{
+	FPlayerWorldFixture Native;
+	AElysiumMapActor* Map = nullptr;
+	TSharedPtr<FElysiumPreparedPropModels> Prepared;
+	TUniquePtr<FElysiumEntityWorld> Entities;
+	const UElysiumModelPhysicsInputs* Inputs = nullptr;
+
+	~FPropSolidNativeFixture()
+	{
+		Entities.Reset();
+		if (Map) ElysiumPreparedProps::Release(Map);
+	}
+
+	bool Prepare(FAutomationTestBase& Test)
+	{
+		if (!Native.CreateWorld(Test)) return false;
+		Map = Native.SpawnMapActorDeferred();
+		auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr,
+			TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+		auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr,
+			TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+		const TArray<FString> Ids = { TEXT("vtmb:model:scenery/vehicles/omnishpere/copcar") };
+		TSet<FSoftObjectPath> Paths; FString Error;
+		if (!Test.TestTrue(TEXT("existing selected CopCar preparation paths"),
+			FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error))) return false;
+		TArray<UObject*> Assets;
+		for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+		Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+		if (!Test.TestTrue(TEXT("actual resident CopCar preparation"), Prepared.IsValid())) return false;
+		UStaticMesh* SourceMesh = Prepared->StaticMesh(Ids[0], Error);
+		Inputs = UElysiumModelPhysicsInputs::Find(SourceMesh);
+		if (!Test.TestTrue(TEXT("actual persisted source-body and selected collision cook"),
+			Inputs && Inputs->bSourceBody && Inputs->SelectedBody
+			&& Inputs->SelectedBody->AggGeom.GetElementCount() > 0)) return false;
+		FElysiumWorldServices Services; Services.Embodiment = Map;
+		Entities = MakeUnique<FElysiumEntityWorld>(Map, nullptr, Services);
+		Entities->Load(FElysiumEntityDefs());
+		return true;
+	}
+
+	FElysiumEntity* Spawn(const TCHAR* Name, const TCHAR* Solid, const FVector& At)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("prop_dynamic"); Def.TargetName = Name; Def.Origin = At;
+		Def.Keys.Add(TEXT("model"), TEXT("models/scenery/vehicles/OmniShpere/CopCar.mdl"));
+		Def.Keys.Add(TEXT("solid"), Solid); Def.Keys.Add(TEXT("angles"), TEXT("17 31 23"));
+		return Entities->Resolve(Entities->SpawnRuntimeEntity(MoveTemp(Def)));
+	}
+
+	bool Publish(FAutomationTestBase& Test)
+	{
+		return Test.TestTrue(TEXT("actual native frame publishes selected shapes"), Native.TestWorld.TickTestWorld(1.f / 60.f))
+			&& Test.TestTrue(TEXT("following native publication frame"), Native.TestWorld.TickTestWorld(1.f / 60.f));
+	}
+
+	bool Hits(UPrimitiveComponent* Expected, const FVector& Center) const
+	{
+		FHitResult Hit;
+		Native.World->LineTraceSingleByChannel(Hit, Center - FVector(1000,0,0), Center + FVector(1000,0,0),
+			ElysiumCollision::SightChannel, FCollisionQueryParams(FName(TEXT("PropSolidSelected")), false));
+		return Hit.GetComponent() == Expected;
+	}
+
+	static int32 QueryShapes(UPrimitiveComponent* Component)
+	{
+		FBodyInstance* Body = ElysiumModelPhysics::Identity(Component);
+		if (!Body) return 0;
+		int32 Count = 0;
+		FPhysicsCommand::ExecuteRead(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
+		{
+			TArray<FPhysicsShapeHandle> Shapes; Body->GetAllShapes_AssumesLocked(Shapes);
+			for (const auto& Shape : Shapes) if (FPhysicsInterface::IsQueryShape(Shape)) ++Count;
+		});
+		return Count;
+	}
+};
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCollisionTest,
 	"Elysium.Arm.PropSolidCollision", GElysiumTestFlags)
 bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
 {
-	FElysiumRecordingServices Services;
-
-	FElysiumEntityDefs Defs;
-	Defs.MapName = TEXT("__prop_solid__");
-	FElysiumEntityDef Solid;
-	Solid.Classname = TEXT("prop_dynamic");
-	Solid.TargetName = TEXT("solid_crate");
-	Solid.ModelMesh = TEXT("crate_static");
-	Solid.Keys.Add(TEXT("model"), TEXT("models/props/crate.mdl"));
-	Solid.Keys.Add(TEXT("solid"), TEXT("6"));   // SOLID_VPHYSICS
-	Defs.Defs.Add(MoveTemp(Solid));
-	FElysiumEntityDef Unsolid;
-	Unsolid.Classname = TEXT("prop_dynamic");
-	Unsolid.TargetName = TEXT("plain_crate");
-	Unsolid.ModelMesh = TEXT("crate2_static");
-	Unsolid.Keys.Add(TEXT("model"), TEXT("models/props/crate2.mdl"));
-	Defs.Defs.Add(MoveTemp(Unsolid));
-
-	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-	World.Load(MoveTemp(Defs));
-	World.Activate(0.0);
-
-	UStaticMeshComponent* SolidBody = Services.PropBodies.FindRef(TEXT("crate"));
-	UStaticMeshComponent* UnsolidBody = Services.PropBodies.FindRef(TEXT("crate2"));
-	TestNotNull(TEXT("the solid prop stands a body"), SolidBody);
-	TestNotNull(TEXT("the plain prop stands a body"), UnsolidBody);
-	if (SolidBody)
-	{
-		TestTrue(TEXT("solid 6 switches on the model's .phy collision"),
-			SolidBody->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
-	}
-	if (UnsolidBody)
-	{
-		TestTrue(TEXT("an absent solid key stays the prior no-collision default"),
-			UnsolidBody->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
-	}
+	FPropSolidNativeFixture Fixture;
+	if (!Fixture.Prepare(*this)) return false;
+	FElysiumEntity* Solid = Fixture.Spawn(TEXT("solid_copcar"), TEXT("6"), FVector(5000,4000,3000));
+	FElysiumEntity* Unsolid = Fixture.Spawn(TEXT("plain_copcar"), TEXT("0"), FVector(8000,4000,3000));
+	if (!TestNotNull(TEXT("solid prop resolved"), Solid) || !TestNotNull(TEXT("plain prop resolved"), Unsolid)
+		|| !TestNotNull(TEXT("solid6 publishes actual selected native object"), Solid->VPhysicsGetObject())) return false;
+	UPrimitiveComponent* SolidBody = ElysiumModelPhysics::ComponentFor(Solid->VPhysicsGetObject());
+	if (!TestNotNull(TEXT("selected native component"), SolidBody) || !Fixture.Publish(*this)) return false;
+	TestEqual(TEXT("solid6 admits one actual selected native query shape"), Fixture.QueryShapes(SolidBody), 1);
+	const FVector Center = Fixture.Inputs->SelectedBody->AggGeom.CalcAABB(
+		ElysiumModelPhysics::Identity(SolidBody)->GetUnrealWorldTransform()).GetCenter();
+	TestTrue(TEXT("solid6 switches on actual selected .phy scene collision"), Fixture.Hits(SolidBody, Center));
+	TestNull(TEXT("solid0 publishes no physics object"), Unsolid->VPhysicsGetObject());
+	UPrimitiveComponent* UnsolidBody = Unsolid->GetAttachBody();
+	if (!TestNotNull(TEXT("solid0 still has prepared art"), UnsolidBody)) return false;
+	TestEqual(TEXT("solid0 art stays noncolliding"), UnsolidBody->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+	TestFalse(TEXT("solid0 art cannot substitute selected collision"), Fixture.Hits(UnsolidBody, Center + FVector(3000,0,0)));
 	return true;
 }
-
-
-// 8.4a — the catalogue (v7, production) path. `solid` decides `FElysiumPlacedModelRequest::Physics`
-// before `BuildPlacedModelBody` runs, so the request itself is the observable surface here.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCatalogueTest,
 	"Elysium.Arm.PropSolidCatalogue", GElysiumTestFlags)
 bool FElysiumPropSolidCatalogueTest::RunTest(const FString&)
 {
-	FElysiumRecordingServices Services;
-	Services.bPlacedModelsResolve = true;
-
-	FElysiumEntityDefs Defs;
-	Defs.MapName = TEXT("__prop_solid_catalogue__");
-	FElysiumEntityDef Solid;
-	Solid.Classname = TEXT("prop_dynamic");
-	Solid.TargetName = TEXT("solid_crate");
-	Solid.Keys.Add(TEXT("model"), TEXT("models/props/crate.mdl"));
-	Solid.Keys.Add(TEXT("solid"), TEXT("3"));   // SOLID_OBB, same static dispatch as 6
-	Defs.Defs.Add(MoveTemp(Solid));
-
-	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-	World.Load(MoveTemp(Defs));
-	World.Activate(0.0);
-
-	TestTrue(TEXT("solid 3 requests a static collision proxy from the catalogue"),
-		Services.Log().Contains(TEXT("physics=1")));   // EElysiumPlacedModelPhysics::CollisionProxy
+	FPropSolidNativeFixture Fixture;
+	if (!Fixture.Prepare(*this)) return false;
+	FElysiumEntity* Solid = Fixture.Spawn(TEXT("solid_copcar"), TEXT("3"), FVector(5000,4000,3000));
+	if (!TestNotNull(TEXT("catalogue solid3 resolved"), Solid)
+		|| !TestNotNull(TEXT("catalogue solid3 publishes actual native object"), Solid->VPhysicsGetObject())) return false;
+	const auto* Recipe = ElysiumModelPhysics::RecipeFor(Solid->VPhysicsGetObject());
+	UPrimitiveComponent* Component = ElysiumModelPhysics::ComponentFor(Solid->VPhysicsGetObject());
+	if (!TestNotNull(TEXT("solid3 request reached selected native recipe"), Recipe)
+		|| !TestNotNull(TEXT("selected component"), Component)) return false;
+	TestTrue(TEXT("solid3 selects static Model collision, as solid6 does"),
+		Recipe->Kind == EElysiumPhysicsRecipeKind::Model && Recipe->bStatic);
+	TestTrue(TEXT("catalogue static request uses source selected body, not generic render setup"),
+		ElysiumModelPhysics::Identity(Component)->GetBodySetup() == Fixture.Inputs->SelectedBody.Get());
+	if (!Fixture.Publish(*this)) return false;
+	TestEqual(TEXT("catalogue static request admits one selected native query shape"), Fixture.QueryShapes(Component), 1);
 	return true;
 }
 
@@ -602,42 +662,32 @@ bool FElysiumPropDisableShadowsTest::RunTest(const FString&)
 }
 
 
-// 8.4a — a hidden/broken solid prop stops blocking, mirroring FElysiumPhysProp::GateBody's own
-// static case: it is undrawn and non-colliding while down, and both restore together.
-
+// Break gates existing selected native shapes and real prepared art together; no recipe fallback.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidGatingTest,
 	"Elysium.Arm.PropSolidGating", GElysiumTestFlags)
 bool FElysiumPropSolidGatingTest::RunTest(const FString&)
 {
-	FElysiumRecordingServices Services;
-
-	FElysiumEntityDefs Defs;
-	Defs.MapName = TEXT("__prop_solid_gating__");
-	FElysiumEntityDef Solid;
-	Solid.Classname = TEXT("prop_dynamic");
-	Solid.TargetName = TEXT("solid_crate");
-	Solid.ModelMesh = TEXT("crate_static");
-	Solid.Keys.Add(TEXT("model"), TEXT("models/props/crate.mdl"));
-	Solid.Keys.Add(TEXT("solid"), TEXT("6"));
-	Defs.Defs.Add(MoveTemp(Solid));
-
-	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-	World.Load(MoveTemp(Defs));
-	World.Activate(0.0);
-
-	UStaticMeshComponent* Body = Services.PropBodies.FindRef(TEXT("crate"));
-	TestNotNull(TEXT("the prop stands a body"), Body);
-	if (!Body)
-	{
-		return true;
-	}
-	TestTrue(TEXT("solid before Break"), Body->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
-
-	World.AcceptInput(TEXT("solid_crate"), FName(TEXT("Break")), FElysiumVariant::Void(),
+	FPropSolidNativeFixture Fixture;
+	if (!Fixture.Prepare(*this)) return false;
+	FElysiumEntity* Solid = Fixture.Spawn(TEXT("solid_copcar"), TEXT("6"), FVector(5000,4000,3000));
+	if (!TestNotNull(TEXT("solid prop resolved"), Solid)
+		|| !TestNotNull(TEXT("solid before Break has actual native object"), Solid->VPhysicsGetObject())) return false;
+	void* Actor = Solid->VPhysicsGetObject();
+	UPrimitiveComponent* Body = ElysiumModelPhysics::ComponentFor(Actor);
+	UPrimitiveComponent* Art = Solid->GetAttachBody();
+	if (!TestNotNull(TEXT("actual native component"), Body) || !TestNotNull(TEXT("prepared prop art"), Art)
+		|| !Fixture.Publish(*this)) return false;
+	const FVector Center = Fixture.Inputs->SelectedBody->AggGeom.CalcAABB(
+		ElysiumModelPhysics::Identity(Body)->GetUnrealWorldTransform()).GetCenter();
+	TestEqual(TEXT("solid before Break has one native query shape"), Fixture.QueryShapes(Body), 1);
+	TestTrue(TEXT("solid before Break actually blocks scene query"), Fixture.Hits(Body, Center));
+	TestTrue(TEXT("prepared art visible before Break"), Art->IsVisible());
+	Fixture.Entities->AcceptInput(TEXT("solid_copcar"), FName(TEXT("Break")), FElysiumVariant::Void(),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-
-	TestTrue(TEXT("Break gates collision off along with visibility"),
-		Body->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
+	TestEqual(TEXT("Break gates actual native query shapes off"), Fixture.QueryShapes(Body), 0);
+	TestFalse(TEXT("Break gates collision off in actual native scene"), Fixture.Hits(Body, Center));
+	TestFalse(TEXT("Break gates prepared art visibility off"), Art->IsVisible());
+	TestTrue(TEXT("Break gates the existing actor without replacement"), Solid->VPhysicsGetObject() == Actor);
 	return true;
 }
 #endif // ELYSIUM_WITH_ARM_TESTS

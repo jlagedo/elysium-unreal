@@ -27,7 +27,9 @@ not every recipient. Exact recovery: `docs/vtmb/entity_io.md` and the retained
 
 Generic Kill100acf90 remains immediate and open E2. Physics save-handler10044a90 removes
 owner association metadata; epoch-resolved native save rows replace that mechanism without
-recreating its storage layout. Native func_brush223 producer remains unrecovered/open P1/P3.
+recreating its storage layout. Native func_brush223 producer and registered false128 restore phase are delivered by the
+2026-10-12 brush packet (physics-interaction.md); core37 native and both actual map records
+prove the bounded contract. Full P1 caller/writer coverage and P3 motion/timing/travel remain open.
 
 Before closing an affected L0 service, identify the actual caller/callee or named data field,
 verify/register the upward hook in `../hooks.tsv` when there is a runtime call, and attach this

@@ -808,9 +808,9 @@ bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 //      before the evaluation returns, with null activator and null caller, while the
 //      outputs that receiver fires still enter the ordinary queue.        SyncScriptInput
 //      (`docs/vtmb/python_bridge.md` → "Synchronous calls versus queued Python")
-//   7. A door's linked partner is driven through chokepoint 1 rather than by a direct C++
-//      call, so the second leaf's swing is visible with its real provenance — and, because
-//      the partner receives `Toggle` and never `Use`, it cannot mirror back.
+//   7. A door's linked partner receives the same-direction helper directly, recursion disabled;
+//      its real output is ordered before the used leaf's, with the original activator and the
+//      partner itself as caller. No synthetic Toggle input is dispatched.
 //                                                                     DoorPartnerChokepoint
 //   8. The by-handle chokepoint accounts a dead receiver exactly as the by-name one does:
 //      a counted target miss on the sinks, outside the stub work list.    StaleDirectHandle
@@ -821,7 +821,7 @@ bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 //      removal at +0.1, and the delayed rows already queued still delivering after the
 //      entity is gone (`docs/vtmb/entity_io.md`).                              WaitMinusOne
 //
-// Rules 6-8 are transport claims, so they are asserted the same way the order rules are —
+// Rules 6 and 8 are input transport claims; rule 7 observes actual linked-helper outputs —
 // on the FElysiumOrderedIOSink stream, which now closes each event line with its `act=`/`cal=`
 // provenance. Rules 9-10 are state claims, asserted through the house freeze/rebuild/apply
 // round trip.
@@ -981,15 +981,11 @@ bool FElysiumDoorPartnerChokepointTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventTransportTests;
 
-	// CBaseDoor::DoorknobUse toggles this leaf and then its `linked_door` partner. The partner's
-	// half is delivered through chokepoint 1 so the sinks, the I/O ring and the queue debugger see
-	// the second leaf swing — synchronously, because DoorUse is already running inside an executing
-	// Use handler, the sanctioned seam for this case.
-	//
-	// Both leaves are bodiless: a mover with no brush body cannot travel, but it still runs the
-	// whole decision — locked check, toggle-state flip, OnOpen — which is the half this asserts.
-	// The doors are linked BOTH ways on purpose: that is how a double door is authored, and it is
-	// what makes "the partner receives Toggle, never Use" load-bearing rather than incidental.
+	// 100f05e0/100f0f50 copy m_hActivator into the linked leaf, dispatch the same-direction
+	// helper with recursion disabled, then restore its prior activator. This is a direct virtual
+	// call, not AcceptInput: only the actual outputs belong in the I/O sink.
+	// Bodiless leaves isolate output/order/provenance; native movement has its own witnesses.
+	// Bidirectional links prove that the cleared propagation flag prevents mirror-back.
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__door_partner__");
 	FElysiumEntityDef LeftLeaf;
@@ -1002,6 +998,7 @@ bool FElysiumDoorPartnerChokepointTest::RunTest(const FString&)
 	RightLeaf.Classname = TEXT("func_door");
 	RightLeaf.TargetName = TEXT("door_b");
 	RightLeaf.Keys.Add(TEXT("linked_door"), TEXT("door_a"));
+	RightLeaf.Keys.Add(TEXT("spawnflags"), TEXT("1")); // sliding START_OPEN makes the partner AtTop
 	Wire(RightLeaf, TEXT("OnOpen"), TEXT("b_open"), TEXT("Add"), TEXT("1"));
 	Defs.Defs.Add(MoveTemp(RightLeaf));
 	Defs.Defs.Add(Counter(TEXT("a_open")));
@@ -1013,37 +1010,34 @@ bool FElysiumDoorPartnerChokepointTest::RunTest(const FString&)
 	const FElysiumEntityHandle Player = World.SpawnPlayer();
 	World.Activate(0.0);
 
-	const FElysiumEntity* DoorA = World.FindByName(TEXT("door_a"));
-	const FElysiumEntity* DoorB = World.FindByName(TEXT("door_b"));
+	FElysiumEntity* DoorA = World.FindByName(TEXT("door_a"));
+	FElysiumEntity* DoorB = World.FindByName(TEXT("door_b"));
 	if (!TestNotNull(TEXT("door_a resolved"), DoorA) || !TestNotNull(TEXT("door_b resolved"), DoorB))
 	{
 		return false;
 	}
+	FElysiumDoorBase* Partner = DoorB->AsDoorBase();
+	if (!TestNotNull(TEXT("partner is an actual door leaf"), Partner)) return false;
+	TestEqual(TEXT("adversarial partner starts open: Toggle would close rather than open"),
+		Partner->State(), FElysiumDoorBase::EToggleState::AtTop);
+	Partner->LastActivator = DoorA->Handle; // a distinct live prior handle, restored after the call
 
-	// The knob press, spelled as the ordinary Use input the +use path and `ent_fire` both reach.
 	World.AcceptInput(TEXT("door_a"), FName(TEXT("Use")), FElysiumVariant::Void(), Player, Player);
-
 	TestTrue(TEXT("the used leaf received Use"), Sink->Saw(TEXT("deliver"), TEXT("door_a.Use")));
-	TestEqual(TEXT("the partner's half is visible at the chokepoint exactly once"),
-		Sink->CountOf(TEXT("deliver"), TEXT("door_b.Toggle")), 1);
-	TestEqual(TEXT("...and did not go through the queue"),
-		Sink->CountOf(TEXT("queue"), TEXT("door_b.Toggle")), 0);
-	TestEqual(TEXT("the queue is untouched by the swing itself"),
-		Sink->CountOf(TEXT("queue"), TEXT("Toggle")), 0);
+	TestEqual(TEXT("direct linked helper produces the partner output exactly once"),
+		Sink->CountOf(TEXT("queue"), TEXT("b_open.Add")), 1);
+	TestTrue(TEXT("partner output precedes the used leaf output"),
+		Sink->AppearsInOrder(TEXT("queue"), { TEXT("b_open.Add"), TEXT("a_open.Add") }));
+	const FString PartnerLine = Sink->FirstLine(TEXT("queue"), TEXT("b_open.Add"));
+	TestTrue(TEXT("the partner output preserves the original activator"), PartnerLine.Contains(ActIs(Player)));
+	TestTrue(TEXT("the partner output names the partner as caller"), PartnerLine.Contains(CalIs(DoorB->Handle)));
+	TestTrue(TEXT("linked helper restores the partner's distinct prior activator"), Partner->LastActivator == DoorA->Handle);
+	TestEqual(TEXT("no invented partner Toggle input"), Sink->CountOf(TEXT("deliver"), TEXT("door_b.Toggle")), 0);
+	TestEqual(TEXT("no invented Toggle is queued"), Sink->CountOf(TEXT("queue"), TEXT("Toggle")), 0);
+	TestEqual(TEXT("the partner never receives Use"), Sink->CountOf(TEXT("deliver"), TEXT("door_b.Use")), 0);
+	TestEqual(TEXT("no mirror-back Toggle input"), Sink->CountOf(TEXT("deliver"), TEXT("door_a.Toggle")), 0);
 
-	const FString PartnerLine = Sink->FirstLine(TEXT("deliver"), TEXT("door_b.Toggle"));
-	TestTrue(TEXT("the partner's delivery preserves the original activator"),
-		PartnerLine.Contains(ActIs(Player)));
-	TestTrue(TEXT("...and names the used leaf as caller"), PartnerLine.Contains(CalIs(DoorA->Handle)));
-
-	// No mirror-back: the partner is handed `Toggle`, which is not the input DoorUse hangs off, so
-	// the recursion is structurally impossible rather than guarded against.
-	TestEqual(TEXT("the partner never receives Use"),
-		Sink->CountOf(TEXT("deliver"), TEXT("door_b.Use")), 0);
-	TestEqual(TEXT("and the used leaf is never toggled back by its partner"),
-		Sink->CountOf(TEXT("deliver"), TEXT("door_a.Toggle")), 0);
-
-	// Both leaves actually moved — the assertion that the visibility change did not cost the swing.
+	// Both actual outputs delivered once: the cleared propagation flag prevented recursion.
 	World.Tick(0.0);
 	TestEqual(TEXT("the used leaf opened"), CounterValue(World, TEXT("a_open")), 1.f);
 	TestEqual(TEXT("and so did the partner"), CounterValue(World, TEXT("b_open")), 1.f);

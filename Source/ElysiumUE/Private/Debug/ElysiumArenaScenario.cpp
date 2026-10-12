@@ -1998,7 +1998,7 @@ bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out)
 		TEXT("move_shoot.active"), TEXT("weapon.reload"), TEXT("weapon.jam"),
 		TEXT("weapon.interrupt"), TEXT("senses.can_sense"), TEXT("senses.gathered"),
 		TEXT("dialog.open"), TEXT("dialog.partner_live"), TEXT("los.player"),
-		TEXT("los.pvs"), TEXT("physics.present"), TEXT("physics.static"), TEXT("physics.shadow_member"), TEXT("physics.shadow_installed")
+		TEXT("los.pvs"), TEXT("physics.present"), TEXT("physics.static"), TEXT("physics.shadow_member"), TEXT("physics.shadow_installed"), TEXT("art.visible")
 	})
 		if (Field == Name) { Out = FElysiumArenaValue::EType::Bool; return true; }
 	for (const TCHAR* Name : {

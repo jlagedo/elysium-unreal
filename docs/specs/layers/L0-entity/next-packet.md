@@ -1,27 +1,25 @@
-# Next bounded packet — P1 native brush producer reconciliation
+# Next bounded packet — P1 remaining native producer reconciliation
 
-Read goal.md/checkpoint.md,vision.md and active delivery/service maps. Reuse accepted
-selected36 input receipt E:/elysium-work/codex/l0-p1-remaining-inputs-20261012/acceptance-checkpoint.json
-and creator/flags/body/material/shadow/velocity walks. No import or recovery replay.
+Read goal.md/checkpoint.md,vision.md and active delivery/service maps. Reuse brush receipt
+E:/elysium-work/codex/l0-p1-brush-native-20261012/acceptance-checkpoint.json and earlier
+selected36/creator/flags/body/material/shadow/velocity walks. No imports or recovery replay.
 
-P1 remains active. Establish the observable contract of func_brush native223 (1013e070):
-look up address first, compare existing Spawn/BuildBody and actual core witness-map callers,
-identify required lower/same-layer producers and their true preparation route. Retain normal
-brush rendering/geometry as Unreal services; internal IVP representation differences are not
-dependencies. Name shipped keyfields/inputs/query/movement/lifecycle/save observers.
-Prior born-hidden fallback and native func_door tests do not prove this missing native branch.
+P1 active: reconcile remaining actual core native223 callers/writers. FuncRotating false128/
+base223 is next candidate: address lookup first, compare current consumers, actual tutorial/
+hub placements and native preparation. Establish whether normal Spawn/registered restore
+reach a missing same/lower producer. No fake body or IVP mechanism prerequisites. Name
+key/input/query/movement/timing/lifecycle/saved-state observers. Reconcile retained tutorial
+prop_switch697 body-input refusal before full closure.
 
-Return a compact precode packet: mapped rows,real callers/producers,accepted walk sections,
-exact unknowns,units/frames/clocks/formulas/order/failure/save/lifetime,allowed files,
-positive/negative/restore/lifecycle witnesses and stop boundary. Main reviews before coding.
-If core evidence disproves this dependency, record exact core/later disposition and select
-the first actually missing P1 producer; do not declare P1 complete from narrow witnesses.
+Return compact precode packet: mapped rows,real callers/producers,accepted oracle sections,
+exact unknowns,units/frames/clocks/formulas/order/failure/save/lifetime,permitted files,
+positive/negative/restore/lifecycle witnesses and stop. Main reviews before coding. If a
+candidate dependency is disproved, record exact core/later disposition and select the first
+actually missing producer. No whole P1 closure from a single caller.
 
-CPhysBox17-map slice has no core witness placements; explicit map-specific D08/I1 work,
-not a global unreachable verdict. Other writers/constraint/ragdoll observers remain in mapped
-scope. Generic Kill/CNotify/Aim/PhysicsAnimlink,E2/P2/P3,full travel,I2 impact and Break remain
-open. Four retained D09 scope-review briefs require disposition before full L0 closure.
-
-One fresh Sol High worker,fork none,one worker/run,no nested agents/commit/push. Bound recovery
-to this required contract; verify installed public APIs and actual production fixture branch.
-Freeze,main independent review/gates,exact-path commit/checkpoint before next run. No owner decision.
+CPhysBox17-map slice remains explicit later D08/I1,not globally unreachable. Other constraint/
+ragdoll writers and generic Kill/CNotify/Aim/PhysicsAnimlink,E2/P2/P3/full native travel/I2/
+Break/four D09 scope briefs remain open. Higher gameplay belongs to named recipient layers.
+One fresh Sol High worker,fork none,one worker/run,no nested agents/commit/push. Verify public
+APIs/production fixture, bound recovery to required question; freeze/main review/gates/exact
+local commit/checkpoint before next run. Never push. No owner decision currently.
