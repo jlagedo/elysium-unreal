@@ -654,6 +654,7 @@ namespace
 	{
 		UWorld* World; FNativeContactOutput Contact; uint64 Sequence; uint64 Birth = 0;
 		bool bQualified = false; bool bInitialTransition = false;
+		bool bSleeping = false; //semantic qualified survivor; native initial flags may restart on wake
 		double OutputTime = -1.; double BirthTime = -1.;
 	};
 	TArray<FCompletedContactBirth> CompletedContactBirths;
@@ -1284,6 +1285,7 @@ bool ElysiumModelPhysics::GetContactPoint(void* Actor, void*& OtherActor, FStrin
 		if (!Particle) return;
 		Particle->ParticleCollisions().VisitConstCollisions([&](const Chaos::FPBDCollisionConstraint& Contact)
 		{
+			if (!Contact.IsCurrent() || Contact.GetIsProbe()) return Chaos::ECollisionVisitorResult::Continue;
 			const auto* First = Contact.GetParticle0(); const auto* Second = Contact.GetParticle1();
 			FCompletedContactBirth* Completed = CompletedContactBirths.FindByPredicate([&](const FCompletedContactBirth& Entry)
 			{ return Entry.World == ComponentFor(Actor)->GetWorld() && Entry.Contact.Shapes[0] == Contact.GetShape0()
@@ -1294,8 +1296,12 @@ bool ElysiumModelPhysics::GetContactPoint(void* Actor, void*& OtherActor, FStrin
 			if (Completed) SurvivingNativePairs.Add(Completed->Sequence);
 			// A cached pair allocation is not an observed friction contact. Preserve the strict
 			// entry/inclusive retirement skin from2603e6d0/2603e880 using current native points.
-			bool bQualifyingPoint = false;
-			if (!Contact.GetDisabled() && !Contact.GetIsProbe())
+			//260184a0 reads the surviving link head; sleep is not2603cf30 unlink.
+			//Chaos sleeping contacts have disabled/zero active points. Retain only a
+			//previously qualified birth; a cached sleeping candidate cannot create one.
+			const bool bRetainedSleeping = Contact.IsSleeping() && Completed && Completed->bQualified;
+			bool bQualifyingPoint = bRetainedSleeping;
+			if (!Contact.IsSleeping() && !Contact.GetDisabled())
 				for (int32 PointIndex = 0; PointIndex < Contact.NumManifoldPoints(); ++PointIndex)
 					if (Contact.IsManifoldPointActive(PointIndex))
 					{
@@ -1304,7 +1310,7 @@ bool ElysiumModelPhysics::GetContactPoint(void* Actor, void*& OtherActor, FStrin
 							bQualifyingPoint = true;
 					}
 			if (!bQualifyingPoint)
-			{ if (Completed) Completed->bQualified = false; return Chaos::ECollisionVisitorResult::Continue; }
+			{ if (Completed) { Completed->bQualified = false; Completed->bSleeping = false; } return Chaos::ECollisionVisitorResult::Continue; }
 			const auto* Partner = Contact.GetParticle0() == Particle ? Contact.GetParticle1() : Contact.GetParticle0();
 			void* PartnerObject = Partner ? const_cast<void*>(static_cast<const void*>(Partner->PhysicsProxy())) : nullptr;
 			if (RetiredNativeActors.Contains(PartnerObject)) return Chaos::ECollisionVisitorResult::Continue;
@@ -1317,9 +1323,13 @@ bool ElysiumModelPhysics::GetContactPoint(void* Actor, void*& OtherActor, FStrin
 					|| Partner->UniqueIdx() != Association->UniqueIdx)
 					return Chaos::ECollisionVisitorResult::Continue;
 			if (!Completed) return Chaos::ECollisionVisitorResult::Continue;
-			if (!Completed->bQualified || Completed->bInitialTransition)
+			//2603e6d0's wake refresh reuses a surviving link. Native initial flags may
+			//restart after sleep on the same retained key; real awake qualification is
+			//still required, but that flag alone must not reorder surviving births.
+			if (!bRetainedSleeping && (!Completed->bQualified || (Completed->bInitialTransition && !Completed->bSleeping)))
 			{ Completed->Birth = Completed->Sequence; Completed->BirthTime = Completed->OutputTime; }
 			Completed->bQualified = true; Completed->bInitialTransition = false;
+			Completed->bSleeping = Contact.IsSleeping();
 			if (Provenance)
 			{
 				*Provenance += FString::Printf(TEXT("partner=%s sequence=%llu birth=%llu birthTime=%.17g outputTime=%.17g initial=%d; "),
@@ -1329,7 +1339,7 @@ bool ElysiumModelPhysics::GetContactPoint(void* Actor, void*& OtherActor, FStrin
 			}
 			Current.Add({ &Contact, PartnerObject, 0, Completed->Birth });
 			return Chaos::ECollisionVisitorResult::Continue;
-		});
+		}, Chaos::ECollisionVisitorFlags::VisitAllCurrentAndExpired);
 	});
 	// Absence from a modifier output batch is not retirement (sleep/no-advance).
 	// Absence from the current completed native pair roster is actual retirement.

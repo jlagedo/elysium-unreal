@@ -341,6 +341,7 @@ void FElysiumDoorCasesTest::GetTests(TArray<FString>& OutBeautifiedNames, TArray
 		TEXT("NativeDoorFeedbackObserver"),
 		TEXT("NativeMovingFirstContact"),
 		TEXT("NativeWorldContentsFilter"),
+		TEXT("NativeSleepingWorldContact"),
 		TEXT("NativeArrivalClockObservers"),
 	};
 	for (const TCHAR* Case : Cases)
@@ -421,6 +422,101 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		}
 		return true;
 	}
+	if (Parameters == TEXT("NativeSleepingWorldContact"))
+	{
+		AActor* Owner=ElysiumDoorResyncTests::SpawnMoverOwner(this,EngineWorld); if (!Owner) return false;
+		FElysiumEntityDefs Defs; Defs.MapName=TEXT("__sleeping_null_world_contact__");
+		for (int32 Index=0; Index<2; ++Index)
+		{
+			FElysiumEntityDef Def; Def.Classname=Index==0?TEXT("func_button"):TEXT("info_target");
+			Def.TargetName=Index==0?TEXT("subject"):TEXT("older"); Def.Model=Index+1;
+			Def.Origin=FVector(Index==0?-28:-47,0,1000); Def.Keys.Add(TEXT("model"),FString::Printf(TEXT("*%d"),Def.Model));
+			Def.Keys.Add(TEXT("spawnflags"),TEXT("1"));
+			FElysiumConvexHull Hull;
+			for (float X : {-10.f,10.f}) for (float Y : {-10.f,10.f}) for (float Z : {-10.f,10.f}) Hull.Vertices.Emplace(X,Y,Z);
+			Def.Hulls.Add(Hull); Defs.Defs.Add(MoveTemp(Def));
+		}
+		FElysiumRecordingServices Services; FElysiumEntityWorld World(Owner,nullptr,Services.Bundle()); World.Load(MoveTemp(Defs)); World.Activate(0.);
+		auto* Subject=World.FindByName(TEXT("subject")); auto* Older=World.FindByName(TEXT("older"));
+		if (!Subject || !Older || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*Older)
+			|| !TestNotNull(TEXT("actual button223 native body exists"),Subject->VPhysicsGetObject())) return false;
+		TestEqual(TEXT("actual button Spawn retains move8"),Subject->GetMoveType(),8);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.05);
+		void* Selected=nullptr;
+		if (!TestTrue(TEXT("actual older native qualifying contact precedes world creation"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),Selected)
+			&& Selected==Older->VPhysicsGetObject())) return false;
+		//Real native world geometry created after entity-world activation has no
+		//creation GameData. No invented owner or clearing of a live mapping.
+		auto* Payload=NewObject<UElysiumMapCollisionPayload>(); Payload->MapName=TEXT("__late_null_world__");
+		FElysiumCollisionHull WorldHull;
+		for (float X : {-20.f,20.f}) for (float Y : {-20.f,20.f}) for (float Z : {-20.f,20.f}) WorldHull.Vertices.Emplace(X,Y,Z+1000.f);
+		Payload->AuthorWorldBody(3,{WorldHull},true);
+		if (!TestTrue(TEXT("real late world convex cooks"),Payload->CreatePhysicsMeshes())) return false;
+		auto* Collider=EngineWorld->SpawnActor<AElysiumWorldCollisionActor>();
+		if (!Collider || !TestEqual(TEXT("late world producer creates native static body"),Collider->AuthorFromPayload(Payload),1)) return false;
+		UElysiumWorldCollisionComponent* WorldComponent=Collider->Bodies[0]; void* WorldObject=ElysiumModelPhysics::ActorIdentity(WorldComponent);
+		TestNull(TEXT("actual late world creation has null GameData"),ElysiumModelPhysics::GameDataForObject(WorldObject));
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.10);
+		FString AwakeProvenance, SleepProvenance;
+		auto QueryBirths=[](const FString& Provenance)
+		{
+			TMap<FString,FString> Births; TArray<FString> Entries; Provenance.ParseIntoArray(Entries,TEXT("; "),true);
+			for (const auto& Entry : Entries)
+			{
+				const int32 SequenceStart=Entry.Find(TEXT(" sequence=")); const int32 BirthStart=Entry.Find(TEXT(" birth=")); const int32 OutputStart=Entry.Find(TEXT(" outputTime="));
+				if (SequenceStart>=0 && BirthStart>=0 && OutputStart>BirthStart) Births.Add(Entry.Left(SequenceStart),Entry.Mid(BirthStart,OutputStart-BirthStart));
+			}
+			return Births;
+		};
+		if (!TestTrue(TEXT("newer qualifying null world is selected before older live GameData"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),Selected,&AwakeProvenance)
+			&& Selected==WorldObject && !ElysiumModelPhysics::GameDataForObject(Selected))) return false;
+		const auto BeforeSleepBirths=QueryBirths(AwakeProvenance);
+		TestEqual(TEXT("real native query has both older and newer null world survivors"),BeforeSleepBirths.Num(),2);
+		ElysiumModelPhysics::Identity(Subject->Body)->PutInstanceToSleep(); ElysiumModelPhysics::Identity(Older->Body)->PutInstanceToSleep();
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.15);
+		TestFalse(TEXT("null world contact subject actually sleeps"),ElysiumModelPhysics::IsActive(Subject->Body));
+		TestTrue(TEXT("sleep retains newest null world over older survivor"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),Selected,&SleepProvenance) && Selected==WorldObject);
+		TestEqual(TEXT("sleep retains actual world query birth"),SleepProvenance,AwakeProvenance);
+		TestTrue(TEXT("no-advance sleeping world query retains selected null"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),Selected,&SleepProvenance) && Selected==WorldObject);
+		int32 NullBlocked=0;
+		Subject->BlockedCallback=[](FElysiumEntity& Receiver,FElysiumEntity* Other)
+		{ Receiver.World->EmitRetailSite(Receiver,TEXT("null_world_blocked"),TEXT("CBaseEntity::Blocked"),0x100a4d40u,TEXT("callback"),Other?TEXT("live"):TEXT("null")); };
+		World.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+		{
+			if (Event.Entity==Subject->Handle && (Event.Text.Contains(TEXT("tag=null_world_blocked")) || Event.Text.Contains(TEXT("tag=pusher_blocked")))) AddInfo(Event.Text);
+			if (Event.Entity==Subject->Handle && Event.Text.Contains(TEXT("tag=null_world_blocked")) && Event.Text.EndsWith(TEXT("null"))) ++NullBlocked;
+		});
+		bool bWakePublished=false; FVector WakeSolved;
+		ElysiumModelPhysics::Wake(Subject->Body);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.15+1./60.,nullptr,[&](const TCHAR* Phase)
+		{
+			if (FCString::Strcmp(Phase,TEXT("after_solve"))!=0) return;
+			bWakePublished=ElysiumModelPhysics::ActiveOutputs(World).ContainsByPredicate([&](const auto& Output) { return Output.Actor==Subject->VPhysicsGetObject(); });
+			TestTrue(TEXT("real waking solved47 pose exists"),ElysiumModelPhysics::GetShadowPosition(Subject->VPhysicsGetObject(),&WakeSolved,nullptr)!=0);
+			void* WakePartner=nullptr; FString WakeProvenance;
+			const bool bWakeContact=ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),WakePartner,&WakeProvenance);
+			AddInfo(FString::Printf(TEXT("null_world_wake selected=%d world=%d other=%s provenance=%s"),bWakeContact,WakePartner==WorldObject,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(WakePartner)),*WakeProvenance));
+			TestTrue(TEXT("real awake qualification preserves the selected sleeping world survivor"),bWakeContact && WakePartner==WorldObject);
+			TestTrue(TEXT("first enabled awake qualifiers preserve both exact birth identities and times"),QueryBirths(WakeProvenance).OrderIndependentCompareEqual(BeforeSleepBirths));
+			FVector WakeDisplaced=WakeSolved+FVector(40,0,0); Subject->SetAbsOrigin(WakeDisplaced); Subject->Velocity=FVector(20,0,0);
+			Subject->LocalTime=1.f; Subject->StartFrameLocalTime=0.f; Subject->PhysicsMoveDoneTime=0.f;
+		});
+		TestTrue(TEXT("actual wake reaches active226 before the query consumer"),bWakePublished);
+		TestEqual(TEXT("actual226 full rewind selects null GameData and reaches generic178 once"),NullBlocked,1);
+		TestEqual(TEXT("actual178 null consumer precedes corrected local clock write"),Subject->LocalTime,0.f);
+		World.SetAiTraceSink({});
+		Subject->BlockedCallback={}; Subject->SetAbsOrigin(WakeSolved); Subject->Velocity=FVector::ZeroVector;
+		WorldComponent->DestroyPhysicsState();
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.20);
+		TestTrue(TEXT("completed native world retirement exposes older qualifying survivor"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),Selected) && Selected==Older->VPhysicsGetObject());
+		WorldComponent->CreatePhysicsState(); WorldObject=ElysiumModelPhysics::ActorIdentity(WorldComponent);
+		TestNull(TEXT("actual world recreation retains legitimate null GameData"),ElysiumModelPhysics::GameDataForObject(WorldObject));
+		ElysiumModelPhysics::Wake(Subject->Body); ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.25);
+		TestTrue(TEXT("recreated qualifying null world again selects over older survivor"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),Selected) && Selected==WorldObject);
+		Collider->Destroy();
+		return true;
+	}
+
 	if (Parameters == TEXT("NativeWorldContentsFilter"))
 	{
 		AActor* Owner = ElysiumDoorResyncTests::SpawnMoverOwner(this, EngineWorld);
@@ -465,10 +561,8 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		//World8/static rejects a real push door8 before masks. Ordinary dynamic
 		//base0 bodies preserve the legitimate world-mask/contact/lifetime observer.
 		ElysiumModelPhysics::ObserveNativeAdmission(*EngineWorld,true);
-		auto KeepCommonAwake=[&](const TCHAR* Phase) { if (FCString::Strcmp(Phase,TEXT("after_begin"))==0) ElysiumModelPhysics::Wake(Common->Body); };
-		//This is an awake contact observer, as the former moving door was. A settled
-		//sleeping static contact has no active manifold points and cannot prove44.
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.8,nullptr,KeepCommonAwake);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.8);
+		TestFalse(TEXT("real settled world contact sleeps without a waking fixture workaround"),ElysiumModelPhysics::IsActive(Common->Body));
 		const auto InitialAdmissions=ElysiumModelPhysics::TakeNativeAdmissions(*EngineWorld);
 		void* InitialWorldActor=ElysiumModelPhysics::ActorIdentity(Collider->Bodies[0]);
 		uint64 InitialWorldGeneration=0; int32 CommonAdmissions=0;
@@ -487,12 +581,12 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		// Slot237's settled live Flags producer changes admission at the next real solve.
 		Clip->Flags |= 0x2000;
 		ElysiumModelPhysics::Wake(Clip->Body);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .86,nullptr,KeepCommonAwake);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .86);
 		TestTrue(TEXT("live NPC mask admits the actual dual-clip native contact"), ElysiumModelPhysics::GetContactPoint(Clip->VPhysicsGetObject(), ClipPartner));
 		TestTrue(TEXT("newly admitted clip contact retains world creation owner"), ElysiumModelPhysics::GameDataForObject(ClipPartner) == WorldOwner);
 		Clip->Flags &= ~0x2000;
 		ElysiumModelPhysics::Wake(Clip->Body);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .92,nullptr,KeepCommonAwake);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .92);
 		TestFalse(TEXT("live base mask retires formerly admitted native contact"), ElysiumModelPhysics::GetContactPoint(Clip->VPhysicsGetObject(), ClipPartner));
 		TestTrue(TEXT("common contact survives the real completed frame"), ElysiumModelPhysics::GetContactPoint(Common->VPhysicsGetObject(), CommonPartner));
 		ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld, 0.f, 1.f, true);
@@ -511,7 +605,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		CommonComponent->CreatePhysicsState();
 		TestTrue(TEXT("actual native recreation retains component creation owner"), ElysiumModelPhysics::GameDataForObject(ElysiumModelPhysics::ActorIdentity(CommonComponent)) == WorldOwner);
 		ElysiumModelPhysics::Wake(Common->Body);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .98,nullptr,KeepCommonAwake);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .98);
 		int32 RecreatedAdmissions=0;
 		void* RecreatedWorldActor=ElysiumModelPhysics::ActorIdentity(CommonComponent);
 		for (const auto& Sample : ElysiumModelPhysics::TakeNativeAdmissions(*EngineWorld))
@@ -1322,6 +1416,40 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FElysiumEntity* LiteralPartner=First;
 		TestTrue(TEXT("public retail opposing comparator literal selected partner"), Evidence.Selected == LiteralPartner);
 		ProveBlocked(LiteralPartner, TEXT("opposed_same_step_receiver"));
+		FString BeforeSleepProvenance, AfterSleepProvenance; void* SleepPartner = nullptr;
+		TestTrue(TEXT("selected qualifying birth exists before native sleep"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),SleepPartner,&BeforeSleepProvenance)
+			&& SleepPartner==LiteralPartner->VPhysicsGetObject());
+		for (FElysiumEntity* Sleeping : {Subject,First,Second}) ElysiumModelPhysics::Identity(Sleeping->Body)->PutInstanceToSleep();
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.70);
+		TestFalse(TEXT("settled sleeping subject publishes no invented awake update"),ElysiumModelPhysics::IsActive(Subject->Body));
+		TestFalse(TEXT("settled sleeping subject is absent from actual226 publication roster"),ElysiumModelPhysics::ActiveOutputs(World).ContainsByPredicate([&](const auto& Output)
+			{ return Output.Actor==Subject->VPhysicsGetObject(); }));
+		TestTrue(TEXT("two sleeping native survivors retain selected newest birth"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),SleepPartner,&AfterSleepProvenance)
+			&& SleepPartner==LiteralPartner->VPhysicsGetObject());
+		TestEqual(TEXT("sleep without new modifier output preserves both contact births"),AfterSleepProvenance,BeforeSleepProvenance);
+		bool bWakePublished = false, bWakeBlocked = false;
+		World.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+		{
+			if (Event.Entity==Subject->Handle && Event.Text.Contains(TEXT("tag=pusher_blocked")))
+				bWakeBlocked=Event.Text.Contains(TEXT("other=")+LiteralPartner->TargetName+TEXT(" "));
+		});
+		ElysiumModelPhysics::Wake(Subject->Body); //actual first wake is the consumer stimulus, never a sleep workaround
+		FVector WakeSolved;
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.70+1./60.,nullptr,[&](const TCHAR* Phase)
+		{
+			if (FCString::Strcmp(Phase,TEXT("after_solve"))!=0) return;
+			bWakePublished=ElysiumModelPhysics::ActiveOutputs(World).ContainsByPredicate([&](const auto& Output)
+			{ return Output.Actor==Subject->VPhysicsGetObject() && ElysiumModelPhysics::GameDataFor(Output,World)==Subject; });
+			FQuat WakeRotation;
+			TestTrue(TEXT("first wake supplies actual solved47 pose"),ElysiumModelPhysics::GetShadowPosition(Subject->VPhysicsGetObject(),&WakeSolved,&WakeRotation)!=0);
+			FVector WakeDisplaced=WakeSolved+FVector(40,0,0); Subject->SetAbsOrigin(WakeDisplaced); Subject->Velocity=FVector(20,0,0);
+			Subject->StartFrameLocalTime=0.f; Subject->LocalTime=1.f; Subject->PhysicsMoveDoneTime=0.f;
+		});
+		World.SetAiTraceSink({});
+		TestTrue(TEXT("first wake reaches production active226 publication"),bWakePublished);
+		TestTrue(TEXT("production226 full rewind queries surviving44 and dispatches literal178 receiver"),bWakeBlocked);
+		TestEqual(TEXT("actual waking consumer overwrites local clock after178"),Subject->LocalTime,0.f);
+		Subject->SetAbsOrigin(WakeSolved); Subject->Velocity=FVector::ZeroVector;
 		return true;
 	}
 

@@ -1,0 +1,43 @@
+{
+  "name": "l0_sleeping_contact_query",
+  "about": "Bounded native query44 lifetime: genuine bottle geometry and completed contact, explicit debug native sleep service, retained selected partner/birth readback, sleeping filter mutation, actual waking rejection and readmission. NativeContactSleep is fixture control, not a retail input or sleeping226 callback. Controlled178/world-null consumer is covered by native automation; ordinary pusher timing remains open.",
+  "stage": "arena", "seed": 1, "duration": 0.7,
+  "player": {"at": "start"},
+  "rows": [
+    {"classname": "prop_physics", "name": "query_a", "at": [5000,5000,3000], "keys": {"model": "models/scenery/physics/bottle/bottle.mdl", "spawnflags": "1"}},
+    {"classname": "prop_physics", "name": "query_b", "at": [5001,5000,3000], "keys": {"model": "models/scenery/physics/bottle/bottle.mdl", "spawnflags": "1"}}
+  ],
+  "script": [
+    {"t": 0.05, "do": "entity_call", "target": "query_a", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.05, "do": "entity_call", "target": "query_b", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.1, "do": "fire", "target": "query_a", "input": "Wake"},
+    {"t": 0.1, "do": "fire", "target": "query_b", "input": "Wake"},
+    {"t": 0.2, "do": "entity_call", "target": "query_a", "function": "NativeContactState", "args": []},
+    {"t": 0.22, "do": "entity_call", "target": "query_b", "function": "SetCollisionGroup", "args": [5]},
+    {"t": 0.23, "do": "fire", "target": "query_a", "input": "Wake"},
+    {"t": 0.23, "do": "fire", "target": "query_b", "input": "Wake"},
+    {"t": 0.26, "do": "entity_call", "target": "query_a", "function": "NativeContactState", "args": []},
+    {"t": 0.28, "do": "entity_call", "target": "query_a", "function": "NativeContactSleep", "args": []},
+    {"t": 0.28, "do": "entity_call", "target": "query_b", "function": "NativeContactSleep", "args": []},
+    {"t": 0.32, "do": "entity_call", "target": "query_a", "function": "NativeContactState", "args": []},
+    {"t": 0.32, "do": "entity_call", "target": "query_b", "function": "NativeContactState", "args": []},
+    {"t": 0.36, "do": "entity_call", "target": "query_b", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.4, "do": "entity_call", "target": "query_a", "function": "NativeContactState", "args": []},
+    {"t": 0.42, "do": "fire", "target": "query_a", "input": "Wake"},
+    {"t": 0.42, "do": "fire", "target": "query_b", "input": "Wake"},
+    {"t": 0.48, "do": "entity_call", "target": "query_a", "function": "NativeContactState", "args": []},
+    {"t": 0.5, "do": "entity_call", "target": "query_b", "function": "SetCollisionGroup", "args": [5]},
+    {"t": 0.51, "do": "fire", "target": "query_a", "input": "Wake"},
+    {"t": 0.51, "do": "fire", "target": "query_b", "input": "Wake"},
+    {"t": 0.55, "do": "entity_call", "target": "query_a", "function": "NativeContactState", "args": []}
+  ],
+  "expect": [
+    {"label": "real_awake_reject", "who": "query_a", "kind": "script", "match": "NativeContactState done sleep=0 contact=0", "by": 0.21},
+    {"label": "real_awake_qualification", "who": "query_a", "kind": "script", "match": "NativeContactState done sleep=0 contact=1 partner=query_b provenance=partner=query_b sequence=", "by": 0.27},
+    {"label": "first_actual_sleep", "who": "query_a", "kind": "script", "match": "NativeContactState done sleep=1 contact=1 partner=query_b", "by": 0.34},
+    {"label": "second_actual_sleep", "who": "query_b", "kind": "script", "match": "NativeContactState done sleep=1 contact=1 partner=query_a", "by": 0.34},
+    {"label": "sleeping_mutation_retains_selected", "who": "query_a", "kind": "script", "match": "NativeContactState done sleep=1 contact=1 partner=query_b", "by": 0.41},
+    {"label": "waking_rejection_retires", "who": "query_a", "kind": "script", "match": "NativeContactState done sleep=0 contact=0", "by": 0.49},
+    {"label": "awake_readmit_requalifies", "who": "query_a", "kind": "script", "match": "NativeContactState done sleep=0 contact=1 partner=query_b", "by": 0.57}
+  ]
+}

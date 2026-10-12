@@ -1,118 +1,83 @@
 # L0 restart checkpoint
 
 Updated 2026-10-12 UTC. Full Goal ACTIVE; full D02/P1/E2/P2/P3 and L0 closure unproven.
-Read goal.md every continuation. Main Sol Medium plans/reviews/gates/commits/checkpoints;
-one fresh Sol High worker per run, one run/worker at a time, no nested agents. Never push.
-No genuine owner decision currently. Unreal services preserve retail observable contracts.
+Read goal.md at every continuation. Main Sol Medium owns planning/review/gates/local commits;
+one fresh Sol High worker per run, one worker/run/enginejob at a time, no nested agents.
+Never push. No genuine owner decision or external blocker. Unreal supplies engine services;
+substrate preserves retail observable contracts. No IVP clone or retail-save import prerequisite.
 
-## Latest accepted run
+## Latest accepted run — selected44 sleeping lifetime
 
-The local commit containing this checkpoint accepts the bounded production native physical
-Start/End adapter and ordered touch consumers. Exact HEAD/tree/path hashes and main gates:
-E:/elysium-work/codex/l0-p2-physical-event-adapter-main-20261012/acceptance-checkpoint.json.
-Parent6a757880; sole worker /root/l0_physical_event_adapter terminal; all engine jobs terminal.
-Worker freeze E:/elysium-work/codex/l0-p2-physical-event-adapter-20261012/freeze.json:
-SHA9beddebeafb1afc1ef6c9a82a023d3c4dfb1af829fe3081d413e788e09a8d01e;
-16source/39evidence hashes independently verified, final sources unchanged after gates.
-Main retail/API/diff review, raw baseline reviews and retained failed gates in main scratch.
+The local commit containing this checkpoint accepts the bounded native sleeping-query adapter.
+Exact accepted HEAD/tree/parent/path hashes and all authoritative main receipts:
+E:/elysium-work/codex/l0-p2-sleeping-contact-query-main-20261012/acceptance-checkpoint.json.
+Parent08694609f36834158a2ea138ed69e08930cf0a37. Sole worker
+/root/l0_sleeping_contact_query terminal; all worker/main engine jobs terminal at acceptance.
+Worker freeze E:/elysium-work/codex/l0-p2-sleeping-contact-query-20261012/freeze.json
+SHA018bbe3334692ec4a33d68465b8e7408330d83fec9e49a99aa6b0d83c46741c0;
+10source plus50evidence/dependency hashes independently verified. Final sources unchanged
+through main gates. Main selection/frozen review and raw baseline reviews in main scratch;
+prior checkpoint/packet archived there, with full history retained by parent commits.
 
-Chaos complete PostSolve retained contacts supply participation without invented Phi threshold;
-semantic state preserves sleeping lifetime, actual awake loss/rejection/readmission and ordered
-incarnation identity. Current listener GameData/callback OR4/staticOR8 admit copied payloads
-before226/229; queue admission survives later native retirement. Ordered direct live FIFO drain,
-successful-link sentinel stamps, End flag1, mutable link/removal safety and base176 authored
-parent relay are joined. Wrapper destruction clears flags/GameData before backend destruction;
-body rebuild suppresses physical End but keeps entity sentinels; distinct entity removal notifies
-flagged other-side End. Reset fences new dispatch. Native scenario proves actual geometry/events.
-See docs/contracts/seam_physical_touch.md and physics-interaction.md; no IVP clone/equivalence claim.
+Observer active226 ->100a55b0 full rewind ->44/260184a0 ->178 before corrected LocalTime.
+Current nonprobe native sleeping contacts retain only prior qualified births. A rejected
+sleeping cache cannot birth. First enabled genuinely qualifying wake preserves surviving
+birth/priority despite native initial activation flags restarting. Awake enabled active IsSet
+strict skin remains mandatory; rejection/reentry, prune/retirement/rebuild lifetime preserved.
+Physical Start/End adapter unchanged. Genuine late unbound world collider proves newest null
+GameData selection and actual Blocked(nullptr), exact both birth identities/times across wake,
+retirement exposing older and recreation. Controlled discrepancy proves real226/44/178 branch,
+not ordinary moving timing equivalence. No invented sleeping226 callback or waking workaround.
+See docs/contracts/seam_physics_contact_query.md and physics-interaction.md's bounded recovery.
 
-Main build225654.603882Z PASS; default225700.061775Z218/218 (all217 preserved, exact native
-physical touch addition), affected arena225734.457276Z22/22 in four boots (all20 prior preserved;
-all host exit0, scenario error/first_unmet none); fresh arm230109.063220Z1671/1671, all1671
-preserved. Tests have zero failures/errors/unfinished. Raw reports225700.212277Z/default,
-225734.666070Z/arena and230229.092799Z/arm. Arena124 known LogPython startup Error lines,
-nonPython0; limitation distinguished from scenario verdicts. Doctor225821.937705Z0warnings;
-generated shape225700.062276Z all surfaces match. Main shape225252.057888Z failed because
-recovered176 lacked generator Hand classification; same-worker bounded repair and refreeze,
-failed receipt retained. No retail ledger edits, no push. Audit/mapped rows remain partial/open;
-full P1/E2/P2/P3/M1/L0 unclosed; broader l0_touch_lifecycle arena remains absent.
-
-Preparatory contact lifecycle6a757880 evidence is retained at
-E:/elysium-work/codex/l0-p2-contact-lifecycle-main-20261012/acceptance-checkpoint.json;
-complete native visitor/sleep/prune/incarnation proof is reused, not replayed.
-Next bounded query contract: sleeping selected44 lifetime through actual L0 consumers,
-keeping query skin qualification distinct from physical event state. See next-packet.md.
-No genuine owner decision or external blocker.
-
-## Accepted native admission foundation
-
-Local commit860d053c accepts the bounded native collision admission packet.
-Exact accepted HEAD/tree/path hashes and gate receipts are recorded in
-E:/elysium-work/codex/l0-p2-native-admission-main-20261012/acceptance-checkpoint.json.
-Parent c19068e11b919f4d7a82c64c20dc9b3ed3615aed; runtime foundation348959fe.
-Sole worker /root/l0_native_collision_admission terminal; all engine jobs terminal.
-Worker packet/freeze: E:/elysium-work/codex/l0-p2-native-admission-20261012/.
-Main independent review, source/evidence hashes, raw baseline reviews and retained failures:
-E:/elysium-work/codex/l0-p2-native-admission-main-20261012/.
-Final freeze28paths/58receipts SHA7c7c3a9a285aa76c13b989aa7dafc8420d00c04847090554ce8c368261fab4a6.
-All hashes verified. Original27 paths unchanged by the final SavePayload assertion repair.
-
-## Contract closed and limits
-
-Reached1002f1e0 ordered predicate now runs on real Chaos candidates through immutable semantic
-snapshots; no UObject/mutable game callback on physics thread. Native GameData/current identity,
-callbackWORD, contentsDWORD, game flags, owner/root, solid/move/flags, actual77, bilateral237/68,
-raw/entity ignore pairs and no-wake current-body25 mutations joined. Equal group/type noops and
-store/notification/partition/untouch order retained. Public Chaos constraint service readmits
-only owned current admitted constraints, with native incarnation/shape fencing and stale pruning.
-Actual creation, current solve response, aliases, retirement/replacement, queued stale-world
-samples, semantic/native SAVE and reconstructed ApplySnapshot/Activate readmission witnessed.
-Native schema56 refuses disposable55 before reading inserted callback/contents words.
-
-Actual CWorld constructor1023b840 and movers remain MoveType8. Real door/door and door/world
-candidates reject through ordered arms; ordinary movable brush bodies provide admitted positive
-contact fixtures. Legitimate material fixtures publish actual Solid2. Door/button receiver and
-callback assertions preserved. Awake world44 is proved; sleeping44 consumer disposition is OPEN.
-Friction44 snapshots are not physical StartTouch/EndTouch events. Native62 conversion, wheel
-producer and higher68 owners remain explicit; audit100aaa40 is firm:partial, not done.
-Full P2, P1 caller disposition, E2 and L0 are not closed by this packet.
-
-## Acceptance evidence
+## Main acceptance gates and limits
 
 CLI receipts below are E:/elysium-work/logs/<filename>.
-- Main build20261012T215706.898827Z-build.json exit0.
-- Worker affected215527.829981Z-test.json:53/53 pass, zero failures/errors/unfinished.
-- Main default215712.961214Z-test.json:217/217 pass, all215 baseline names preserved.
-  Index reports/tests/20261012T215713.110727Z-elysium-session-elysium-substrate/index.json.
-- Main arena215759.541713Z-arena.json:20/20 pass, four boots, all host exit0.
-  Index E:/elysium-work/reports/arena/20261012T215759.819254Z/index.json.
-  Existing editor Python startup limitation:124 Error lines allLogPython, zero nonPython;
-  no scenario error/first_unmet. This is an affected arena gate, not the full L0 arena.
-- Main arm220742.939421Z-test.json:1671/1671 pass, all1671 baseline names preserved.
-  Index E:/elysium-work/reports/tests/20261012T220744.461578Z-elysium-arm/index.json.
-- Doctor215723.194320Z-doctor.json repo-only zero warnings; generated shape
-  research215723.194817Z-research.json matches ledger without regenerating it.
-Failed initial default212732 and arm220140 retained; bounded same-worker repairs independently
-reviewed. Final arm repairs only SaveTests literals/comments; production/default/arena source
-hashes unchanged, so those gates remain valid. Focused SavePayload220558 passes1/1.
+- Build20261012T232548.114745Z-build.json exit0.
+- Default232555.159073Z-test.json:219/219 pass; all218 prior names preserved, exactly
+  NativeSleepingWorldContact added. Raw232555.315992Z-elysium-session-elysium-substrate/index.json
+  under reports/tests; SHA48761588ad334cc8a75e77883367277b88420d7ed9e35c58e1131441a21670d5.
+- Arena232639.490729Z-arena.json:23/23 pass across fourboots, allhost0, no scenarioerror/first_unmet;
+  all22 prior records preserved plus l0_sleeping_contact_query. Raw reports/arena/
+  20261012T232639.706421Z/index.json SHAf5783e4d7748ee9108fe1902fb20b565d11c24d03a6d2ab97b36dd58ec9fedd2.
+  Literal startup Error lines124, allLogPython/nonPython0; known editor limitation distinguished
+  from scenario verdicts. Full L0 arena and required repeated boot orders remain unproved.
+- Fresharm233022.283140Z-test.json:1671/1671 pass, all1671 prior names preserved,
+  errors/failures/unfinished0. Raw reports/tests/20261012T233153.460980Z-elysium-arm/index.json
+  SHAde32be170a40da8c77f1a6a97c30445693b3b41d3872d5282bdee8f6da385d9d.
+- Doctor232609.748230Z-doctor.json repo-only0warnings; generated shape232609.747729Z-research.json
+  allsurfacesmatch, no ledger regeneration. Worker54affected and3focusedarena receipts in freeze.
 
-## Reuse / protection
+Failed fixture compile231140 and focused231350/231632 retained. Diagnostic actualwake rebirthed
+survivors in reverse priority, now repaired with semantic prior-sleep marker; expectations not
+weakened. Audit100a55b0/100aaa40 and mapped rows remain partial/open. Ordinary moving-pusher
+first-contact/mechanics timing, generic changed-feature/same-step order, wider query/material
+and saved/reconstructed contact integration remain OPEN. No full P1/E2/P2/P3/M1/L0 closure.
 
-Normal initialization/core PhysProp348959fe acceptance:
-E:/elysium-work/codex/l0-p1-initnormal-main-20261012/acceptance-checkpoint.json.
-Physical listenerf52004e9 and recheck timingc19068e11 recover real Start/End routes;
-reached solid recheck pair cleanup does not synchronously emit physical contact destruction.
-Reuse body/material/shadow/query/save, sound8f8aea1b, plan5b48bb61 and timing freezes.
-Previous checkpoint/packet archived in main scratch. No imports/content/corpus/retail writes.
+## Reuse accepted foundations
 
-## Remaining / next witness
+08694609 production physical event adapter: callback/GameData admission, retained physical
+participation, before226/229 ordered FIFO, event-driven touch sentinels, base176 parent relay,
+wrapper destruction suppression vs entity removal End, reset fences. Exact acceptance:
+E:/elysium-work/codex/l0-p2-physical-event-adapter-main-20261012/acceptance-checkpoint.json.
+6a757880 native retained/sleep/prune/incarnation preparatory proof reused without replay.
+860d053c actual1002f1e0 immutable native admission, current no-wake mutations/contents/callback/
+SAVE56, coreworld/door constructors, current identity and masks; acceptance in
+E:/elysium-work/codex/l0-p2-native-admission-main-20261012/acceptance-checkpoint.json.
+348959fe core InitNormal/PhysProp; 8f8aea1b sound and5b48bb61 separate34pathplan remain accepted.
+Reuse body/material/shadow/query/save/sound walks; no content/corpus/retail/ledger writes.
 
-Next P2 contract: sleeping selected44 retention, actual world/null and Blocked consumer disposition; reuse accepted physical event state and native lifecycle proof. P1 core caller/writer/lifecycle final disposition remains; E2 Kill100acf90/CNotify/Aim10000/
-PhysicsAnimLink1014ec70; P2 native62/wheel/query/material/sleeping44/event consumers; P3 shadow
-simulation/parent/bounds/native landmark travel/collision SAVE global merge remain open.
-FuncRotating51 D07/P3, CPhysBox17 D08/I1, I2 impact10151c00/fullBreak/wider constraints,
-ragdoll/four D09 scope reviews and D03 audio occlusion policy retain mapped obligations.
-Full gate requires all active L0/integration in one arena, repeated boot orders, default+arm
-zero failures/baselines, owned audit done or owner-accepted named divergence, observable engine
-contracts, registered higher hooks and complete mapped disposition. No IVP clone or retail-save
-import prerequisite. Never mark complete for a packet or subsystem.
+## First unmet / next closing witness
+
+Next required body lifecycle dependency E2: core Kill100acf90 vs QueueRemove and terminal
+ReleaseForRemoval. Current base Kill immediately performs terminal native/body cleanup;
+retail119 queues UTIL_Remove. Confirm actual bindings/overrides/callers and deferred phases,
+then faithful implementation with real authored/native consumer witness; see next-packet.md.
+P1 caller/writer/lifecycle final disposition remains; E2 CNotifytarget40/pair/Aim10000 deletion/
+PhysicsAnimLink1014ec70; P2 native62 core/noncore producer disposition, map-specificwheel,
+query/material; P3 shadow simulation/parent/bounds/native landmark travel/globalcollisionSAVE
+merge remain open. FuncRotating51D07/P3, CPhysBox17D08/I1, I2impact10151c00/fullBreak/wider
+constraints, ragdoll/fourD09scope reviews and D03audioocclusion policy retain mapped obligations.
+Full gate: allactiveL0/integration onefullarena, required repeatedbootorders, default+armzero/
+baselines, owned auditdone or owneracceptednameddivergence, observable service contracts,
+registeredhigherhooks and completemappeddisposition. Never mark complete for a packet/subsystem.

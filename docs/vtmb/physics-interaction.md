@@ -3258,3 +3258,56 @@ Final repaired affected gate: build215437.398303Z passes;215527.829981Z passes53
 warnings. It retains the original lifecycle/dual-contact/material/178/linkedpeer assertions,
 adds actual rejected mover candidates, and proves awake world44 plus world sample lifetime.
 Main acceptance/default/arena/arm gates remain independently owned; full P2 remains open.
+
+### Sleeping selected-contact44 lifetime — bounded native consumer witness (2026-10-12)
+
+The accepted oracle is the existing pusher walk `L0-pusher-feedback.md:327–335`:
+sleep/no-advance retains live friction survivors. Object44 `260184a0` reads the newest
+surviving head; birth `2603b4f0`, unlink `2603cf30`, wake refresh `2603e6d0` and
+retirement `2603e880/2605fc40` already establish the lifecycle and unchanged strict
+entry/inclusive retirement skin. No additional IVP internals were reconstructed.
+The observer is awake226 `1002ea40 ->100b4f30 ->100a55b0`, with44 after full rewind
+and before178/LocalTime correction. Settled sleeping owners skip226; the world44 gap
+above was evidence of the native query adapter's missing retained state, not a
+requirement to invent callbacks while sleeping.
+
+Installed public `VisitAllCurrentAndExpired` exposes current sleeping constraints
+whose disabled flag and zero active points cannot establish a new qualifier. The
+adapter retains only a previously qualified current non-probe birth on the same
+proxy/UniqueIdx/incarnation/shape/geometry key. Awake contacts still require enabled
+active IsSet points below `2.8563570231199265`cm; rejected sleeping caches cannot
+birth. Awake rejection/skin loss, absence/prune, retired producers and rebuilt
+incarnations remove the prior qualification. Physical admission/Start/End projection
+is unchanged. `docs/contracts/seam_physics_contact_query.md` names the full seam.
+
+A first-wake native diagnostic exposed a second query divergence: unchanged
+survivors were both reported initial and their births reversed (older13, null
+world12). Installed `PBDCollisionConstraint.h:420–422` defines initial by this-tick
+versus last-tick activation; `ParticlePairMidPhase.cpp` derives it from that history.
+It is not a new retail link. A qualified sleeping survivor therefore keeps its
+birth on its first enabled, genuinely qualifying awake observation; failed awake
+qualification clears that sleep marker, so actual reentry/new key still births.
+Failed focused receipts231350/231632 and their raw reports preserve the diagnostic.
+
+Actual geometry and frames now prove NativePhysicalTouch qualification, no new
+sleep outputs, exact provenance across sleep/no-advance, sleeping rejected-cache
+no-birth, awake rejection/readmission and separation. Mover Lifetime/Mirror/Swizzle
+prove survivor priority and controlled waking production226/full-rewind44/178;
+the logical discrepancy is explicit consumer stimulus, not ordinary movement parity.
+NativeWorldContentsFilter settles without its prior repeated awake workaround.
+NativeSleepingWorldContact creates an actual unbound world collider after entity-world
+activation, so null creation GameData is a genuine producer precondition. It proves
+newest null selection, both birth identities/time across first wake, actual null178,
+retirement exposing older and native recreation. Normal bound world owner behavior
+remains covered separately. The debug arena uses actual bottle geometry and native
+sleep service, reporting sleep, partner and provenance without fake callbacks.
+
+Worker final source: build231903.673382Z passes; test232011.564711Z passes54/54
+(ModelPhysics32, Mover22), no failed/unfinished/abstained tests. Arena232205.285308Z
+passes sleeping query, native physical touch and native collision admission3/3;
+no scenario error/first-unmet, host exit0. The full CLI log contains31 literal `: Error:` lines, all LogPython startup errors
+are retained separately, not scenario failures. Failed fixture compile231140 and
+focused assertion receipts remain in the evidence freeze. Main owns independent
+acceptance. Ordinary moving-pusher timing, generic changed-feature/same-step
+ordering, wider query/material and saved/reconstructed contact integration, plus
+full P1/E2/P2/P3/M1/L0 remain open.

@@ -2512,7 +2512,8 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			return true;
 		}
 		if (Action.Function == TEXT("SetCollisionGroup") || Action.Function == TEXT("ObserveNativeAdmission")
-			|| Action.Function == TEXT("NativeAdmission") || Action.Function == TEXT("PhysicalTouchState"))
+			|| Action.Function == TEXT("NativeAdmission") || Action.Function == TEXT("PhysicalTouchState")
+			|| Action.Function == TEXT("NativeContactSleep") || Action.Function == TEXT("NativeContactState"))
 		{
 			FElysiumEntity* AdmissionReceiver = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
 			UWorld* AdmissionWorld = Host.GetWorld();
@@ -2533,6 +2534,25 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				ElysiumModelPhysics::ObserveNativeAdmission(*AdmissionWorld,Action.Args[0].Value.bBool);
 				ElysiumModelPhysics::TakeNativeAdmissions(*AdmissionWorld);
 				AdmissionText = FString::Printf(TEXT("entity_call ObserveNativeAdmission done enabled=%d"),Action.Args[0].Value.bBool);
+			}
+			else if (Action.Function == TEXT("NativeContactSleep") || Action.Function == TEXT("NativeContactState"))
+			{
+				if (!Action.Args.IsEmpty()) { OutError = TEXT("native contact service stimulus/state takes no arguments"); return false; }
+				auto* ContactBody=ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(AdmissionReceiver->VPhysicsGetObject()));
+				if (!ContactBody) { OutError = TEXT("native contact service requires an actual current body"); return false; }
+				if (Action.Function == TEXT("NativeContactSleep"))
+				{
+					//Debug fixture controls the actual native body; never a game input or226 callback.
+					ContactBody->PutInstanceToSleep();
+					AdmissionText=FString::Printf(TEXT("entity_call NativeContactSleep done sleep=%d"),!ContactBody->IsInstanceAwake());
+				}
+				else
+				{
+					void* ContactPartner=nullptr; FString ContactProvenance;
+					const bool bContact=ElysiumModelPhysics::GetContactPoint(AdmissionReceiver->VPhysicsGetObject(),ContactPartner,&ContactProvenance);
+					AdmissionText=FString::Printf(TEXT("entity_call NativeContactState done sleep=%d contact=%d partner=%s provenance=%s"),
+						!ContactBody->IsInstanceAwake(),bContact,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(ContactPartner)),*ContactProvenance);
+				}
 			}
 			else if (Action.Function == TEXT("PhysicalTouchState"))
 			{

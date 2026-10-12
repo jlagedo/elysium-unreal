@@ -1208,18 +1208,40 @@ bool FElysiumNativePhysicalTouchTest::RunTest(const FString&)
 	TestEqual(TEXT("ordinary solid pair retains link without initial174"),Link(A,B->Handle)->Flags,0);
 	TestEqual(TEXT("actual native birth listener queues then dispatches once"),Events.Num(),2);
 	const int32 BirthEvents = Events.Num();
+	void* QueryPartner = nullptr; FString AwakeProvenance, SleepingProvenance;
+	if (!TestTrue(TEXT("real awake qualification selects the actual other native body"),
+		ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner,&AwakeProvenance) && QueryPartner==NativeB.Actor)) return false;
+	ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,true);
+	ON_SCOPE_EXIT { ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,false); };
+	ElysiumModelPhysics::TakeNativeAdmissions(*Fixture.World);
 	BodyA->PutInstanceToSleep(); BodyB->PutInstanceToSleep(); Frame();
 	TestEqual(TEXT("sleep produces no listener transition"),Events.Num(),BirthEvents);
+	TestTrue(TEXT("both native bodies actually sleep"),!BodyA->IsInstanceAwake() && !BodyB->IsInstanceAwake());
+	TestTrue(TEXT("sleep without a new native candidate retains selected44 identity"),
+		ElysiumModelPhysics::TakeNativeAdmissions(*Fixture.World).IsEmpty()
+		&& ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner,&SleepingProvenance) && QueryPartner==NativeB.Actor);
+	TestEqual(TEXT("sleep preserves query birth and completed output provenance"),SleepingProvenance,AwakeProvenance);
+	TestTrue(TEXT("no-advance sleeping query retains exact selected partner"),ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner,&SleepingProvenance) && QueryPartner==NativeB.Actor);
+	TestEqual(TEXT("no-advance query cannot replay a birth"),SleepingProvenance,AwakeProvenance);
 	A->SetCollisionGroup(4); B->SetCollisionGroup(4); Frame();
 	TestTrue(TEXT("sleeping filter mutation retains exact sentinel"),Link(A,B->Handle) && Link(A,B->Handle)->TouchStamp==-1);
 	TestEqual(TEXT("sleeping rejection no synthetic event"),Events.Num(),BirthEvents);
+	TestTrue(TEXT("sleeping filter mutation preserves surviving selected44 until awake recheck"),ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner,&SleepingProvenance) && QueryPartner==NativeB.Actor);
+	TestEqual(TEXT("sleeping mutation cannot change query birth"),SleepingProvenance,AwakeProvenance);
 	BodyA->WakeInstance(); BodyB->WakeInstance(); Frame();
 	TestTrue(TEXT("actual awake rejected manifold emits end and unlinks both"),!Link(A,B->Handle) && !Link(B,A->Handle) && Events.Num()>BirthEvents);
-	const int32 BeforeReadmit = Events.Num(); B->SetCollisionGroup(5); Frame();
+	TestFalse(TEXT("awake predicate rejection retires selected44 qualification"),ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner));
+	BodyA->PutInstanceToSleep(); BodyB->PutInstanceToSleep(); Frame();
+	TestFalse(TEXT("a sleeping rejected native cache cannot create a query birth"),ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner));
+	const int32 BeforeReadmit = Events.Num(); B->SetCollisionGroup(5);
+	BodyA->WakeInstance(); BodyB->WakeInstance(); Frame();
 	TestTrue(TEXT("readmission on same native cache produces new physical begin"),Link(A,B->Handle) && Events.Num()>BeforeReadmit);
+	TestTrue(TEXT("actual awake readmission requalifies selected44"),ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner,&AwakeProvenance) && QueryPartner==NativeB.Actor);
+	TestTrue(TEXT("awake requalification assigns a new query birth"),AwakeProvenance!=SleepingProvenance);
 	const auto Readmitted = Entities->PhysicalTouchTrace();
 	BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(6000,5000,5000)),ETeleportType::TeleportPhysics); BodyB->WakeInstance(); Frame();
 	TestTrue(TEXT("real separation retires physical sentinel links"),!Link(A,B->Handle) && !Link(B,A->Handle));
+	TestFalse(TEXT("real completed separation retires selected44"),ElysiumModelPhysics::GetContactPoint(NativeA.Actor,QueryPartner));
 	//Suppressed birth must remain raw participation: changing callback flags cannot manufacture Start.
 	ElysiumModelPhysics::SetCallbackFlags(NativeA,0); ElysiumModelPhysics::SetCallbackFlags(NativeB,0);
 	A->SetCollisionGroup(0); B->SetCollisionGroup(0); Place(); const int32 Suppressed = Events.Num(); Frame();

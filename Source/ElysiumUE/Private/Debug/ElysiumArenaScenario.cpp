@@ -2250,6 +2250,8 @@ const TArray<FString>& EntityCallAllowlist()
 		TEXT("VPhysicsSetObject"), TEXT("VPhysicsSwapObject"),
 		// Native admission witness: actual setter and immutable candidate/contact observations.
 		TEXT("SetCollisionGroup"), TEXT("ObserveNativeAdmission"), TEXT("NativeAdmission"), TEXT("PhysicalTouchState"),
+		// Explicit debug service stimulus and readback; no retail Sleep input or sleeping226 dispatch.
+		TEXT("NativeContactSleep"), TEXT("NativeContactState"),
 		// L0.entity_core.monster-template: slot 70 `IsMonster()` on a live entity, no arguments.
 		TEXT("IsMonster"),
 		// L0.entity_core.save-block-framework (L0-r029): the engine's calls into CServerGameDLL's save
