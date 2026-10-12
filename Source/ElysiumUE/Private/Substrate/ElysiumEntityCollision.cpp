@@ -38,7 +38,7 @@ void FElysiumEntity::PhysicsTouchTriggers(const FVector* OldOriginCm)
 	//100a53d0 ->VEngineServer014#122 (20111f30): edict/solid gate then real geometry.
 	if (!World || EdictIndex() == 0 || (IsRetailNotSolid() && !(RetailSolidFlags & 8u))) return;
 	// Engine touch geometry belongs to the edict, independently of mutable m_pPhysicsObject aliases.
-	UPrimitiveComponent* Native = Body ? static_cast<UPrimitiveComponent*>(Body) : GetAttachBody();
+	UPrimitiveComponent* Native = Body ? static_cast<UPrimitiveComponent*>(Body) : GetCollisionQueryBody();
 	UWorld* NativeWorld = Native ? Native->GetWorld() : nullptr;
 	if (!NativeWorld) return; // no native environment exists for an unembodied entity
 	SetCheckUntouch(true); // deferred EndTouch, before callback enumeration
@@ -51,8 +51,14 @@ void FElysiumEntity::PhysicsTouchTriggers(const FVector* OldOriginCm)
 	ComponentParams.AddIgnoredComponent(Native);
 	if (RetailSolidType != 2)
 	{
-		NativeWorld->ComponentOverlapMulti(Overlaps, Native, AbsoluteOrigin, Rotation, ComponentParams, Objects);
-		if (OldOriginCm) NativeWorld->ComponentSweepMulti(Hits, Native, *OldOriginCm, AbsoluteOrigin, Rotation, ComponentParams);
+		// Dedicated studio query carriers are symmetric about their hull centre. Native query APIs
+		// receive the component shape's pose, not the entity/attachment origin.
+		const bool bSeparateQuery = Native == GetCollisionQueryBody() && Native != GetAttachBody();
+		const FVector QueryOrigin = bSeparateQuery ? Native->GetComponentLocation() : AbsoluteOrigin;
+		const FQuat QueryRotation = bSeparateQuery ? Native->GetComponentQuat() : Rotation;
+		NativeWorld->ComponentOverlapMulti(Overlaps, Native, QueryOrigin, QueryRotation, ComponentParams, Objects);
+		if (OldOriginCm) NativeWorld->ComponentSweepMulti(Hits, Native,
+			*OldOriginCm + (QueryOrigin - AbsoluteOrigin), QueryOrigin, QueryRotation, ComponentParams);
 	}
 	else
 	{
@@ -191,6 +197,7 @@ void FElysiumEntity::SetCollisionBounds(const FVector& MinsUnits, const FVector&
 	// 6. `CALL thunk_FUN_100dda20` (`100dc7db`), ECX = cp: the `0x14000` OR and `FUN_100ddd20`'s edict gate.
 	MarkCollisionBoundsDirty();
 	// `m_vecSize` (`+0x38c`) is NOT written here: only `UTIL_SetSize`'s slot-213 call does that.
+	OnRuntimeCollisionChanged();
 }
 
 void FElysiumEntity::UtilSetSize(const FVector& MinsUnits, const FVector& MaxsUnits)
@@ -467,6 +474,7 @@ void FElysiumEntity::SetSolid(int32 Type)
 	{
 		CheckForUntouchOnSolidChange();                                            // -> 0x100dc430
 	}
+	OnRuntimeCollisionChanged();
 }
 
 void FElysiumEntity::SetSolidFlags(uint16 Word)
@@ -520,6 +528,7 @@ void FElysiumEntity::SetSolidFlags(uint16 Word)
 		UpdatePartitionMembership();                                               // 100dc5d9 -> 0x100ddc40
 		CheckForUntouchOnSolidChange();                                            // 100dc5e0 -> 0x100dc430
 	}
+	OnRuntimeCollisionChanged();
 }
 
 // --- The flag word: slots 83 / 84 --------------------------------------------------------------

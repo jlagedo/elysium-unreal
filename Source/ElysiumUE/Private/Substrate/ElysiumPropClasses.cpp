@@ -137,6 +137,7 @@ static void BuildPhysPropClass(FElysiumClassDesc& D)
 // phys_hinge: the RE'd CPhysHinge/CPhysConstraint input surface.
 static void BuildPhysHingeClass(FElysiumClassDesc& D)
 {
+	ElysiumAddClassField(D, TEXT("breaksound"), &FElysiumPhysHinge::BreakSound, ElysiumFieldDefault);
 	D.Input(TEXT("TurnOn"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumPhysHinge&>(E).InputTurnOn(Args); });
 	D.Input(TEXT("TurnOff"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)

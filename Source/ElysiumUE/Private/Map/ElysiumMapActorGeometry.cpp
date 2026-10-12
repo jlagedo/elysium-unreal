@@ -3,6 +3,8 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumCollisionRules.h"
+#include "Substrate/ElysiumNpcAccess.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumWorldCollisionActor.h"
 #include "Map/ElysiumRetailMaskRecipe.h"
@@ -30,7 +32,8 @@ bool AElysiumMapActor::TraceRetail(const FElysiumRetailTrace& Trace, FElysiumRet
 	// The pass entity's own actor is excluded up front. Every `Ignore` handle -- the pass entity
 	// again, the second entity, and a brush entity whose body is a component of THIS actor and so
 	// has no actor of its own -- is also refused per hit by handle inside the trace.
-	const AActor* IgnoreSelf = Trace.Ignore.Num() > 0 ? ResolveQueryActor(Trace.Ignore[0]) : nullptr;
+	const AActor* IgnoreSelf = Trace.PassEntity.IsSet() ? ResolveQueryActor(Trace.PassEntity)
+		: (Trace.Ignore.Num() > 0 ? ResolveQueryActor(Trace.Ignore[0]) : nullptr);
 	// `StandardFilterRules 0x101d3080`'s solid-flag `0x20` (`101d30b6`) and render-mode
 	// (`101d3112`) arms, per hit on an entity the hit names: a refused entity joins the ignore list
 	// and the line is traced again (`ElysiumRetailMask::TraceSkippingRefusedEntities`). The words are
@@ -43,7 +46,7 @@ bool AElysiumMapActor::TraceRetail(const FElysiumRetailTrace& Trace, FElysiumRet
 		},
 		[this, &Trace](const FElysiumEntityHandle& Hit)
 		{
-			const FElysiumEntity* Entity = EntityWorld ? EntityWorld->Resolve(Hit) : nullptr;
+			FElysiumEntity* Entity = EntityWorld ? EntityWorld->Resolve(Hit) : nullptr;
 			if (Entity == nullptr)
 			{
 				return false;
@@ -70,8 +73,27 @@ bool AElysiumMapActor::TraceRetail(const FElysiumRetailTrace& Trace, FElysiumRet
 				}
 			}
 			const FString* RenderMode = Entity->Def != nullptr ? Entity->Def->Keys.Find(TEXT("rendermode")) : nullptr;
-			return ElysiumRetailMask::EntityArmsReject(Trace.RetailMask,
-				RenderMode != nullptr ? FCString::Atoi(**RenderMode) : 0, Entity->RetailSolidFlags);
+			if (ElysiumRetailMask::EntityArmsReject(Trace.RetailMask,
+				RenderMode != nullptr ? FCString::Atoi(**RenderMode) : 0, Entity->RetailSolidFlags)) return true;
+			//101d31c0: Standard, pass rules,91, BCC words, rules77, bilateral68.
+			FElysiumEntity* Pass = EntityWorld ? EntityWorld->Resolve(Trace.PassEntity) : nullptr;
+			if (Pass && (Entity == Pass || Entity->GetOwnerEntity() == Pass->Handle
+				|| Pass->GetOwnerEntity() == Entity->Handle)) return true; //101d2fc0, owner not move-parent
+			if (!Entity->ShouldCollide(Trace.CollisionGroup, Trace.RetailMask)) return true;
+			Entity = EntityWorld->Resolve(Hit); Pass = EntityWorld->Resolve(Trace.PassEntity);
+			if (!Entity || (Trace.PassEntity.IsSet() && !Pass)) return true;
+			if (Entity->AsCombatCharacter() && (!ElysiumNpcAccess::IsBccTargetable(*Entity) || Entity->IsHidden())) return true;
+			if (!ElysiumCollisionRules::ShouldCollide(Trace.CollisionGroup, Entity->CollisionGroup)) return true;
+			if (Pass && Trace.RetailMask != 0x46004003)
+			{
+				if (Entity->ShouldIgnoreCollision(Pass)) return true;
+				Entity = EntityWorld->Resolve(Hit); Pass = EntityWorld->Resolve(Trace.PassEntity);
+				if (!Entity || !Pass) return true;
+				//10340650 is the explicit L1 virtual pass hook; its higher policy stays owned there.
+				if (Pass->ShouldIgnoreCollision(Entity)) return true;
+				if (!EntityWorld->Resolve(Trace.PassEntity)) return true;
+			}
+			return !EntityWorld->Resolve(Hit);
 		});
 }
 

@@ -72,6 +72,15 @@ the complete contract, not just a similar story title.
 
 ## Scope accounting still required
 
+The reached `TraceFilterSimple::ShouldHitEntity` `101d31c0` bilateral virtual68 call has an
+explicit L1 recipient in `hooks.tsv`: BCC `10340650`, per the established audit ownership.
+Its combat marker `+1480`, `100b5190`, group1 and player `+14b8 &20000` predicates remain
+owned by that override; their complete producers are not recovered here. L0 supplies the real
+`1008bfe0 ->10158b90` entity-pair membership and actual request pass/group/mask/order.
+The current higher pass override answers its existing hook default. Native L0 geometry tests
+do not establish full retail player/BCC filter completion; the raw APawn use-channel branch
+still retains its higher character body selection outside this Simple world-geometry seam.
+
 The delivery map marks four existing additional briefs `scope-review`: the three low-reach
 constraint/force/animlink-family slices and the generic ragdoll physics-asset bake. They remain
 accounted for in D09 until their required core producer role or explicit later-scope disposition

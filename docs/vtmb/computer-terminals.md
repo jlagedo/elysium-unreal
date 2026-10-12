@@ -164,11 +164,14 @@ Spawn (vtable slot 103, the same slot as `CBaseEntity::Spawn`) is `FUN_10217880`
 skill-entity spawn it:
 
 1. `SetSolid(SOLID_BBOX)` and copies the model's hull into the collision AABB;
-2. `Relink`s;
-3. clamps `m_nScreenColumns` into `[4, 36]` and `m_nScreenRows` into `[2, 24]`
+2. removes solid flags `0x0c` (`10217997–102179a0`: the existing 16-bit flags
+   are masked with `0xfff3`), then dispatches slot 93 `SetMoveType(0, 0)`
+   (`102179aa–102179b7`, base `100aad70`);
+3. `Relink`s (`102179bf`, thunk `1001514a`);
+4. clamps `m_nScreenColumns` into `[4, 36]` and `m_nScreenRows` into `[2, 24]`
    (`CMP 0x24 / 0x18` then a floor at 4 / 2);
-4. zeros `m_HackFlags`, `m_nMaxInput` and `m_bAllowDirKeys`;
-5. tail-calls slot 71 (`JMP dword ptr [vtable+0x11c]` at `0x10217a29`) — sound Precache
+5. zeros `m_HackFlags`, `m_nMaxInput` and `m_bAllowDirKeys`;
+6. tail-calls slot 71 (`JMP dword ptr [vtable+0x11c]` at `0x10217a29`) — sound Precache
    `FUN_10217680`. The decompiler reported that jump as a damaged table; the listing is a
    single tail-call, not a dispatch to slot 104.
 

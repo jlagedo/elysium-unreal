@@ -46,6 +46,7 @@ class UStaticMeshComponent;
 class FElysiumTeamRegistry;
 class FElysiumEntityWorld;
 class FElysiumDataObjectAccessSystem;
+class FElysiumCollisionPairs;
 struct FElysiumTouchLink;
 
 // Ordinary admitted host bounds from2008ba30. Native ingress supplies its actual
@@ -361,6 +362,7 @@ public:
 	void RegisterPropBody(UPrimitiveComponent* Component,
 		const FElysiumEntityHandle& UseOwner = FElysiumEntityHandle::Invalid());
 	void RegisterUseAnchor(UPrimitiveComponent* Component, const FElysiumEntityHandle& Owner);
+	void RegisterPhysicalUseAnchor(UPrimitiveComponent* Physical, UPrimitiveComponent* Visual, const FElysiumEntityHandle& Owner);
 	void RegisterTouchAnchor(UPrimitiveComponent* Component, const FElysiumEntityHandle& Owner);
 	// Keep a registered model anchor in step with ScriptHide/Kill without teaching the entity about
 	// collision profiles. Brush bodies also report the edge, although their own SetDormant remains
@@ -374,6 +376,10 @@ public:
 	// Register a physics constraint (built by a phys_hinge leaf) so the world tears it down
 	// with the map, like the prop/NPC bodies. The FElysiumPhysHinge leaf calls this from PostSpawn().
 	void RegisterConstraintBody(UPhysicsConstraintComponent* Component);
+	// Physics CUSTOM records may share a former native output. The record naming it does not
+	// own its lifetime: retain it with its actual GameData producer (or the native world).
+	void AdoptRestoredConstraintEndpoint(UPrimitiveComponent* Component, FElysiumEntityHandle Producer);
+	void RetireRestoredConstraintEndpoints(FElysiumEntityHandle Producer = FElysiumEntityHandle::Invalid());
 
 	// ScheduleTask(delay, "<source>"): defer a field-6 Python source string on the same
 	// event queue, evaluated at now+delay through the installed script host (DeliverEvent's Python
@@ -407,6 +413,7 @@ public:
 	FElysiumDataObjectAccessSystem& DataObjects() const { return *DataObjectSystem; }
 	/** Process-owned SurfaceProps001 material table, initialized before entities. */
 	FElysiumPhysicsSurfaceProps& PhysicsSurfaces() const;
+	FElysiumCollisionPairs& CollisionPairs() const;
 	// The type-1 (touch-link) data-object steps of the retail touch pass, at the port's touch edges
 	// (L0-r019; the node stamp is r015's `FElysiumEntity::TouchStamp`, `ElysiumEntityCollision.cpp`;
 	// `PhysicsTouch` and the `EndTouch` flag gate stay with the touch-lifecycle story):
@@ -1255,6 +1262,8 @@ private:
 	// phys_hinge constraints (built on the map actor by the leaf's PostSpawn): weak refs held so
 	// a world rebuild on a surviving actor destroys them, like PropBodies.
 	TArray<TWeakObjectPtr<UPhysicsConstraintComponent>> Constraints;
+	struct FRestoredConstraintEndpoint { TWeakObjectPtr<UPrimitiveComponent> Component; FElysiumEntityHandle Producer; };
+	TArray<FRestoredConstraintEndpoint> RestoredConstraintEndpoints;
 	// UE may report the same overlap once from its movement update and once from the explicit
 	// post-teleport reconciliation. Keep touch edges idempotent at the engine-neutral terminus;
 	// the packed key is (brush index, activator index), sufficient within this world's epoch.
@@ -1291,6 +1300,7 @@ private:
 	// unhide arms the body to think on this frame, a restore must leave the saved cadence alone.
 	bool bApplyingSnapshot = false;
 	bool bLevelTransitionRestore = false; // DAT_1070b268, 0x1011a710 -> 0x1011a620 -> slot130
+	mutable TUniquePtr<FElysiumCollisionPairs> CollisionPairService;
 
 	// The omission baseline: each entity's state as the spawn pass left it, index-aligned
 	// with EntityList. A freeze records only what has moved since, which is what makes a 2,600-entity

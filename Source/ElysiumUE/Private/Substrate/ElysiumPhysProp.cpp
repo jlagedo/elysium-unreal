@@ -7,7 +7,10 @@
 #include "Map/ElysiumRetailMaskRecipe.h"   // PropBodyMaskBits -- which retail filters meet an entity prop
 #include "Substrate/ElysiumProp.h"
 #include "Substrate/ElysiumModelPhysics.h"
+#include "Substrate/ElysiumCollisionPairs.h"
+#include "ElysiumSaveArchive.h"
 #include "ElysiumModelPhysicsInputs.h"
+#include "ElysiumPhysicsPropComponent.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -18,6 +21,9 @@
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
 
 // Console gate for prop_physics simulation. 1 (default) simulates the body as a Chaos rigid body;
+bool FElysiumPhysProp::ShouldIgnoreCollision(FElysiumEntity* Other)
+{ return World && World->CollisionPairs().ContainsEntities(Handle,Other ? Other->Handle : FElysiumEntityHandle::Invalid()); } //1008bfe0 ->10158b90
+
 // 0 leaves it standing as a static, non-solid mesh (visual parity, like a prop_dynamic). Read in
 // the leaf's Spawn — takes effect next load.
 static TAutoConsoleVariable<int32> CVarPhysicsProps(
@@ -359,7 +365,10 @@ void FElysiumPhysHinge::PostSpawn()
 
 	ConfigureAsHinge();
 	Constraint->SetConstrainedComponents(Body1, NAME_None, Body2, NAME_None);
+	NativeEndpoint1 = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Body1));
+	NativeEndpoint2 = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Body2));
 	World->RegisterConstraintBody(Constraint);
+	bSavedConstraintPresent = true;
 	UE_LOG(LogElysiumProp, Verbose, TEXT("%s hinge: %s <-> %s"), *DebugString(),
 		Body1 ? TEXT("attach1") : TEXT("world"), Body2 ? TEXT("attach2") : TEXT("world"));
 }
@@ -370,16 +379,189 @@ void FElysiumPhysHinge::InputTurnOff(const FElysiumInputArgs&)
 	{
 		Constraint->BreakConstraint();
 	}
+	bSavedConstraintEnabled = false;
+	//1002af90 preserves the constraint, clears endpoint GameFlags2, then removes the pair.
+	for (const auto End : { NativeEndpoint1, NativeEndpoint2 })
+		if (ElysiumModelPhysics::IsCurrentOutput(End))
+		{
+			uint16 NativeFlags = 0;
+			if (ElysiumModelPhysics::GetGameFlags(End, NativeFlags))
+				ElysiumModelPhysics::SetGameFlags(End, NativeFlags & ~2u);
+		}
+	PublishPair(false);
+}
+
+void FElysiumPhysHinge::Precache()
+{
+	//1002b170: the inherited slot precaches only an authored nonnull sound name.
+	if (!BreakSound.IsEmpty())
+		if (auto* Audio = World ? World->Audio() : nullptr)
+			Audio->Prefetch(FElysiumAudioSource::Path(BreakSound));
 }
 
 void FElysiumPhysHinge::InputBreak(const FElysiumInputArgs& Args)
 {
-	if (Constraint)
-	{
-		Constraint->BreakConstraint();
-	}
+	InputTurnOff(Args); //1002a960 also removes the spawnflag1 relation.
+	bConstraintBroken = true;
+	//1002a960 raw EmitSound: channel6, volume1, attenuation1.25, pitch100.
+	if (!BreakSound.IsEmpty())
+		if (auto* Audio = World ? World->Audio() : nullptr)
+		{
+			FElysiumBodySound Sound;
+			Sound.Rel = BreakSound; Sound.Channel = EElysiumSoundChannel::Static;
+			Sound.Volume = 1.f; Sound.SoundLevelDb = 66; Sound.Pitch = 1.f;
+			Audio->PlayBodySound(Handle, Sound);
+		}
 	static const FName OnBreak(TEXT("OnBreak"));
-	FireOutput(OnBreak, Args.Activator);
+	FireOutput(OnBreak, Handle); //retail self/self, independent of the input activator
+	QueueRemove(); //1002a960 ->101cd940, distinct from TurnOff
+}
+
+void FElysiumPhysHinge::PublishPair(bool bAdd)
+{
+	if (!World || !Constraint || bConstraintBroken || (SpawnFlags & 1) == 0) return;
+	if (!ElysiumModelPhysics::IsCurrentOutput(NativeEndpoint1)
+		|| !ElysiumModelPhysics::IsCurrentOutput(NativeEndpoint2)) return;
+	if (bAdd) World->CollisionPairs().AddTranslated(NativeEndpoint1.Actor, NativeEndpoint2.Actor);
+	else World->CollisionPairs().RemoveTranslated(NativeEndpoint1.Actor, NativeEndpoint2.Actor);
+}
+
+void FElysiumPhysHinge::Activate()
+{
+	FElysiumEntity::Activate();
+	//1002b420 ->1002b4c0 existing-native arm: publish, then owner association. No enable write.
+	PublishPair(true);
+}
+
+void FElysiumPhysHinge::Serialize(FElysiumSaveArchive& Ar)
+{
+	if (Ar.IsSaving())
+	{
+		bSavedConstraintPresent = Constraint != nullptr;
+		bSavedConstraintEnabled = Constraint && !Constraint->IsBroken();
+		if (Constraint) SavedConstraintFrame = Constraint->GetComponentTransform();
+		SavedEndpointReference(NativeEndpoint1, EndpointFieldOwner1, EndpointField1);
+		SavedEndpointReference(NativeEndpoint2, EndpointFieldOwner2, EndpointField2);
+	}
+	Ar << Endpoint1 << Endpoint2 << bSavedConstraintPresent << bSavedConstraintEnabled << bConstraintBroken;
+	Ar << EndpointFieldOwner1 << EndpointField1 << EndpointFieldOwner2 << EndpointField2;
+	Ar << SavedConstraintFrame;
+	if (Ar.IsLoading() && World)
+	{ Endpoint1 = World->RestoreHandle(Endpoint1); Endpoint2 = World->RestoreHandle(Endpoint2); }
+}
+
+void FElysiumPhysHinge::OnPostRestore(FElysiumEntityWorld&)
+{
+	// Native owner field reconstructed after all Physics fields, before forward Activate publishes.
+	if (!bSavedConstraintPresent || bConstraintBroken)
+	{
+		if (Constraint) { Constraint->DestroyComponent(); Constraint = nullptr; }
+		return;
+	}
+	NativeEndpoint1 = ResolveEndpointReference(EndpointFieldOwner1, EndpointField1);
+	NativeEndpoint2 = ResolveEndpointReference(EndpointFieldOwner2, EndpointField2);
+	if (Constraint) Constraint->SetWorldTransform(SavedConstraintFrame);
+	ReinitConstraint();
+	if (Constraint && !bSavedConstraintEnabled) Constraint->BreakConstraint();
+}
+
+void FElysiumPhysHinge::SavedEndpointReference(const ElysiumModelPhysics::FNativeOutput& Output, int32& FieldOwner, FString& Field) const
+{
+	FieldOwner = INDEX_NONE; Field.Empty();
+	if (!World || !ElysiumModelPhysics::IsCurrentOutput(Output)) return;
+	auto* ActualOwner = ElysiumModelPhysics::GameDataFor(Output, *World);
+	if (auto* Owner = ActualOwner ? World->Resolve(ActualOwner->Handle) : nullptr;
+		Owner && Owner->ShouldSavePhysics() && Owner->VPhysicsGetObject() == Output.Actor)
+	{ FieldOwner = Owner->Handle.Index; Field = TEXT("m_pPhysicsObject"); return; }
+	// Registered current fields are reconstructed by Physics first; preserve their actual identity.
+	for (const auto& Entity : World->Entities())
+		if (Entity && !Entity->IsDead() && Entity->ShouldSavePhysics() && Entity->VPhysicsGetObject() == Output.Actor)
+		{ FieldOwner = Entity->Handle.Index; Field = TEXT("m_pPhysicsObject"); return; }
+	// A former producer can be owned only by a constraint CUSTOM record. Canonicalize shared refs.
+	for (const auto& Entity : World->Entities())
+	{
+		if (!Entity || Entity->IsDead() || !Entity->Def || Entity->Def->Classname != TEXT("phys_hinge")) continue;
+		const auto* Hinge = static_cast<const FElysiumPhysHinge*>(Entity.Get());
+		if (Hinge->NativeEndpoint1.Actor == Output.Actor && Hinge->NativeEndpoint1.Incarnation == Output.Incarnation)
+		{ FieldOwner = Entity->Handle.Index; Field = TEXT("m_pConstraint.endpoint1"); return; }
+		if (Hinge->NativeEndpoint2.Actor == Output.Actor && Hinge->NativeEndpoint2.Incarnation == Output.Incarnation)
+		{ FieldOwner = Entity->Handle.Index; Field = TEXT("m_pConstraint.endpoint2"); return; }
+	}
+}
+
+bool FElysiumPhysHinge::CaptureConstraintPhysics(TArray<FElysiumSavedPhysicsBody>& Rows) const
+{
+	for (const auto Output : { NativeEndpoint1, NativeEndpoint2 })
+	{
+		int32 FieldOwner; FString Field; SavedEndpointReference(Output, FieldOwner, Field);
+		if (FieldOwner != Handle.Index || !Field.StartsWith(TEXT("m_pConstraint."))) continue;
+		if (Rows.ContainsByPredicate([&](const auto& Row) { return Row.EntityIndex == FieldOwner && Row.FieldName == Field; })) continue;
+		FElysiumSavedPhysicsBody State;
+		if (!ElysiumModelPhysics::Capture(Output.Actor, State)) return false;
+		State.EntityIndex = FieldOwner; State.FieldName = Field;
+		const auto* Owner = ElysiumModelPhysics::GameDataFor(Output, *World);
+		State.GameDataEntityIndex = Owner ? Owner->Handle.Index : INDEX_NONE;
+		Rows.Add(MoveTemp(State));
+	}
+	return true;
+}
+
+ElysiumModelPhysics::FNativeOutput FElysiumPhysHinge::ResolveEndpointReference(int32 FieldOwner, const FString& Field) const
+{
+	auto* Entity = World ? World->Resolve(FElysiumEntityHandle(FieldOwner, World->GetEpoch())) : nullptr;
+	if (!Entity) return {};
+	if (Field == TEXT("m_pPhysicsObject")) return ElysiumModelPhysics::CaptureIdentity(Entity->VPhysicsGetObject());
+	if (!Entity->Def || Entity->Def->Classname != TEXT("phys_hinge")) return {};
+	const auto* Hinge = static_cast<const FElysiumPhysHinge*>(Entity);
+	if (Field == TEXT("m_pConstraint.endpoint1")) return Hinge->AdditionalEndpoint1;
+	if (Field == TEXT("m_pConstraint.endpoint2")) return Hinge->AdditionalEndpoint2;
+	return {};
+}
+
+bool FElysiumPhysHinge::ValidateRestoredConstraintEndpoints(FString& Error) const
+{
+	if (!bSavedConstraintPresent || bConstraintBroken) return true;
+	for (const auto& Reference : { TPair<int32,FString>(EndpointFieldOwner1,EndpointField1), {EndpointFieldOwner2,EndpointField2} })
+	{
+		if (Reference.Key == INDEX_NONE && Reference.Value.IsEmpty()) continue; //world frame
+		if (Reference.Key < 0 || !ElysiumModelPhysics::IsCurrentOutput(ResolveEndpointReference(Reference.Key, Reference.Value)))
+		{ Error = FString::Printf(TEXT("constraint endpoint %d.%s has no reconstructed native output"),Reference.Key,*Reference.Value); return false; }
+	}
+	return true;
+}
+
+bool FElysiumPhysHinge::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& Error)
+{
+	if (State.FieldName == TEXT("m_pPhysicsObject")) return FElysiumEntity::RestoreSavedPhysics(State, Error);
+	if (!World || !World->GetOwnerActor() || !State.bHasObject || State.bRebuildFromEntity
+		|| (State.FieldName != TEXT("m_pConstraint.endpoint1") && State.FieldName != TEXT("m_pConstraint.endpoint2")))
+	{ Error = TEXT("invalid registered constraint native endpoint"); return false; }
+	auto* NativeOwner = World->GetOwnerActor();
+	auto* Component = NewObject<UElysiumPhysicsPropComponent>(NativeOwner);
+	Component->RegisterComponent(); NativeOwner->AddInstanceComponent(Component); Component->SetVisibility(false);
+	if (!ElysiumModelPhysics::Restore(Component, World->PhysicsSurfaces(), State, Error))
+	{ Component->DestroyComponent(); return false; }
+	const auto Output = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Component));
+	auto* Owner = World->Resolve(FElysiumEntityHandle(State.GameDataEntityIndex, World->GetEpoch()));
+	if (Owner)
+		ElysiumModelPhysics::SetGameData(Output.Actor, *Owner);
+	else if (State.GameDataEntityIndex != INDEX_NONE)
+	{ ElysiumModelPhysics::Destroy(Component); Component->DestroyComponent(); Error = TEXT("restored constraint native endpoint has no live GameData owner"); return false; }
+	World->AdoptRestoredConstraintEndpoint(Component, Owner ? Owner->Handle : FElysiumEntityHandle::Invalid());
+	if (State.FieldName == TEXT("m_pConstraint.endpoint1")) AdditionalEndpoint1 = Output;
+	else AdditionalEndpoint2 = Output;
+	return true;
+}
+
+FElysiumPhysHinge::~FElysiumPhysHinge()
+{
+	if (Constraint) Constraint->DestroyComponent();
+}
+
+void FElysiumPhysHinge::ReleaseForRemoval()
+{
+	if (Constraint) { Constraint->DestroyComponent(); Constraint = nullptr; }
+	FElysiumEntity::ReleaseForRemoval();
 }
 
 void FElysiumPhysHinge::GetDebugState(TArray<TPair<FString, FString>>& Out) const
@@ -398,6 +580,8 @@ UPrimitiveComponent* FElysiumPhysHinge::ResolveBody(const TCHAR* Key)
 		return nullptr;   // empty attach → the world frame
 	}
 	FElysiumEntity* Found = World->FindByName(Name);
+	if (FCString::Strcmp(Key, TEXT("attach1")) == 0) Endpoint1 = Found ? Found->Handle : FElysiumEntityHandle::Invalid();
+	else Endpoint2 = Found ? Found->Handle : FElysiumEntityHandle::Invalid();
 	return Found ? Found->GetAttachBody() : nullptr;
 }
 
@@ -436,10 +620,18 @@ void FElysiumPhysHinge::ReinitConstraint()
 {
 	if (!Constraint)
 	{
-		return;
+		auto* Outer = World ? World->GetOwnerActor() : nullptr;
+		if (!Outer || !Def || !Outer->GetRootComponent()) return;
+		Constraint = NewObject<UPhysicsConstraintComponent>(Outer);
+		Constraint->SetupAttachment(Outer->GetRootComponent());
+		Constraint->SetWorldTransform(SavedConstraintFrame);
+		Constraint->RegisterComponent(); Outer->AddInstanceComponent(Constraint);
+		World->RegisterConstraintBody(Constraint);
 	}
-	UPrimitiveComponent* Body1 = ResolveBody(TEXT("attach1"));
-	UPrimitiveComponent* Body2 = ResolveBody(TEXT("attach2"));
+	UPrimitiveComponent* Body1 = ElysiumModelPhysics::IsCurrentOutput(NativeEndpoint1) ? ElysiumModelPhysics::ComponentFor(NativeEndpoint1.Actor) : nullptr;
+	UPrimitiveComponent* Body2 = ElysiumModelPhysics::IsCurrentOutput(NativeEndpoint2) ? ElysiumModelPhysics::ComponentFor(NativeEndpoint2.Actor) : nullptr;
 	ConfigureAsHinge();
 	Constraint->SetConstrainedComponents(Body1, NAME_None, Body2, NAME_None);
+	NativeEndpoint1 = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Body1));
+	NativeEndpoint2 = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Body2));
 }

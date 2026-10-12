@@ -1,25 +1,31 @@
-# Next bounded packet — P1 remaining native producer reconciliation
+# Next bounded packet — remaining P1 production callers
 
-Read goal.md/checkpoint.md,vision.md and active delivery/service maps. Reuse brush receipt
-E:/elysium-work/codex/l0-p1-brush-native-20261012/acceptance-checkpoint.json and earlier
-selected36/creator/flags/body/material/shadow/velocity walks. No imports or recovery replay.
+Read goal.md/checkpoint.md/vision.md and the active delivery/service/handoff maps.
+Latest local accepted run and exact HEAD/tree: see checkpoint.md and
+E:/elysium-work/codex/l0-p1-rotating-reconcile-20261012/acceptance-checkpoint.json.
+The prior native use/collision-pair/constraint/switch run is accepted; worker stopped.
+Main Sol Medium owns selection/review/final gates/commit/checkpoint. Use one fresh Sol High
+coding worker, fork_turns=none, once the next concrete packet is selected. Never push.
 
-P1 active: reconcile remaining actual core native223 callers/writers. FuncRotating false128/
-base223 is next candidate: address lookup first, compare current consumers, actual tutorial/
-hub placements and native preparation. Establish whether normal Spawn/registered restore
-reach a missing same/lower producer. No fake body or IVP mechanism prerequisites. Name
-key/input/query/movement/timing/lifecycle/saved-state observers. Reconcile retained tutorial
-prop_switch697 body-input refusal before full closure.
+First unmet: P1's complete production body caller/writer and lifecycle coverage is not yet
+reconciled. Read exact remaining owned audit/service rows and existing producer evidence;
+compare accepted body/static/shadow/velocity/native query/use and save witnesses before
+selecting one required bounded contract. Do not replay confirmed recovery or dispatch a
+whole IVP/Source subsystem. Every requirement names its shipped-content/gameplay/native
+saved-state observer and real producer/consumer, supported public API, exact unknown,
+permitted paths, failing witness and stop boundary. Build real same/lower producers with
+readers; higher gameplay stays registered hooks. No empty same-layer service.
 
-Return compact precode packet: mapped rows,real callers/producers,accepted oracle sections,
-exact unknowns,units/frames/clocks/formulas/order/failure/save/lifetime,permitted files,
-positive/negative/restore/lifecycle witnesses and stop. Main reviews before coding. If a
-candidate dependency is disproved, record exact core/later disposition and select the first
-actually missing producer. No whole P1 closure from a single caller.
+Reuse accepted studio inputs and native dispatcher proof. No additional corpus import or
+body topology/layout/allocator clone. Retain model failure and explicit Solid0, saved bounds,
+current serial/GameData, visual/query split, event/filter/source-clock ordering and all
+existing assertions. Chaos owns geometry, solving, broadphase, contacts and rigid-body mechanics.
 
-CPhysBox17-map slice remains explicit later D08/I1,not globally unreachable. Other constraint/
-ragdoll writers and generic Kill/CNotify/Aim/PhysicsAnimlink,E2/P2/P3/full native travel/I2/
-Break/four D09 scope briefs remain open. Higher gameplay belongs to named recipient layers.
-One fresh Sol High worker,fork none,one worker/run,no nested agents/commit/push. Verify public
-APIs/production fixture, bound recovery to required question; freeze/main review/gates/exact
-local commit/checkpoint before next run. Never push. No owner decision currently.
+After P1, follow E2/P2 then integrated P3. E2 removal/notify/Aim/animlink, P2 result/material
+contracts, P3 timing/parent/bounds/native travel/global collision state and later D07/D08/D09
+remain explicit in checkpoint. Four scope-review briefs require evidence/disposition before
+full closure; no scope change or gameplay divergence preapproved. No owner decision currently.
+
+One run: focused development proof, coherent freeze, independent main review/build/default/
+affected arena and story arm/relevant checks; exact-path local commit/checkpoint before next
+run. Current acceptance proves one packet, not P1/D02/L0. Full gate remains spec.md's gate.

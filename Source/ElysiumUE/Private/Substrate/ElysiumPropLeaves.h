@@ -6,6 +6,7 @@
 #include "Substrate/ElysiumProp.h"
 
 struct FElysiumSignData;
+class UElysiumEntityQueryBox;
 
 // VtMB CPropButton (vampire.dll 0x10214d60; datamap builder 0x10214e30).
 // State values are skin indices 0..max_states. Use fires OnPressed before cycling the state;
@@ -18,6 +19,12 @@ public:
 	int32 MaxStates = 0;
 
 	virtual void Spawn() override;
+	~FElysiumPropButton() override;
+	void ReleaseForRemoval() override;
+	void OnRuntimeCollisionChanged() override;
+	void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+	UElysiumEntityQueryBox* QueryBody() const { return StudioQuery; }
+	UPrimitiveComponent* GetCollisionQueryBody() const override;
 
 	virtual bool IsUsable() const override { return true; }
 	virtual bool IsUseLocked() const override { return bLocked; }
@@ -31,19 +38,44 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 private:
+	bool UsesStudioQueryObb() const override { return true; }
+	void OnRuntimeModelChanged() override;
+	void OnRuntimeModelAdmitted() override;
+	void OnRuntimeTransformChanged() override;
+	void OnDormancyChanged() override;
+	void BuildStudioQuery(bool bUseSavedBounds);
+	void RetireStudioQuery();
+	void GateStudioQuery();
+	UElysiumEntityQueryBox* StudioQuery = nullptr;
+	bool bSpawnQueryPending = true;
+	bool bSavedQueryBounds = false;
 	void ButtonUse(const FElysiumEntityHandle& Activator);
 	void SetButtonState(int32 NewState, const FElysiumEntityHandle& Activator);
 };
 
-// VtMB CPropSwitch. The state changes immediately, while its authored transition clip owns the
-// delayed OnActivate/OnDeactivate edge. Static or incomplete bodies complete synchronously so the
-// gameplay wire never depends on whether presentation content was available.
+// CPropSwitch1020d850/1020dd70: owned studio query OBB and server sequence state.
 class FElysiumPropSwitch final : public FElysiumProp
 {
 public:
+	virtual ~FElysiumPropSwitch() override;
+	void ReleaseForRemoval() override;
+	bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
+	bool ReplayActivationAfterRestore() const override { return true; }
+	void Activate() override;
+	void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+	void OnRuntimeCollisionChanged() override;
+	UPrimitiveComponent* GetAttachBody() const override;
+	UElysiumEntityQueryBox* QueryBody() const { return StudioQuery; }
+	UPrimitiveComponent* GetCollisionQueryBody() const override;
+	int32 SequenceIndex = 0; //m_nSequence, including missing-idle index0 fallback
+	float SequenceCycle = 0.f;
+	float SequenceCycleRate = 0.f; //+650 cached by ResetSequenceInfo; negative-index helper retains it
+	float SequenceAnimTime = 0.f, SequencePrevAnimTime = 0.f;
+	bool bSequenceFinished = false;
+	float SequencePlaybackRate() const { return AnimationPlaybackRate; }
+	void SetSequencePlaybackRate(float Rate);
 	FString LinkedSwitchName;
-	// SEAM (parsed, unread): `reset_state` lands here through the registered keyfield and nothing in
-	// the module reads it.
+	//1020e100 reads reset_state only for a true level-transition restore bool.
 	int32 ResetState = 0;
 	bool bLocked = false;
 	bool bActivated = false;
@@ -70,9 +102,23 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 private:
+	bool UsesStudioQueryObb() const override { return true; }
+	void OnRuntimeModelChanged() override;
+	void OnRuntimeModelAdmitted() override;
+	void OnRuntimeTransformChanged() override;
+	void OnDormancyChanged() override;
+	void BuildStudioQuery(bool bUseSavedBounds);
+	void RetireStudioQuery();
+	void GateStudioQuery();
+	UElysiumEntityQueryBox* StudioQuery = nullptr;
+	bool bSpawnQueryPending = true;
+	bool bSavedQueryBounds = false;
+	FElysiumEntityHandle LinkedSwitch;
+	int32 SwitchSequences[4] = { INDEX_NONE, INDEX_NONE, INDEX_NONE, INDEX_NONE };
 	void SetSwitchState(bool bNewActivated, const FElysiumEntityHandle& Activator, bool bMirrorLinked);
-	void FinishTransition();
 	void PlayIdle();
+	void PlaySwitchSequence(int32 Index, const FString& Label);
+	void AdvanceSwitchSequence();
 };
 
 // CPropSign is a world prop and an explicit one-player session. The view is presentation only;
@@ -80,6 +126,13 @@ private:
 class FElysiumPropSign final : public FElysiumProp
 {
 public:
+	~FElysiumPropSign() override;
+	void Spawn() override;
+	void ReleaseForRemoval() override;
+	void OnRuntimeCollisionChanged() override;
+	void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+	UPrimitiveComponent* GetCollisionQueryBody() const override;
+	UElysiumEntityQueryBox* QueryBody() const { return StudioQuery; }
 	FString DefinitionFile;
 	TSharedPtr<const FElysiumSignData> Panel;
 
@@ -91,5 +144,15 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 private:
+	bool UsesStudioQueryObb() const override { return true; }
+	void OnRuntimeModelChanged() override;
+	void OnRuntimeModelAdmitted() override;
+	void OnRuntimeTransformChanged() override;
+	void BuildStudioQuery(bool bUseSavedBounds);
+	void RetireStudioQuery();
+	void GateStudioQuery();
+	UElysiumEntityQueryBox* StudioQuery = nullptr;
+	bool bSpawnQueryPending = true;
+	bool bSavedQueryBounds = false;
 	bool EnsurePanel();
 };

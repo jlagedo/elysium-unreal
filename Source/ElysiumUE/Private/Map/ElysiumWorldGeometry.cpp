@@ -1,6 +1,9 @@
 #include "Map/ElysiumWorldGeometry.h"
 
 #include "ElysiumBrushComponent.h"
+#include "ElysiumEntityQueryBox.h"
+#include "ElysiumEntity.h"
+#include "Substrate/ElysiumModelPhysics.h"
 #include "ElysiumCollisionChannels.h"
 #include "ElysiumWorldCollisionActor.h"
 #include "Map/ElysiumRetailMaskRecipe.h"
@@ -100,6 +103,10 @@ namespace ElysiumWorldGeometryDetail
 		{
 			return Brush->GetOwningEntity();
 		}
+		if (const UElysiumEntityQueryBox* Query = Cast<UElysiumEntityQueryBox>(Component)) return Query->Entity;
+		if (Component)
+			if (const FElysiumEntity* Owner = ElysiumModelPhysics::GameDataForObject(
+				ElysiumModelPhysics::ActorIdentity(const_cast<UPrimitiveComponent*>(Component)))) return Owner->Handle;
 		return Actor != nullptr ? ToHandle(Actor) : FElysiumEntityHandle::Invalid();
 	}
 
@@ -124,12 +131,12 @@ namespace ElysiumWorldGeometryDetail
 		// The filter's pass entity and its second (`CTraceFilterSimpleTwoEnt`), whichever body
 		// they stand in. Named only when there is someone to ignore: `ToHandle` may walk the entity
 		// world for an actor it does not recognise.
-		if (Request.Ignore.IsEmpty())
+		if (Request.Ignore.IsEmpty() && !Request.PassEntity.IsSet() && !Request.SecondEntity.IsSet())
 		{
 			return EAdmit::Admit;
 		}
 		const FElysiumEntityHandle Entity = HandleOf(Component, Actor, ToHandle);
-		if (Entity.IsSet() && Request.Ignore.Contains(Entity))
+		if (Entity.IsSet() && (Request.Ignore.Contains(Entity) || Entity == Request.PassEntity || Entity == Request.SecondEntity))
 		{
 			return EAdmit::RejectComponent;
 		}
@@ -215,6 +222,7 @@ namespace ElysiumWorldGeometryDetail
 				Out.bStartSolid = true;
 				Out.bAllSolid = true;
 				Out.HitEntity = HandleOf(Solid->GetComponent(), Solid->GetActor(), ToHandle);
+				Out.HitComponent = Solid->GetComponent(); Out.HitActor = Solid->GetActor();
 				Out.HitSignature = SignatureOf(Solid->GetComponent());
 			}
 			return;
@@ -272,6 +280,7 @@ namespace ElysiumWorldGeometryDetail
 			Out.EndPosCm = Request.StartCm + (Request.EndCm - Request.StartCm) * Time;
 			Out.Normal = Hit.ImpactNormal;
 			Out.HitEntity = HandleOf(Component, Actor, ToHandle);
+			Out.HitComponent = Component; Out.HitActor = const_cast<AActor*>(Actor);
 			Out.HitSignature = SignatureOf(Component);
 			// The shape's index in its body (Unreal truncates it to a byte). Debug only.
 			Out.ElementIndex = static_cast<int32>(Hit.ElementIndex);
@@ -310,7 +319,8 @@ namespace ElysiumWorldGeometryDetail
 	void NoteCharacter(const FCharacterContact& Contact, const FElysiumRetailTrace& Request,
 		FElysiumRetailTraceResult& Out)
 	{
-		if (!Contact.Entity.IsSet() || Request.Ignore.Contains(Contact.Entity))
+		if (!Contact.Entity.IsSet() || Request.Ignore.Contains(Contact.Entity)
+			|| Contact.Entity == Request.PassEntity || Contact.Entity == Request.SecondEntity)
 		{
 			return;   // not a game entity, or the filter's pass entity
 		}

@@ -1,5 +1,6 @@
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumModelPhysics.h"
+#include "Substrate/ElysiumCollisionPairs.h"
 #include "Substrate/ElysiumTeamRegistry.h"
 
 #include "ElysiumBrushComponent.h"
@@ -166,6 +167,26 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsyst
 	AttackCoordinators[0] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Normal"), 2);
 	AttackCoordinators[1] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Player"), 2);
 	AttackCoordinators[2] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Boss"), 2);
+}
+
+FElysiumCollisionPairs& FElysiumEntityWorld::CollisionPairs() const
+{
+	if (!CollisionPairService) CollisionPairService = MakeUnique<FElysiumCollisionPairs>(*const_cast<FElysiumEntityWorld*>(this));
+	return *CollisionPairService;
+}
+
+void FElysiumEntityWorld::AdoptRestoredConstraintEndpoint(UPrimitiveComponent* Component, FElysiumEntityHandle Producer)
+{ RestoredConstraintEndpoints.Add({ Component, Producer }); }
+
+void FElysiumEntityWorld::RetireRestoredConstraintEndpoints(FElysiumEntityHandle Producer)
+{
+	for (int32 Index = RestoredConstraintEndpoints.Num() - 1; Index >= 0; --Index)
+	{
+		if (Producer.IsSet() && RestoredConstraintEndpoints[Index].Producer != Producer) continue;
+		if (auto* Component = RestoredConstraintEndpoints[Index].Component.Get())
+		{ ElysiumModelPhysics::Destroy(Component); Component->DestroyComponent(); }
+		RestoredConstraintEndpoints.RemoveAt(Index);
+	}
 }
 
 FElysiumPhysicsSurfaceProps& FElysiumEntityWorld::PhysicsSurfaces() const
@@ -1404,6 +1425,18 @@ void FElysiumEntityWorld::RegisterUseAnchor(UPrimitiveComponent* Component,
 	}
 }
 
+void FElysiumEntityWorld::RegisterPhysicalUseAnchor(UPrimitiveComponent* Physical, UPrimitiveComponent* Visual,
+	const FElysiumEntityHandle& OwnerHandle)
+{
+	if ((!Physical && !Visual) || !OwnerHandle.IsSet()) return;
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->RegisterPhysicalUseAnchor(Physical, Visual, OwnerHandle);
+		const auto* Entity = Resolve(OwnerHandle);
+		Bodily->SetUseAnchorEnabled(OwnerHandle, Entity && !Entity->IsInert());
+	}
+}
+
 void FElysiumEntityWorld::RegisterTouchAnchor(UPrimitiveComponent* Component,
 	const FElysiumEntityHandle& OwnerHandle)
 {
@@ -2269,6 +2302,7 @@ void FElysiumEntityWorld::PurgeEntityRemovals()
 				Npc->TroikaUpdateOnRemove(); //1028d610 destructor, once at release.
 			}
 			Entity->ReleaseForRemoval();
+			RetireRestoredConstraintEndpoints(Removing);
 		}
 	}
 	EntityRemovalQueue.Reset(); //100f6ce0 clears only after every live-count row has released.
@@ -3406,6 +3440,7 @@ void FElysiumEntityWorld::Teardown()
 	{
 		if (Dying && Dying->VPhysicsGetObject()) Dying->VPhysicsDestroyObject();
 	}
+	RetireRestoredConstraintEndpoints();
 	Epoch = 0;
 	EntityRemovalQueue.Reset();
 	PhysicsShadowHandles.Reset();
@@ -3435,6 +3470,7 @@ void FElysiumEntityWorld::Teardown()
 	ElysiumWorldDestroyWeakComponents(Constraints);
 
 	EntityList.Empty();
+	CollisionPairService.Reset(); //1002dc50: service follows entity retirement
  if (!bDetached) TeamRegistry().LevelShutdownPostEntity(); // 0x10230860, retired world cannot reset a new level
 	Baseline.Empty();
 	RuntimeDefs.Empty();

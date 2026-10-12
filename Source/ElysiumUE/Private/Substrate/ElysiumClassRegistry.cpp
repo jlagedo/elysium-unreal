@@ -205,6 +205,8 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		ElysiumNpcKernelBindings::AddBaseEntityFields(D);
 		// And the chain's one generated SAVE row, `m_lifeState` (`+0x200`), under its member name.
 		ElysiumNpcKernelBindings::AddBaseEntitySaveFields(D);
+		// Actual bool SAVE row +0xfe:100a93d0 getter/100a9470 setter; D03 owns sound occlusion policy.
+		D.Field(TEXT("m_bOccludesSound"), &FElysiumEntity::bOccludesSound, EElysiumField::Save);
 
 		// The two rows the replay does not put on `CBaseEntity`. Retail declares `use_icon` and
 		// `locked_icon` on `CBaseButton`, `CBaseDoor`, `CPushable`, `CPropSwitch` and kin, one copy
@@ -222,6 +224,17 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		// 0x10560c20); `ReadKeyField` 0x100acab0 never descends, so `Embedded` refuses the read.
 		D.Field(TEXT("solid"),           &FElysiumEntity::RetailSolidType,
 			EElysiumField::Save | EElysiumField::MapKey | EElysiumField::Embedded);
+		//10560c20 embedded collision SAVE map: GLOBAL vectors, short flags, cached float radius.
+		D.Field(TEXT("m_vecMins"), &FElysiumEntity::CollMins, EElysiumField::Save | EElysiumField::Global | EElysiumField::Embedded);
+		D.Field(TEXT("m_vecMaxs"), &FElysiumEntity::CollMaxs, EElysiumField::Save | EElysiumField::Global | EElysiumField::Embedded);
+		FElysiumFieldAccessor SolidFlags;
+		SolidFlags.ApplyFlags(EElysiumField::Save | EElysiumField::Embedded);
+		SolidFlags.Type = EElysiumVariantType::Int;
+		SolidFlags.RetailType = ElysiumRetailFieldType::Short;
+		SolidFlags.Get = [](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<int32>(E.RetailSolidFlags)); };
+		SolidFlags.Set = [](FElysiumEntity& E, const FElysiumVariant& V) { E.RetailSolidFlags = static_cast<uint16>(V.ToInt()); };
+		D.Fields.Add(TEXT("m_usSolidFlags"), MoveTemp(SolidFlags));
+		D.Field(TEXT("m_flRadius"), &FElysiumEntity::CollisionRadius, EElysiumField::Save | EElysiumField::Embedded);
 		// Rows 108 / 109 of the base table: `m_OnUseBegin` (+0x5c) and `m_OnUseEnd` (+0x74), type 10
 		// CUSTOM, flags 0x16 SAVE|KEY|OUTPUT, ops `CEventsSaveDataOps` 0x106e70d8 (`walks/L0-r017.md`).
 		// A map key of either name reaches the walker's custom branch, which parses the six-field

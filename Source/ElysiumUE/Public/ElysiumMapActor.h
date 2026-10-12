@@ -550,6 +550,8 @@ public:
 	virtual void DamagePlayer(float Amount) override;
 	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) override;
+	virtual void RegisterPhysicalUseAnchor(UPrimitiveComponent* Physical, UPrimitiveComponent* Visual,
+		const FElysiumEntityHandle& Owner) override;
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
 	virtual void UnregisterUseAnchor(const FElysiumEntityHandle& Owner) override;
 	// How many anchor records this owner holds. One is the only correct answer for a live entity;
@@ -779,6 +781,7 @@ private:
 		TWeakObjectPtr<USkeletalMeshComponent> AttachmentSource;
 		FElysiumEntityHandle Owner;
 		bool bEnabled = true;
+		bool bNativePhysical = false;
 	};
 	TArray<FUseAnchorRecord> UseAnchors;
 	UPROPERTY(Transient) TArray<TObjectPtr<UPrimitiveComponent>> OwnedTouchAnchorComponents;

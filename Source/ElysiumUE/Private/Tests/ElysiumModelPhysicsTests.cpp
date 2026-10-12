@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 #if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+#include "Tests/ElysiumTestServices.h"
 #include "ElysiumPlayerWorldFixture.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEntityDefs.h"
@@ -17,6 +19,11 @@
 #include "Substrate/ElysiumModelPhysics.h"
 #include "Substrate/ElysiumPhysProp.h"
 #include "Substrate/ElysiumProp.h"
+#include "Substrate/ElysiumPropLeaves.h"
+#include "Substrate/ElysiumTerminal.h"
+#include "Substrate/ElysiumCollisionPairs.h"
+#include "ElysiumEntityQueryBox.h"
+#include "PhysicsEngine/PhysicsConstraintComponent.h"
 #include "Substrate/ElysiumNpc.h"
 #include "ElysiumCollisionChannels.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -30,17 +37,34 @@
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 #include "PBDRigidsSolver.h"
+#include "Chaos/PBDRigidsEvolutionGBF.h"
+#include "Chaos/SimCallbackObject.h"
+#include "Chaos/Collision/SpatialAccelerationBroadPhase.h"
 #include "Player/ElysiumCommandBus.h"
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumSessionSubsystem.h"
 #include "Substrate/ElysiumMover.h"
+#include "Substrate/ElysiumMoverSounds.h"
+#include "Substrate/ElysiumSaveRestoreGame.h"
+#include "ElysiumIOSink.h"
 #include "Substrate/ElysiumTriggerBase.h"
 #include "ElysiumBrushComponent.h"
 #include "ElysiumMapCollisionPayload.h"
 #include "ElysiumWorldCollisionActor.h"
 #include "Misc/ScopeExit.h"
+#include "UObject/UObjectGlobals.h"
+#include "Containers/Ticker.h"
+#include "Tickable.h"
+#include "AssetCompilingManager.h"
+#include "IAssetCompilingManager.h"
+#include "ElysiumCastData.h"
+#include "Animation/AnimSequence.h"
+#include "Animation/IAnimationSequenceCompiler.h"
+#include "Engine/SkeletalMesh.h"
+#include "Visual/ElysiumNativeAnimationData.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Visual/ElysiumBodyAnimInstance.h"
 #include "Components/StaticMeshComponent.h"
 #include "Physics/PhysicsInterfaceCore.h"
 #include <limits>
@@ -62,6 +86,940 @@ namespace ElysiumModelPhysicsTest
 		return Result;
 	}
 }
+
+#if ELYSIUM_WITH_ARM_TESTS
+namespace ElysiumSwitchNativeTest
+{
+	struct FBreakSink final : IElysiumIOSink
+	{
+		TFunction<void(const FElysiumEntity&,const FElysiumOutputDef&)> Output;
+		TFunction<void(const FElysiumIOEvent&)> Queued;
+		void OnOutputFired(double,const FElysiumEntity& Source,const FElysiumOutputDef& Row) override { if (Output) Output(Source,Row); }
+		void OnQueued(double,const FElysiumIOEvent& Event) override { if (Queued) Queued(Event); }
+	};
+	struct FOrderedAudio final : IElysiumAudio
+	{
+		FElysiumRecordingServices Data;
+		TFunction<void()> BeforeBody;
+		FElysiumVoiceHandle Submit(FElysiumAudioRequest Request) override { return Data.Submit(MoveTemp(Request)); }
+		void Prefetch(const FElysiumAudioSource& Source) override { Data.Prefetch(Source); }
+		void PauseVoice(FElysiumVoiceHandle Voice,bool bPaused) override { Data.PauseVoice(Voice,bPaused); }
+		void SeekVoice(FElysiumVoiceHandle Voice,float Offset) override { Data.SeekVoice(Voice,Offset); }
+		void SetVoicePitch(FElysiumVoiceHandle Voice,float Pitch) override { Data.SetVoicePitch(Voice,Pitch); }
+		void CancelAudioOwner(FElysiumAudioOwner Owner,float Fade) override { Data.CancelAudioOwner(Owner,Fade); }
+		FElysiumAudioVoiceHandle PlayVoice(const FString& Rel,const FElysiumPlayParams& Params) override { return Data.PlayVoice(Rel,Params); }
+		FElysiumAudioVoiceHandle PlayBodySound(const FElysiumEntityHandle& Owner,const FElysiumBodySound& Sound) override
+		{ if (BeforeBody) BeforeBody(); return Data.PlayBodySound(Owner,Sound); }
+		void StopVoice(FElysiumAudioVoiceHandle Voice,float Fade) override { Data.StopVoice(Voice,Fade); }
+		void SetVoiceVolume(FElysiumAudioVoiceHandle Voice,float Volume) override { Data.SetVoiceVolume(Voice,Volume); }
+		bool IsVoicePlaying(FElysiumAudioVoiceHandle Voice) const override { return Data.IsVoicePlaying(Voice); }
+		void FadeInScheme(const FString& Rel,const FVector& Anchor,float Fade) override { Data.FadeInScheme(Rel,Anchor,Fade); }
+		void FadeOutScheme(const FString& Rel,float Fade) override { Data.FadeOutScheme(Rel,Fade); }
+		FString ActiveSchemeRel() const override { return Data.ActiveSchemeRel(); }
+	};
+	struct FPairProbeInput : Chaos::FSimCallbackInput
+	{
+		Chaos::FUniqueIdx First, Second;
+		void Reset() { First = {}; Second = {}; }
+	};
+	struct FPairProbeOutput : Chaos::FSimCallbackOutput
+	{
+		bool bIgnored=false;
+		void Reset() { bIgnored=false; }
+	};
+	class FPairProbe final : public Chaos::TSimCallbackObject<FPairProbeInput,FPairProbeOutput,Chaos::ESimCallbackOptions::PostSolve>
+	{
+		FName GetFNameForStatId() const override { return TEXT("ElysiumSwitchPairProbe"); }
+		void OnPreSimulate_Internal() override {} //the solver's base callback contract requires this face
+		void OnPostSolve_Internal() override
+		{
+			if (const auto* Input=GetConsumerInput_Internal())
+				GetProducerOutputData_Internal().bIgnored=static_cast<Chaos::FPBDRigidsSolver*>(GetSolver())->GetEvolution()->GetBroadPhase().GetIgnoreCollisionManager().IgnoresCollision(Input->First,Input->Second);
+		}
+	};
+	TArray<FString> FilterCalls;
+	class FFilterProbe final : public FElysiumProp
+	{
+	public:
+		mutable TFunction<void()> On91;
+		TFunction<void()> On68;
+		bool bReject68=false;
+		bool ShouldCollide(int32 Group,int32 Mask) const override
+		{ FilterCalls.Add(TargetName+TEXT("91")); if (On91) On91(); return FElysiumEntity::ShouldCollide(Group,Mask); }
+		bool ShouldIgnoreCollision(FElysiumEntity*) override
+		{ FilterCalls.Add(TargetName+TEXT("68")); if (On68) On68(); return bReject68; }
+	};
+	TUniquePtr<FElysiumEntity> MakeFilterProbe() { return MakeUnique<FFilterProbe>(); }
+	FElysiumClassRegistrar FilterRegistrar(TEXT("elysium_test_switch_filter"),TEXT("prop_dynamic"),&MakeFilterProbe,[](FElysiumClassDesc&){});
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSwitchStudioInputsTest, "Elysium.Arm.ModelPhysics.SwitchStudioInputs",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumSwitchStudioInputsTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	if (!TestNotNull(TEXT("native fixture production map owner"), Map)) return false;
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	if (!TestNotNull(TEXT("actual placed model catalogue"), Placed)
+		|| !TestNotNull(TEXT("actual prop skin catalogue"), Skins)) return false;
+	const FString SwitchId = TEXT("vtmb:model:scenery/structural/switches/switch");
+	const TArray<FString> Ids = { SwitchId };
+	TSet<FSoftObjectPath> Paths;
+	FString Error;
+	if (!TestTrue(TEXT("actual switch catalogue GatherPaths"), FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)))
+	{ AddError(Error); return false; }
+	TArray<UObject*> Assets;
+	for (const auto& Path : Paths)
+	{
+		auto* Asset = Path.TryLoad();
+		AddInfo(FString::Printf(TEXT("switch studio resident: path=%s object=%s"), *Path.ToString(), *GetPathNameSafe(Asset)));
+		if (!TestNotNull(*FString::Printf(TEXT("native resident %s"), *Path.ToString()), Asset)) return false;
+		Assets.Add(Asset);
+	}
+	auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+	if (!TestTrue(TEXT("actual switch native prepared admission"), Prepared.IsValid())) { AddError(Error); return false; }
+	TestTrue(TEXT("selected switch ID actually admitted"), Prepared->IsAdmitted(SwitchId));
+	auto* Mesh = Prepared->StaticMesh(SwitchId, Error);
+	if (!TestNotNull(TEXT("prepared switch actual static mesh"), Mesh)) { AddError(Error); return false; }
+	const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh);
+	AddInfo(FString::Printf(TEXT("switch studio admission: id=%s mesh=%s typed=%s studio=%d mins=%s maxs=%s"),
+		*SwitchId, *GetPathNameSafe(Mesh), *GetPathNameSafe(Inputs), Inputs && Inputs->bStudioBounds,
+		Inputs ? *Inputs->StudioMinsCm.ToString() : TEXT("absent"), Inputs ? *Inputs->StudioMaxsCm.ToString() : TEXT("absent")));
+	if (!TestNotNull(TEXT("actual prepared switch supplies typed studio inputs"), Inputs)) return false;
+	TestTrue(TEXT("actual typed switch admits Source studio hull bounds"), Inputs->bStudioBounds);
+	TestFalse(TEXT("actual studio mins are finite"), Inputs->StudioMinsCm.ContainsNaN());
+	TestFalse(TEXT("actual studio maxs are finite"), Inputs->StudioMaxsCm.ContainsNaN());
+	// Published MDL hull header +0xb4/+0xc0: accepted studio producer reflects Y and converts to cm.
+	// Header values already reflect source globalScale; do not apply that scale again.
+	const FVector ExpectedMins = FVector(-2.0518600940704346, -0.7970643043518066, -3.282989978790283) * 2.54;
+	const FVector ExpectedMaxs = FVector(2.0518600940704346, 1.4412333965301514, 3.282989978790283) * 2.54;
+	TestTrue(TEXT("actual native studio mins equal Source header projection"), Inputs->StudioMinsCm.Equals(ExpectedMins, .0001));
+	TestTrue(TEXT("actual native studio maxs equal Source header projection"), Inputs->StudioMaxsCm.Equals(ExpectedMaxs, .0001));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalStudioInputsTest, "Elysium.Arm.ModelPhysics.TerminalStudioInputs",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumTerminalStudioInputsTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	if (!TestNotNull(TEXT("native prepared admission owner"), Map)) return false;
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	struct FPlacement { const TCHAR* MapName; int32 Index; const TCHAR* Class; const TCHAR* Name; const TCHAR* Model; };
+	const FPlacement Placements[] = {
+		{ TEXT("sp_tutorial_1"), 124, TEXT("prop_hacking"), TEXT("tuthack"), TEXT("models/scenery/furniture/computer/monitor_useable.mdl") },
+		{ TEXT("sm_hub_1"), 277, TEXT("prop_hacking"), TEXT("bertrams_computer_on"), TEXT("models/scenery/furniture/computer/monitor_useable.mdl") },
+		{ TEXT("sp_tutorial_1"), 1857, TEXT("prop_hacking"), TEXT("beam_1_terminal"), TEXT("models/scenery/misc/militarycomputer/militarycomputer2.mdl") },
+		{ TEXT("sp_tutorial_1"), 523, TEXT("prop_button"), TEXT("elev_button_1_up"), TEXT("models/scenery/structural/elevator_dial/elevbutton_up.mdl") }
+	};
+	for (const auto& Placement : Placements)
+	{
+		FElysiumEntityDefs Actual;
+		if (!TestTrue(TEXT("actual deployed map definition loads"), ElysiumEntityDefSource::Load(Placement.MapName, Actual) != EElysiumEntityDefSource::None)) return false;
+		if (!TestTrue(TEXT("actual selected lump ordinal exists"), Actual.Defs.IsValidIndex(Placement.Index))) return false;
+		const auto& Def = Actual.Defs[Placement.Index];
+		AddInfo(FString::Printf(TEXT("studio selected native row: map=%s index=%d class=%s name=%s modelToken=%s authoredModel=%s"),
+			Placement.MapName, Placement.Index, *Def.Classname, *Def.TargetName, *Def.ModelMesh, *Def.Keys.FindRef(TEXT("model"))));
+		TestEqual(TEXT("actual selected class"), Def.Classname, FString(Placement.Class));
+		TestEqual(TEXT("actual selected name"), Def.TargetName, FString(Placement.Name));
+		TestEqual(TEXT("actual selected authored model"), Def.Keys.FindRef(TEXT("model")), FString(Placement.Model));
+	}
+	// Offline source GLB mdl.header hullMin/hullMax, projected by importers/models.py _body_inputs.
+	// Header globalScale0.5 is already reflected; no second scale and no render-geometry bounds.
+	struct FSourceHull { const TCHAR* Id; FVector Mins; FVector Maxs; };
+	const FSourceHull SourceHulls[] = {
+		{ TEXT("vtmb:model:scenery/furniture/computer/monitor_useable"),
+			FVector(-36.65685165405274, -29.79876735687256, 0.000001682925387740397), FVector(26.345850696563723, 29.798777046203615, 61.34554817199707) },
+		{ TEXT("vtmb:model:scenery/misc/militarycomputer/militarycomputer2"),
+			FVector(-14.70573634147644, -10.901477270126342, -0.000001372041598415308), FVector(18.323254146575927, 10.901477270126342, 22.339552116394042) },
+		{ TEXT("vtmb:model:scenery/structural/elevator_dial/elevbutton_up"),
+			FVector(-0.2613661473989487, -3.576828064918518, -3.576828064918518), FVector(1.3406120598316194, 3.576828064918518, 3.576828064918518) }
+	};
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	if (!TestNotNull(TEXT("actual placed model catalogue"), Placed) || !TestNotNull(TEXT("actual skin catalogue"), Skins)) return false;
+	TArray<FString> Ids;
+	for (const auto& SourceHull : SourceHulls) Ids.Add(SourceHull.Id);
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!TestTrue(TEXT("selected native GatherPaths"), FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error))) { AddError(Error); return false; }
+	TArray<UObject*> Assets;
+	for (const auto& Path : Paths)
+	{
+		auto* Asset = Path.TryLoad();
+		AddInfo(FString::Printf(TEXT("terminal studio resident: path=%s object=%s"), *Path.ToString(), *GetPathNameSafe(Asset)));
+		if (!TestNotNull(TEXT("actual selected native resident"), Asset)) return false;
+		Assets.Add(Asset);
+	}
+	const auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+	if (!TestTrue(TEXT("actual selected native prepared admission"), Prepared.IsValid())) { AddError(Error); return false; }
+	for (const auto& SourceHull : SourceHulls)
+	{
+		TestTrue(TEXT("selected model actually admitted"), Prepared->IsAdmitted(SourceHull.Id));
+		auto* Mesh = Prepared->StaticMesh(SourceHull.Id, Error);
+		if (!TestNotNull(TEXT("actual prepared static mesh"), Mesh)) { AddError(Error); continue; }
+		const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh);
+		AddInfo(FString::Printf(TEXT("terminal studio admission: id=%s mesh=%s typed=%s studio=%d sourceMins=%s sourceMaxs=%s nativeMins=%s nativeMaxs=%s"),
+			SourceHull.Id, *GetPathNameSafe(Mesh), *GetPathNameSafe(Inputs), Inputs && Inputs->bStudioBounds,
+			*SourceHull.Mins.ToString(), *SourceHull.Maxs.ToString(), Inputs ? *Inputs->StudioMinsCm.ToString() : TEXT("absent"), Inputs ? *Inputs->StudioMaxsCm.ToString() : TEXT("absent")));
+		if (!TestNotNull(*FString::Printf(TEXT("required native typed studio input %s"), SourceHull.Id), Inputs)) continue;
+		TestTrue(TEXT("actual typed input admits studio hull bounds"), Inputs->bStudioBounds);
+		TestFalse(TEXT("native studio mins finite"), Inputs->StudioMinsCm.ContainsNaN());
+		TestFalse(TEXT("native studio maxs finite"), Inputs->StudioMaxsCm.ContainsNaN());
+		TestTrue(TEXT("native studio mins equal source projection"), Inputs->StudioMinsCm.Equals(SourceHull.Mins, .0001));
+		TestTrue(TEXT("native studio maxs equal source projection"), Inputs->StudioMaxsCm.Equals(SourceHull.Maxs, .0001));
+	}
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSignStudioInputsTest, "Elysium.Arm.ModelPhysics.SignStudioInputs",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumSignStudioInputsTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+ auto* Map=Fixture.SpawnMapActorDeferred(); if (!TestNotNull(TEXT("actual sign native admission owner"),Map)) return false;
+ ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+ FElysiumEntityDefs Core; if (!TestTrue(TEXT("actual tutorial33/1282 native definitions"),ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"),Core)!=EElysiumEntityDefSource::None&&Core.Defs.IsValidIndex(1282))) return false;
+ TArray<FString> Ids;
+ for (int32 Index:{33,1282})
+ {
+  const auto& Def=Core.Defs[Index]; TestEqual(TEXT("actual registered prop_sign definition"),Def.Classname,FString(TEXT("prop_sign")));
+  AddInfo(FString::Printf(TEXT("sign selected native placement index=%d name=%s model=%s solidKey=%s"),Index,*Def.TargetName,*Def.Keys.FindRef(TEXT("model")),*Def.Keys.FindRef(TEXT("solid"))));
+  Ids.Add(ElysiumPreparedProps::ModelId(Def.Keys.FindRef(TEXT("model"))));
+ }
+ auto* Placed=LoadObject<UElysiumPlacedModelCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+ auto* Skins=LoadObject<UElysiumPropSkinCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+ TSet<FSoftObjectPath> Paths; FString Error;
+ if (!FElysiumPreparedPropModels::GatherPaths(Placed,Skins,Ids,Paths,Error)) { AddError(Error); return false; }
+ TArray<UObject*> Assets; for (const auto& Path:Paths) { auto* Asset=Path.TryLoad(); AddInfo(FString::Printf(TEXT("sign actual native asset path=%s object=%s"),*Path.ToString(),*GetPathNameSafe(Asset))); if (!TestNotNull(TEXT("selected sign actual native asset"),Asset)) return false; Assets.Add(Asset); }
+ auto Prepared=FElysiumPreparedPropModels::Create(Map,1,Placed,Skins,Ids,Assets,Error); if (!TestTrue(TEXT("actual sign native prepared admission"),Prepared.IsValid())) return false;
+ for (const auto& Id:Ids)
+ {
+  TestTrue(TEXT("actual selected sign model admitted"),Prepared->IsAdmitted(Id)); auto* Mesh=Prepared->StaticMesh(Id,Error); if (!TestNotNull(TEXT("actual sign native prepared static mesh"),Mesh)) continue;
+  const auto* Inputs=UElysiumModelPhysicsInputs::Find(Mesh);
+  AddInfo(FString::Printf(TEXT("sign native studio id=%s mesh=%s typed=%s studio=%d mins=%s maxs=%s"),*Id,*GetPathNameSafe(Mesh),*GetPathNameSafe(Inputs),Inputs&&Inputs->bStudioBounds,Inputs?*Inputs->StudioMinsCm.ToString():TEXT("absent"),Inputs?*Inputs->StudioMaxsCm.ToString():TEXT("absent")));
+  if (!TestNotNull(TEXT("required actual sign native typed studio inputs"),Inputs)) continue;
+  TestTrue(TEXT("actual sign studio hull producer present"),Inputs->bStudioBounds); TestFalse(TEXT("actual sign native mins finite"),Inputs->StudioMinsCm.ContainsNaN()); TestFalse(TEXT("actual sign native maxs finite"),Inputs->StudioMaxsCm.ContainsNaN());
+ }
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSignQueryTest, "Elysium.Arm.ModelPhysics.SignQuery",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumSignQueryTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+ auto* Map=Fixture.SpawnMapActorDeferred(); if (!TestNotNull(TEXT("actual sign owner"),Map)) return false;
+ ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+ FElysiumEntityDefs Core; if (!TestTrue(TEXT("real tutorial sign definitions"),ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"),Core)!=EElysiumEntityDefSource::None&&Core.Defs.IsValidIndex(1282))) return false;
+ FElysiumEntityDefs Defs; TArray<FString> Ids;
+ for (int32 Index:{33,1282}) { auto Def=Core.Defs[Index]; Def.TargetName=FString::Printf(TEXT("native_sign_%d"),Index); Def.Origin=FVector(7000,Index==33?3000:4000,2000); Def.Keys.Add(TEXT("angles"),TEXT("0 35 0")); Ids.Add(ElysiumPreparedProps::ModelId(Def.Keys.FindRef(TEXT("model")))); Defs.Defs.Add(MoveTemp(Def)); }
+ auto* Placed=LoadObject<UElysiumPlacedModelCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+ auto* Skins=LoadObject<UElysiumPropSkinCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+ TSet<FSoftObjectPath> Paths; FString Error; if (!FElysiumPreparedPropModels::GatherPaths(Placed,Skins,Ids,Paths,Error)) { AddError(Error); return false; }
+ TArray<UObject*> Assets; for (const auto& Path:Paths) { auto* Asset=Path.TryLoad(); if (!TestNotNull(TEXT("actual sign asset"),Asset)) return false; Assets.Add(Asset); }
+ auto Prepared=FElysiumPreparedPropModels::Create(Map,1,Placed,Skins,Ids,Assets,Error); if (!TestTrue(TEXT("actual sign prepared admission"),Prepared.IsValid())) return false;
+ FElysiumWorldServices Services; Services.Embodiment=Map; Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,Services)); auto* Entities=Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(Defs));
+ for (const auto& Entity:Entities->Entities())
+ {
+  if (!TestTrue(TEXT("real registered sign class"),Entity->Class&&Entity->Class->ClassName==FName(TEXT("prop_sign")))) return false;
+  auto* Sign=static_cast<FElysiumPropSign*>(Entity.Get()); auto* Shape=Sign->QueryBody(); if (!TestNotNull(TEXT("actual default sign native OBB"),Shape)) return false;
+  TestEqual(TEXT("default Spawn overrides absent solid key"),Sign->GetSolid(),3); TestEqual(TEXT("actual sign Spawn group"),Sign->CollisionGroup,1);
+  TestNull(TEXT("query-only sign leaves semantic Physics null"),Sign->VPhysicsGetObject());
+  TestTrue(TEXT("visual attachment and native query are distinct"),static_cast<FElysiumEntity*>(Sign)->GetAttachBody()&&static_cast<FElysiumEntity*>(Sign)->GetAttachBody()!=Shape&&Map->FindUseVisual(Sign->Handle)==static_cast<FElysiumEntity*>(Sign)->GetAttachBody());
+  FElysiumRetailTrace Request; Request.StartCm=Shape->GetComponentLocation()-FVector(80,0,0); Request.EndCm=Shape->GetComponentLocation()+FVector(80,0,0); Request.RetailMask=0x0600408b; FElysiumRetailTraceResult Hit; Map->TraceRetail(Request,Hit);
+  TestTrue(TEXT("actual sign native hit carries component/currentserial/fraction"),Hit.Fraction>0.f&&Hit.Fraction<1.f&&Hit.HitEntity==Sign->Handle&&Hit.HitComponent==Shape);
+  Sign->ScriptHide(); Map->TraceRetail(Request,Hit); TestEqual(TEXT("hidden sign refuses native query"),Hit.Fraction,1.f); Sign->ScriptUnhide();
+  TestEqual(TEXT("live sign physical publication deduplicates"),Map->NumUseAnchors(Sign->Handle),1);
+  Sign->UtilSetSize(FVector(-2,-3,-4),FVector(4,5,6)); Sign->SetSolidFlags(0x80);
+ }
+ FElysiumMapSnapshot Captured; Entities->Freeze(Captured); TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Saving(Writer,FElysiumSaveVersion::Latest); Saving<<Captured;
+ FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Loading(Reader,FElysiumSaveVersion::Latest); Loading<<Persisted; if (!TestFalse(TEXT("actual sign archive decodes"),Loading.IsError())) return false;
+ Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,Services)); Entities=Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(Defs)); if (!TestTrue(TEXT("actual sign restore"),Entities->ApplySnapshot(Persisted,42.)>=0)) return false; Entities->Activate(42.);
+ TArray<FElysiumEntityHandle> RestoredSignHandles;
+ for (const auto& Entity:Entities->Entities()) RestoredSignHandles.Add(Entity->Handle);
+ for (const auto& RestoredHandle:RestoredSignHandles)
+ {
+  auto* RestoredEntity=Entities->Resolve(RestoredHandle); if (!TestNotNull(TEXT("restored sign current serial resolves"),RestoredEntity)) return false;
+  auto* Sign=static_cast<FElysiumPropSign*>(RestoredEntity); if (!TestNotNull(TEXT("restored real sign carrier"),Sign->QueryBody())) return false;
+  TestTrue(TEXT("restored sign uses saved bounds/flags not fresh header"),Sign->CollMins==FVector(-2,-3,-4)&&Sign->CollMaxs==FVector(4,5,6)&&Sign->RetailSolidFlags==0x80u&&Sign->QueryBody()->GetUnscaledBoxExtent().Equals(FVector(3,4,5)*ElysiumMove::U,.001));
+  TestTrue(TEXT("restored sign current physical/visual publication"),Map->NumUseAnchors(Sign->Handle)==1&&Map->FindUseVisual(Sign->Handle)==static_cast<FElysiumEntity*>(Sign)->GetAttachBody());
+  const auto OldHandle=Sign->Handle; TWeakObjectPtr<UElysiumEntityQueryBox> OldShape=Sign->QueryBody(); Sign->QueueRemove(); Entities->PurgeEntityRemovals();
+  TestTrue(TEXT("retirement rejects stale sign serial/component"),!Entities->Resolve(OldHandle)&&Map->NumUseAnchors(OldHandle)==0&&(!OldShape.IsValid()||!OldShape->Entity.IsSet()));
+ }
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalLateAdmissionTest, "Elysium.Arm.ModelPhysics.TerminalLateAdmission",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumTerminalLateAdmissionTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+ Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); if (!TestNotNull(TEXT("actual admission player"),Fixture.Pawn)||!TestNotNull(TEXT("actual admission controller"),Fixture.PlayerController)) return false;
+ Fixture.PlayerController->Possess(Fixture.Pawn);
+ auto* Map=Fixture.SpawnMapActorDeferred(); if (!TestNotNull(TEXT("actual late-admission map"),Map)) return false;
+ Map->bStageOnly=true; Map->bStageWithoutCatalogue=true; Map->MapName.Reset(); Map->FinishSpawning(FTransform::Identity);
+ auto Tick=[&]() { return Fixture.TestWorld.TickTestWorld(.02f); };
+ for (int32 Frame=0;Frame<20&&!Map->IsRuntimeActive();++Frame) if (!Tick()) { AddError(TEXT("native initial activation tick failed")); return false; }
+ if (!TestTrue(TEXT("initial production stage activation"),Map->IsRuntimeActive())) { AddError(Map->GetMissingRuntimePrerequisites()); return false; }
+ FElysiumEntityDefs Core; if (!TestTrue(TEXT("real tutorial terminal definitions for admission"),ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"),Core)!=EElysiumEntityDefSource::None&&Core.Defs.IsValidIndex(1857))) return false;
+ FElysiumEntityDefs Defs; Defs.MapName=TEXT("terminal_late_native"); FElysiumEntityDef WorldDef; WorldDef.Classname=TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+ auto Initial=Core.Defs[124]; Initial.TargetName=TEXT("initial_native_terminal"); Initial.Origin=FVector(5000,3000,2000); Defs.Defs.Add(MoveTemp(Initial));
+ FElysiumStageSeat Seat; Seat.FeetCm=FVector(-1000,0,1000); FString Error;
+ if (!TestTrue(TEXT("real entity-derived prepared stage rebuild"),Map->RebuildStageWorld(MoveTemp(Defs),{},Seat,Error))) { AddError(Error); return false; }
+ for (int32 Frame=0;Frame<20&&!Map->IsRuntimeActive();++Frame) if (!Tick()) { AddError(TEXT("native rebuilt activation tick failed")); return false; }
+ if (!TestTrue(TEXT("initial terminal prepared stage active"),Map->IsRuntimeActive())) { AddError(Map->GetMissingRuntimePrerequisites()); return false; }
+ const FString MilitaryId=TEXT("vtmb:model:scenery/misc/militarycomputer/militarycomputer2"); auto Prepared=ElysiumPreparedProps::ForOwner(Map);
+ if (!TestTrue(TEXT("actual map knows but has not admitted later military model"),Prepared.IsValid()&&Prepared->Knows(MilitaryId)&&!Prepared->IsAdmitted(MilitaryId))) return false;
+ TSet<FSoftObjectPath> LaterPaths;
+ if (!FElysiumPreparedPropModels::GatherPaths(Prepared->PlacedCatalogue(),Prepared->SkinCatalogue(),{MilitaryId},LaterPaths,Error)) { AddError(Error); return false; }
+ auto ReportAdmissionStage=[&](const TCHAR* Stage)
+ {
+  auto* Native=Map->GetGameInstance()?Map->GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>():nullptr;
+  const auto* CastData=Native?Native->PreparedCast():nullptr;
+  const auto* Entry=CastData?CastData->Models.Find(MilitaryId):nullptr;
+  const auto* PlacedRow=Prepared->PlacedCatalogue()->FindModel(MilitaryId);
+  const bool bNativeBody=Entry&&!Entry->Mesh.IsNull()&&!Entry->BodyData.IsNull()&&!(PlacedRow&&PlacedRow->bSourceAbsent);
+  AddInfo(FString::Printf(TEXT("late admission branch %s: cast=%d entry=%d mesh=%s body=%s placed=%d sourceAbsent=%d nativeBody=%d nativeReady=%d nativePending=%d"),Stage,CastData!=nullptr,Entry!=nullptr,Entry?*Entry->Mesh.ToSoftObjectPath().ToString():TEXT("<none>"),Entry?*Entry->BodyData.ToSoftObjectPath().ToString():TEXT("<none>"),PlacedRow!=nullptr,PlacedRow&&PlacedRow->bSourceAbsent,bNativeBody,Native&&Native->IsModelReady(MilitaryId),Native?Native->NumPendingModelAdmissions():0));
+  TArray<FSoftObjectPath> SortedPaths=LaterPaths.Array(); SortedPaths.Sort([](const auto& A,const auto& B){return A.ToString()<B.ToString();});
+  for (const auto& Path:SortedPaths)
+  {
+   const auto* Asset=Path.ResolveObject();
+   AddInfo(FString::Printf(TEXT("late admission selected %s: path=%s resident=%d class=%s"),Stage,*Path.ToString(),Asset!=nullptr,Asset?*Asset->GetClass()->GetName():TEXT("<none>")));
+  }
+  for (const IAssetCompilingManager* Manager:FAssetCompilingManager::Get().GetRegisteredManagers()) if (Manager)
+   AddInfo(FString::Printf(TEXT("late admission compiler %s: type=%s remaining=%d"),Stage,*Manager->GetAssetTypeName().ToString(),Manager->GetNumRemainingAssets()));
+ };
+ ReportAdmissionStage(TEXT("before-runtime-spawn"));
+ auto Later=Core.Defs[1857]; Later.TargetName=TEXT("later_native_terminal"); Later.Origin=FVector(7000,3000,2000);
+ auto* Entities=Map->GetEntityWorld(); const auto LaterHandle=Entities->SpawnRuntimeEntity(MoveTemp(Later)); auto* LaterEntity=Entities->Resolve(LaterHandle);
+ if (!TestNotNull(TEXT("real runtime terminal spawn"),LaterEntity)||!TestNotNull(TEXT("registered terminal runtime class"),LaterEntity->AsTerminal())) return false;
+ auto* Terminal=LaterEntity->AsTerminal();
+ if (!Prepared->IsAdmitted(MilitaryId)) TestNull(TEXT("pending actual residency does not invent query geometry"),Terminal->QueryBody());
+ // Drain the native loader, then its real game/core-ticker callbacks; no direct entity callback.
+ FlushAsyncLoading();
+ for (int32 Frame=0;Frame<100&&(!Prepared->IsAdmitted(MilitaryId)||!Terminal->QueryBody()||!Terminal->GetAttachBody());++Frame)
+ {
+  // Native-body completion can start the placed request on a later delegate. Drain each
+  // actual loader phase; a tight synchronous world tick does not run the engine loading pump.
+  FlushAsyncLoading();
+  TArray<UObject*> ResolvedAssets; int32 CompilingAssets=0;
+  for (const auto& Path:LaterPaths) if (auto* Asset=Path.ResolveObject())
+  {
+   ResolvedAssets.Add(Asset);
+   if (const auto* Static=Cast<UStaticMesh>(Asset); Static&&Static->IsCompiling()) ++CompilingAssets;
+   if (const auto* Skeletal=Cast<USkeletalMesh>(Asset); Skeletal&&Skeletal->IsCompiling()) ++CompilingAssets;
+  }
+  if (Frame==0||Frame==99)
+  {
+   ReportAdmissionStage(Frame==0?TEXT("frame0-before-drain"):TEXT("frame99-before-drain"));
+   auto* Native=Map->GetGameInstance()?Map->GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>():nullptr;
+   AddInfo(FString::Printf(TEXT("late admission native phase: frame=%d nativeReady=%d resolved=%d/%d compiling=%d admitted=%d query=%d visual=%d"),Frame,Native&&Native->IsModelReady(MilitaryId),ResolvedAssets.Num(),LaterPaths.Num(),CompilingAssets,Prepared->IsAdmitted(MilitaryId),Terminal->QueryBody()!=nullptr,Terminal->GetAttachBody()!=nullptr));
+  }
+  // The production dispatcher polls these exact resident meshes before its admission
+  // barrier. Finish their real editor compilation without loading or admitting substitutes.
+  if (CompilingAssets) FAssetCompilingManager::Get().FinishCompilationForObjects(ResolvedAssets);
+  // NativeAnimationData::FinishPreparation395–410 uses the animation compiler's public
+  // selected-sequence barrier; the generic mesh barrier does not drain this queue.
+  TArray<UAnimSequence*> ResolvedSequences;
+  for (auto* Asset:ResolvedAssets) if (auto* Sequence=Cast<UAnimSequence>(Asset)) ResolvedSequences.Add(Sequence);
+  if (!ResolvedSequences.IsEmpty()) UE::Anim::IAnimSequenceCompilingManager::FinishCompilation(ResolvedSequences);
+  FTSTicker::GetCoreTicker().Tick(.02f);
+  if (!Tick()) { AddError(TEXT("native late-admission tick failed")); return false; }
+  // GameEngine.cpp1973: global streamable delayed delegates are not world/core tickers.
+  FTickableGameObject::TickObjects(nullptr,LEVELTICK_All,false,.02f);
+ }
+ int32 FinalResolved=0,FinalCompiling=0;
+ for (const auto& Path:LaterPaths) if (auto* Asset=Path.ResolveObject())
+ {
+  ++FinalResolved;
+  if (const auto* Static=Cast<UStaticMesh>(Asset); Static&&Static->IsCompiling()) ++FinalCompiling;
+  if (const auto* Skeletal=Cast<USkeletalMesh>(Asset); Skeletal&&Skeletal->IsCompiling()) ++FinalCompiling;
+ }
+ auto* FinalNative=Map->GetGameInstance()?Map->GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>():nullptr;
+ ReportAdmissionStage(TEXT("after-drain"));
+ AddInfo(FString::Printf(TEXT("late admission after native drain: nativeReady=%d resolved=%d/%d compiling=%d admitted=%d query=%d visual=%d"),FinalNative&&FinalNative->IsModelReady(MilitaryId),FinalResolved,LaterPaths.Num(),FinalCompiling,Prepared->IsAdmitted(MilitaryId),Terminal->QueryBody()!=nullptr,Terminal->GetAttachBody()!=nullptr));
+ if (!TestTrue(TEXT("actual async admission dispatcher produces native terminal body"),Prepared->IsAdmitted(MilitaryId)&&Terminal->QueryBody()&&Terminal->GetAttachBody())) return false;
+ TestTrue(TEXT("late dispatcher publishes actual current physical/visual owner"),Map->NumUseAnchors(LaterHandle)==1&&Map->FindUseVisual(LaterHandle)==Terminal->GetAttachBody());
+ FElysiumRetailTrace Request; Request.StartCm=Terminal->QueryBody()->GetComponentLocation()-FVector(80,0,0); Request.EndCm=Terminal->QueryBody()->GetComponentLocation()+FVector(80,0,0); Request.RetailMask=0x0600408b; FElysiumRetailTraceResult Hit; Map->TraceRetail(Request,Hit);
+ TestTrue(TEXT("actual late-admitted native query attribution"),Hit.Fraction>0.f&&Hit.Fraction<1.f&&Hit.HitEntity==LaterHandle&&Hit.HitComponent==Terminal->QueryBody());
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalQueryTest, "Elysium.Arm.ModelPhysics.TerminalQuery",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumTerminalQueryTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+ auto* Map = Fixture.SpawnMapActorDeferred(); if (!TestNotNull(TEXT("production query map"),Map)) return false;
+ ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+ auto* Placed=LoadObject<UElysiumPlacedModelCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+ auto* Skins=LoadObject<UElysiumPropSkinCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+ const TArray<FString> Ids={TEXT("vtmb:model:scenery/furniture/computer/monitor_useable"),TEXT("vtmb:model:scenery/misc/militarycomputer/militarycomputer2"),TEXT("vtmb:model:scenery/structural/elevator_dial/elevbutton_up")};
+ TSet<FSoftObjectPath> Paths; FString Error;
+ if (!FElysiumPreparedPropModels::GatherPaths(Placed,Skins,Ids,Paths,Error)) { AddError(Error); return false; }
+ TArray<UObject*> Assets; for (const auto& Path:Paths) { auto* Asset=Path.TryLoad(); if (!TestNotNull(TEXT("actual native resident"),Asset)) return false; Assets.Add(Asset); }
+ auto Prepared=FElysiumPreparedPropModels::Create(Map,1,Placed,Skins,Ids,Assets,Error);
+ if (!TestTrue(TEXT("actual terminal/button prepared inputs"),Prepared.IsValid())) return false;
+ FElysiumEntityDefs Core; if (!TestTrue(TEXT("actual tutorial124/1857/523 definitions"),ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"),Core)!=EElysiumEntityDefSource::None&&Core.Defs.IsValidIndex(1857))) return false;
+ FElysiumEntityDefs Defs; Defs.MapName=TEXT("terminal_query_native");
+ for (int32 Index:{124,1857,523}) Defs.Defs.Add(Core.Defs[Index]);
+ Defs.Defs[0].Origin=FVector(5000,5000,5000); Defs.Defs[1].Origin=FVector(7000,5000,5000); Defs.Defs[2].Origin=FVector(9000,5000,5000);
+ FElysiumWorldServices Services; Services.Embodiment=Map;
+ Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,Services));
+ auto* Entities=Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(Defs));
+ auto* Terminal=Entities->Entities()[0]->AsTerminal(); auto* Military=Entities->Entities()[1]->AsTerminal();
+ if (!TestTrue(TEXT("actual registered tutorial523 class"),Entities->Entities()[2]->Class && Entities->Entities()[2]->Class->ClassName==FName(TEXT("prop_button")))) return false;
+ auto* Button=static_cast<FElysiumPropButton*>(Entities->Entities()[2].Get());
+ if (!TestNotNull(TEXT("actual terminal class"),Terminal)||!TestNotNull(TEXT("actual second model terminal"),Military)||!TestNotNull(TEXT("actual tutorial523 query despite absent solid key"),Button->QueryBody())||!TestNotNull(TEXT("actual terminal BBOX query"),Terminal->QueryBody())||!TestNotNull(TEXT("actual military terminal query"),Military->QueryBody())) return false;
+ TestEqual(TEXT("terminal Solid2"),Terminal->GetSolid(),2); TestEqual(TEXT("terminal Spawn removes flags0xc"),Terminal->RetailSolidFlags&0xcu,0u);
+ TestEqual(TEXT("terminal Spawn movetypeNone"),Terminal->GetMoveType(),0);
+ TestEqual(TEXT("button Spawn OBB"),Button->GetSolid(),3); TestEqual(TEXT("button group1"),Button->CollisionGroup,1);
+ TestTrue(TEXT("button semantic OccludesSound false"),!Button->OccludesSound());
+ TestTrue(TEXT("query carriers have null semantic VPhysics"),!Terminal->VPhysicsGetObject()&&!Button->VPhysicsGetObject());
+ TestTrue(TEXT("visual and physical carriers distinct"),Terminal->GetAttachBody()&&Terminal->GetAttachBody()!=Terminal->QueryBody()&&static_cast<FElysiumEntity*>(Button)->GetAttachBody()&&static_cast<FElysiumEntity*>(Button)->GetAttachBody()!=Button->QueryBody());
+ TestTrue(TEXT("production anchor projection retains terminal visual"),Map->FindUseVisual(Terminal->Handle)==Terminal->GetAttachBody());
+ TestEqual(TEXT("one physical terminal anchor"),Map->NumUseAnchors(Terminal->Handle),1);
+ auto Trace=[&](FElysiumEntity& Entity,UElysiumEntityQueryBox* Shape)
+ {
+  FElysiumRetailTrace Request; Request.StartCm=Shape->GetComponentLocation()-FVector(300,0,0); Request.EndCm=Request.StartCm+FVector(80*ElysiumMove::U,0,0); Request.RetailMask=0x0600408b;
+  FElysiumRetailTraceResult Hit; Map->TraceRetail(Request,Hit); TestTrue(TEXT("real native80 ray misses"),Hit.Fraction==1.f);
+  Request.EndCm=Request.StartCm+FVector(160*ElysiumMove::U,0,0); Map->TraceRetail(Request,Hit);
+  AddInfo(FString::Printf(TEXT("native producer trace name=%s owner=%s component=%s fraction=%g"),*Entity.TargetName,*Hit.HitEntity.ToString(),*GetPathNameSafe(Hit.HitComponent.Get()),Hit.Fraction));
+  TestTrue(TEXT("real native160 ray owner/component/fraction"),Hit.Fraction>0.f&&Hit.Fraction<1.f&&Hit.HitEntity==Entity.Handle&&Hit.HitComponent==Shape);
+ };
+ Trace(*Terminal,Terminal->QueryBody()); Trace(*Military,Military->QueryBody()); Trace(*Button,Button->QueryBody());
+ Fixture.SpawnPlayerControllerAndPawn(); if (!TestNotNull(TEXT("actual use pawn"),Fixture.Pawn)||!TestNotNull(TEXT("actual use controller"),Fixture.PlayerController)) return false;
+ Fixture.PlayerController->Possess(Fixture.Pawn); Fixture.PlayerController->SetControlRotation(FRotator::ZeroRotator);
+ FVector Eye; if (!TestTrue(TEXT("real use body eye"),Map->GetPlayerUseOrigin(Eye))) return false;
+ Fixture.Pawn->SetActorLocation(Fixture.Pawn->GetActorLocation()+Terminal->QueryBody()->GetComponentLocation()-FVector(300,0,0)-Eye);
+ Terminal->InputEnable(); auto Use=Map->QueryPlayerUse({});
+ TestTrue(TEXT("terminal fallback native query maps to current serial anchor"),Use.Candidates.Num()==1&&Use.Candidates[0].Owner==Terminal->Handle);
+ Fixture.Pawn->SetActorLocation(Fixture.Pawn->GetActorLocation()+FVector(150,0,0));
+ if (!TestTrue(TEXT("updated actual player use origin"),Map->GetPlayerUseOrigin(Eye))) return false;
+ FElysiumEntityDef WallDef; WallDef.Classname=TEXT("func_brush"); WallDef.TargetName=TEXT("terminal_sight_wall"); WallDef.Model=2; WallDef.Keys.Add(TEXT("model"),TEXT("*2")); WallDef.Origin=Eye+FVector(100,0,0); WallDef.Contents=1; WallDef.bBlocksPlayer=true;
+ FElysiumConvexHull WallHull; for (float X:{-3.f,3.f}) for (float Y:{-100.f,100.f}) for (float Z:{-100.f,100.f}) WallHull.Vertices.Add(FVector(X,Y,Z)); WallDef.Hulls.Add(WallHull);
+ const auto WallHandle=Entities->SpawnRuntimeEntity(MoveTemp(WallDef)); auto* WallEntity=Entities->Resolve(WallHandle);
+ if (!TestTrue(TEXT("real Sight wall native producer"),WallEntity&&WallEntity->Body&&WallEntity->Body->IsRegistered())) return false;
+ FElysiumRetailTrace Sight; Sight.StartCm=Eye; Sight.EndCm=Terminal->QueryBody()->GetComponentLocation(); Sight.RetailMask=0x02004089; FElysiumRetailTraceResult SightHit; Map->TraceRetail(Sight,SightHit);
+ TestTrue(TEXT("actual Sight wall owner component fraction"),SightHit.Fraction>0.f&&SightHit.Fraction<1.f&&SightHit.HitEntity==WallHandle&&SightHit.HitComponent==WallEntity->Body);
+ Use=Map->QueryPlayerUse({}); TestTrue(TEXT("real world Sight occlusion refuses terminal acquisition"),Use.Candidates.IsEmpty()); TestEqual(TEXT("actual occlusion outcome"),Use.MissOutcome,EElysiumUseOutcome::Occluded);
+ WallEntity->QueueRemove(); Entities->PurgeEntityRemovals();
+
+ Terminal->InputDisable(); Trace(*Terminal,Terminal->QueryBody());
+ // Valid player/cone enabled-to-disabled focus is covered by Elysium.Substrate.TerminalCone; this witness asserts native collision independently.
+ Terminal->InputEnable();
+ const FVector Extent=Terminal->QueryBody()->GetUnscaledBoxExtent();
+ Terminal->SetRuntimeAngles(FVector(0,90,0));
+ TestTrue(TEXT("terminal BBOX stays world-axis under visual rotation"),Terminal->QueryBody()->GetComponentQuat().Equals(FQuat::Identity)&&Terminal->QueryBody()->GetUnscaledBoxExtent().Equals(Extent));
+ Terminal->bNativeLocalPose=true; FVector NativeOrigin=Terminal->GetAbsOrigin()+FVector(120,20,30); Terminal->SetAbsOrigin(NativeOrigin);
+ FRotator NativeAngles(0,35,0); Terminal->SetAbsAngles(NativeAngles);
+ TestTrue(TEXT("native pose setter relinks terminal BBOX"),Terminal->QueryBody()->GetComponentLocation().Equals(NativeOrigin+FVector(Terminal->CollMins.X+Terminal->CollMaxs.X,-Terminal->CollMaxs.Y-Terminal->CollMins.Y,Terminal->CollMins.Z+Terminal->CollMaxs.Z)*(.5*ElysiumMove::U),.001));
+ Terminal->UtilSetSize(FVector(-4,-3,-2),FVector(8,9,10));
+ TestTrue(TEXT("actual bounds setter changes extent"),Terminal->QueryBody()->GetUnscaledBoxExtent().Equals(FVector(6,6,6)*ElysiumMove::U,.001));
+ Terminal->SetSolidFlags(static_cast<uint16>(Terminal->RetailSolidFlags|4u)); TestEqual(TEXT("solidflag setter gates query"),Terminal->QueryBody()->GetCollisionEnabled(),ECollisionEnabled::NoCollision);
+ Terminal->SetSolidFlags(0x80); Terminal->SetMoveType(0,1); const int32 MoveCollide=Terminal->RetailMoveCollide;
+ Terminal->SetRuntimeModel(TEXT("models/scenery/misc/militarycomputer/militarycomputer2.mdl"));
+ const auto* MilitaryInputs=UElysiumModelPhysicsInputs::Find(Prepared->StaticMesh(Ids[1],Error));
+ if (!TestNotNull(TEXT("replacement actual typed hull"),MilitaryInputs)||!TestNotNull(TEXT("replacement actual query"),Terminal->QueryBody())) return false;
+ TestTrue(TEXT("replacement changes native extent from typed new model"),Terminal->QueryBody()->GetUnscaledBoxExtent().Equals((MilitaryInputs->StudioMaxsCm-MilitaryInputs->StudioMinsCm)*.5,.001));
+ TestEqual(TEXT("replacement preserves flags"),Terminal->RetailSolidFlags,0x80u); TestEqual(TEXT("replacement preserves actual setter-canonicalized movement word"),Terminal->RetailMoveCollide,MoveCollide);
+ Terminal->ScriptHide(); TestEqual(TEXT("hide retires use publication"),Map->NumUseAnchors(Terminal->Handle),0); TestEqual(TEXT("hide gates native shape"),Terminal->QueryBody()->GetCollisionEnabled(),ECollisionEnabled::NoCollision);
+ Terminal->ScriptUnhide(); TestEqual(TEXT("unhide republishes exactly one physical anchor"),Map->NumUseAnchors(Terminal->Handle),1); TestTrue(TEXT("unhide retains real visual identity"),Map->FindUseVisual(Terminal->Handle)==Terminal->GetAttachBody());
+ Button->UtilSetSize(FVector(-2,-3,-4),FVector(4,5,6)); Button->bNativeLocalPose=true; FVector ButtonOrigin=Button->GetAbsOrigin()+FVector(10,20,30); Button->SetAbsOrigin(ButtonOrigin); FRotator ButtonAngles(0,90,0); Button->SetAbsAngles(ButtonAngles);
+ TestTrue(TEXT("button native bounds setter updates OBB extent"),Button->QueryBody()->GetUnscaledBoxExtent().Equals(FVector(3,4,5)*ElysiumMove::U,.001));
+ TestTrue(TEXT("button native angle setter rotates OBB"),Button->QueryBody()->GetComponentQuat().Equals(ElysiumModelPhysics::SourceRotation(Button->GetAbsAngles()),.001));
+ Entities->Activate(0.);
+ Button->UtilSetSize(FVector(100,-1,-1),FVector(102,1,1));
+ FElysiumEntityDef TouchDef; TouchDef.Classname=TEXT("trigger_multiple"); TouchDef.TargetName=TEXT("offset_query_touch"); TouchDef.Model=1; TouchDef.Keys.Add(TEXT("model"),TEXT("*1")); TouchDef.Origin=Button->QueryBody()->GetComponentLocation(); TouchDef.Keys.Add(TEXT("spawnflags"),TEXT("8"));
+ FElysiumConvexHull TouchHull; for (float X:{-1.f,1.f}) for (float Y:{-1.f,1.f}) for (float Z:{-1.f,1.f}) TouchHull.Vertices.Add(FVector(X,Y,Z)); TouchDef.Hulls.Add(TouchHull);
+ const auto TouchHandle=Entities->SpawnRuntimeEntity(MoveTemp(TouchDef)); auto* TouchEntity=Entities->Resolve(TouchHandle);
+ if (!TestTrue(TEXT("actual native trigger query shape admitted"),TouchEntity&&TouchEntity->Body&&TouchEntity->Body->IsRegistered())) return false;
+ Button->PhysicsTouchTriggers(); TestTrue(TEXT("native offset OBB geometry produces actual physical touch nodes"),Button->IsCurrentlyTouching()&&TouchEntity->IsCurrentlyTouching());
+ TouchEntity->QueueRemove(); Entities->PurgeEntityRemovals(); Button->UtilSetSize(FVector(-2,-3,-4),FVector(4,5,6));
+
+ Terminal->UtilSetSize(FVector(-4,-3,-2),FVector(8,9,10)); Terminal->SetOccludesSound(true);
+ Military->SetSolid(0); TestEqual(TEXT("actual Solid0 setter gates BBOX"),Military->QueryBody()->GetCollisionEnabled(),ECollisionEnabled::NoCollision);
+ const FVector SavedMins=Terminal->CollMins,SavedMaxs=Terminal->CollMaxs,SavedOrigin=Terminal->GetAbsOrigin();
+ FElysiumMapSnapshot Captured; Entities->Freeze(Captured); TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Save(Writer,FElysiumSaveVersion::Latest); Save<<Captured;
+ FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Load(Reader,FElysiumSaveVersion::Latest); Load<<Persisted;
+ if (!TestFalse(TEXT("actual archive decodes"),Load.IsError())) return false;
+ Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,Services)); Entities=Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(Defs));
+ if (!TestTrue(TEXT("actual query snapshot apply"),Entities->ApplySnapshot(Persisted,42.)>=0)) return false;
+ Entities->Activate(42.); Terminal=Entities->Entities()[0]->AsTerminal(); Military=Entities->Entities()[1]->AsTerminal(); Button=static_cast<FElysiumPropButton*>(Entities->Entities()[2].Get());
+ if (!TestNotNull(TEXT("restored terminal physical carrier"),Terminal->QueryBody())||!TestNotNull(TEXT("restored button physical carrier"),Button->QueryBody())) return false;
+ TestTrue(TEXT("restore uses saved arbitrary bounds rather than source header"),Terminal->CollMins==SavedMins&&Terminal->CollMaxs==SavedMaxs&&Terminal->QueryBody()->GetUnscaledBoxExtent().Equals(FVector(6)*ElysiumMove::U,.001));
+ TestTrue(TEXT("restore preserves semantic native absolute pose"),Terminal->GetAbsOrigin().Equals(SavedOrigin,.001));
+ TestEqual(TEXT("restore flags"),Terminal->RetailSolidFlags,0x80u); TestTrue(TEXT("non-default actual OccludesSound SAVE roundtrip"),Terminal->OccludesSound()); TestFalse(TEXT("button false SAVE roundtrip"),Button->OccludesSound());
+ TestNull(TEXT("saved Solid0 does not invent physical carrier"),Military->QueryBody());
+ TestTrue(TEXT("saved Solid0 retains real visual presentation record"),Military->GetAttachBody()&&Map->FindUseVisual(Military->Handle)==Military->GetAttachBody());
+ TestEqual(TEXT("saved Solid0 visual-only record deduplicates"),Map->NumUseAnchors(Military->Handle),1);
+
+ Terminal->OnRuntimeModelAdmitted();
+ TestTrue(TEXT("restored late native model admission retains saved bounds"),Terminal->CollMins==SavedMins&&Terminal->CollMaxs==SavedMaxs&&Terminal->QueryBody()&&Terminal->QueryBody()->GetUnscaledBoxExtent().Equals(FVector(6)*ElysiumMove::U,.001));
+ TestEqual(TEXT("late restored admission deduplicates physical publication"),Map->NumUseAnchors(Terminal->Handle),1);
+ TestEqual(TEXT("restore one current physical anchor"),Map->NumUseAnchors(Terminal->Handle),1); TestTrue(TEXT("restore physical/visual separation"),Map->FindUseVisual(Terminal->Handle)==Terminal->GetAttachBody()&&Terminal->GetAttachBody()!=Terminal->QueryBody());
+ const FElysiumEntityHandle OldHandle=Terminal->Handle; TWeakObjectPtr<UElysiumEntityQueryBox> OldShape=Terminal->QueryBody();
+ Terminal->QueueRemove(); Entities->PurgeEntityRemovals(); TestNull(TEXT("old serial cannot resolve after removal"),Entities->Resolve(OldHandle)); TestEqual(TEXT("removal unregisters physical anchor"),Map->NumUseAnchors(OldHandle),0);
+ TestTrue(TEXT("removed query owner cleared"),!OldShape.IsValid()||!OldShape->Entity.IsSet());
+ return true;
+}
+#endif // ELYSIUM_WITH_ARM_TESTS
+
+#if ELYSIUM_WITH_ARM_TESTS
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSwitchCoupledTest, "Elysium.Arm.ModelPhysics.SwitchCoupled",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumSwitchCoupledTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	if (!TestNotNull(TEXT("real native owner"), Map)) return false;
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> Ids = { TEXT("vtmb:model:scenery/structural/switches/switch"), ElysiumModelPhysicsTest::BodyId,
+		TEXT("vtmb:model:scenery/vehicles/lightningbird/trunklid") };
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+	const auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+	if (!TestTrue(TEXT("actual selected/native .phy prepared producer"), Prepared.IsValid())) return false;
+	FElysiumEntityDefs Core;
+	if (!TestTrue(TEXT("actual tutorial entity data"), ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"), Core) != EElysiumEntityDefSource::None)) return false;
+	if (!TestTrue(TEXT("actual tutorial697 switch placement"), Core.Defs.IsValidIndex(697) && Core.Defs[697].Classname == TEXT("prop_switch"))) return false;
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("switch_coupled_native"); Defs.Defs.Add(Core.Defs[697]);
+	Defs.Defs.Add(ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("pair_a")));
+	Defs.Defs.Add(ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("pair_b")));
+	Defs.Defs[1].Origin = FVector(5000, 5000, 5000); Defs.Defs[2].Origin = FVector(5050, 5000, 5000);
+	FElysiumEntityDef Hinge; Hinge.Classname = TEXT("phys_hinge"); Hinge.TargetName = TEXT("pair_owner");
+	Hinge.Keys.Add(TEXT("attach1"), TEXT("pair_a")); Hinge.Keys.Add(TEXT("attach2"), TEXT("pair_b")); Hinge.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+	const auto& ActualCues=ElysiumSoundGroups::Resolve(ElysiumSoundGroups::Switches,Core.Defs[697].Keys.FindRef(TEXT("soundgroup")));
+	const auto* AuthoredBreakSound=ActualCues.Find(TEXT("on")); const auto* SavedBreakSound=ActualCues.Find(TEXT("off"));
+	if (!TestNotNull(TEXT("deployed authored break sound stimulus"),AuthoredBreakSound) || !TestNotNull(TEXT("deployed saved break sound stimulus"),SavedBreakSound)) return false;
+	Hinge.Keys.Add(TEXT("breaksound"),*AuthoredBreakSound);
+	FElysiumOutputDef BreakOutput; BreakOutput.Name=TEXT("OnBreak"); BreakOutput.Target=TEXT("pair_b"); BreakOutput.Input=TEXT("Wake"); Hinge.Outputs.Add(BreakOutput);
+	Hinge.Origin = FVector(5000,5000,5000); Hinge.HingeAxis = FVector::UpVector; Defs.Defs.Add(Hinge);
+	Hinge.TargetName = TEXT("shared_owner"); Defs.Defs.Add(Hinge);
+	Defs.Defs.Add(ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("pair_alias")));
+	Defs.Defs.Last().Origin = FVector(5500,5000,5000);
+	// Real prepared native sequence0 model with no idle_on/idle_off: source descriptor fallback.
+	for (const auto& Name : { TEXT("fallback_zero"), TEXT("fallback_rate") })
+	{
+		auto Fallback = Core.Defs[697]; Fallback.TargetName = Name; Fallback.Origin = FVector(8000+(Defs.Defs.Num()-6)*200,8000,8000);
+		Fallback.ModelMesh = TEXT("models/scenery/vehicles/lightningbird/trunklid.mdl"); Fallback.Keys.Add(TEXT("model"),Fallback.ModelMesh);
+		Fallback.Keys.Add(TEXT("reset_state"),FCString::Strcmp(Name,TEXT("fallback_zero"))==0 ? TEXT("1") : TEXT("2"));
+		Defs.Defs.Add(Fallback);
+	}
+	FElysiumEntityDef PlayerDef; PlayerDef.Classname=TEXT("player"); Defs.Defs.Add(PlayerDef);
+	ElysiumSwitchNativeTest::FOrderedAudio AudioWitness;
+	FElysiumWorldServices Services; Services.Embodiment = Map; Services.Audio = &AudioWitness;
+	Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map, nullptr, Services));
+	auto* Entities = Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(Defs));
+	auto* SwitchEntity = Entities->Entities()[0].Get(); //retail697 has no targetname
+	if (!TestNotNull(TEXT("actual tutorial switch entity retained after Spawn"), SwitchEntity)) return false;
+	auto* Switch = SwitchEntity->AsPropSwitch();
+	if (!TestNotNull(TEXT("registered actual switch Spawn"), Switch) || !TestNotNull(TEXT("owned Source-header native OBB"), Switch->QueryBody())) return false;
+	TestTrue(TEXT("ordinary semantic physics remains null"), Switch->VPhysicsGetObject() == nullptr);
+	TestEqual(TEXT("whole Spawn solid/group/effects"), Switch->GetSolid(), 3);
+	TestEqual(TEXT("actual debris group1"), Switch->CollisionGroup, 1);
+	TestEqual(TEXT("switch effects assigns A0"), Switch->EffectsWord, 0xa0u);
+	TestEqual(TEXT("base rest NextThink0 before Activate"), Switch->NextThink, 0.f);
+	Fixture.SpawnPlayerControllerAndPawn();
+	if (!TestNotNull(TEXT("actual use player controller"),Fixture.PlayerController) || !TestNotNull(TEXT("actual use pawn"),Fixture.Pawn)) return false;
+	Fixture.PlayerController->Possess(Fixture.Pawn); Fixture.PlayerController->SetControlRotation(FRotator::ZeroRotator);
+	FVector UseEye; if (!TestTrue(TEXT("actual use eye resolves"),Map->GetPlayerUseOrigin(UseEye))) return false;
+	Fixture.Pawn->SetActorLocation(Fixture.Pawn->GetActorLocation()+Switch->QueryBody()->GetComponentLocation()-FVector(150,0,0)-UseEye);
+	const auto UseResult=Map->QueryPlayerUse({});
+	TestTrue(TEXT("actual native player use80 mask/pass/group resolves owned switch shape"),UseResult.Candidates.Num()==1 && UseResult.Candidates[0].Owner==Switch->Handle);
+	const FQuat Rotation = ElysiumModelPhysics::SourceRotation(Switch->GetAbsAngles());
+	const FVector Center = Switch->QueryBody()->GetComponentLocation();
+	FElysiumRetailTrace Request; Request.StartCm = Center + Rotation.RotateVector(FVector(-30,0,0)); Request.EndCm = Center + Rotation.RotateVector(FVector(30,0,0));
+	Request.RetailMask = 0x0600408b;
+	FElysiumRetailTraceResult Hit;
+	Map->TraceRetail(Request, Hit);
+	TestTrue(TEXT("native rotated ray attributed to current owner and component"), Hit.Fraction < 1.f && Hit.HitEntity == Switch->Handle && Hit.HitComponent == Switch->QueryBody() && Hit.HitActor == Map);
+	Request.MinsCm = FVector(-.5); Request.MaxsCm = FVector(.5); Map->TraceRetail(Request, Hit);
+	TestTrue(TEXT("native hull sweep exact attribution"), Hit.Fraction < 1.f && Hit.HitEntity == Switch->Handle && Hit.HitComponent == Switch->QueryBody());
+	Request.StartCm = Request.EndCm = Center; Map->TraceRetail(Request, Hit);
+	TestTrue(TEXT("native overlap exact attribution"), Hit.bStartSolid && Hit.HitEntity == Switch->Handle && Hit.HitComponent == Switch->QueryBody());
+	Request.RetailMask &= ~0x04000000; Map->TraceRetail(Request, Hit);
+	TestFalse(TEXT("candidate91 group1 negative before bilateral"), Hit.bStartSolid);
+	Request.RetailMask = 0x0600408b; Request.PassEntity = Switch->Handle; Map->TraceRetail(Request, Hit);
+	TestFalse(TEXT("actual pass self exclusion"), Hit.bStartSolid);
+	Request.PassEntity = {}; Request.SecondEntity = Switch->Handle; Map->TraceRetail(Request, Hit);
+	TestFalse(TEXT("actual second exclusion distinct from pass"), Hit.bStartSolid);
+	Request.SecondEntity = {}; Switch->ScriptHide(); Map->TraceRetail(Request, Hit);
+	TestFalse(TEXT("hidden owned shape refuses native query"), Hit.bStartSolid); Switch->ScriptUnhide();
+	TestEqual(TEXT("switch unhide retains one current physical anchor"),Map->NumUseAnchors(Switch->Handle),1);
+	TestTrue(TEXT("switch physical use publication preserves visual attachment frame"),Map->FindUseVisual(Switch->Handle)==static_cast<FElysiumEntity*>(Switch)->GetAttachBody() && static_cast<FElysiumEntity*>(Switch)->GetAttachBody()!=Switch->QueryBody());
+	Entities->Activate(0.);
+	TestEqual(TEXT("idle own callback clock"), Switch->NextThink, .05f);
+	auto* First = Entities->FindByName(TEXT("pair_a")); auto* Second = Entities->FindByName(TEXT("pair_b"));
+	auto* Owner = static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("pair_owner")));
+	if (!TestNotNull(TEXT("actual Chaos constraint producer"), Owner->Constraint)
+		|| !TestNotNull(TEXT("actual first GameData native body"), First->VPhysicsGetObject()) || !TestNotNull(TEXT("actual second GameData native body"), Second->VPhysicsGetObject())) return false;
+	TestTrue(TEXT("real owner Activate publishes translated pair"), Entities->CollisionPairs().ContainsEntities(First->Handle, Second->Handle));
+	Owner->InputTurnOff({}); TestFalse(TEXT("TurnOff removes pair and retains native owner"), Entities->CollisionPairs().ContainsEntities(First->Handle,Second->Handle));
+	TestNotNull(TEXT("TurnOff native constraint remains"), Owner->Constraint);
+	Owner->InputTurnOn({}); TestTrue(TEXT("TurnOn exact existing-native publication"), Entities->CollisionPairs().ContainsEntities(First->Handle,Second->Handle));
+	TestTrue(TEXT("TurnOn does not invent re-enable"), Owner->Constraint->IsBroken());
+	const auto Former = ElysiumModelPhysics::CaptureIdentity(First->VPhysicsGetObject());
+	TestEqual(TEXT("actual authored FIELD_SOUNDNAME key"),Owner->BreakSound,*AuthoredBreakSound);
+	Owner->Precache();
+	TestTrue(TEXT("inherited Precache forwards the authored raw sound path"),AudioWitness.Data.Log().Contains(TEXT("Prefetch ")+*AuthoredBreakSound));
+	TestTrue(TEXT("real datamap sound write differs from authored baseline"),Owner->KeyValue(TEXT("breaksound"),**SavedBreakSound));
+	static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("shared_owner")))->KeyValue(TEXT("breaksound"),**SavedBreakSound);
+	auto* Alias = Entities->FindByName(TEXT("pair_alias"));
+	AddExpectedError(TEXT("Overwriting physics object for prop_physics"),EAutomationExpectedErrorFlags::Contains,1);
+	First->VPhysicsSetObject(Alias->VPhysicsGetObject()); //actual registered current-field writer; constraint retains former output
+	TestTrue(TEXT("actual mutable current field differs from registered constraint endpoint"), First->VPhysicsGetObject() != Former.Actor && ElysiumModelPhysics::IsCurrentOutput(Former));
+	const auto Ready = ElysiumPreparedProps::ForOwner(Map);
+	const auto* ActivateClip = Ready->Clip(Ids[0],TEXT("activate"),Error);
+	if (!TestNotNull(TEXT("actual source transition descriptor"), ActivateClip)) return false;
+	bool BeforeActivated=Switch->bActivated; int32 BeforeSequence=Switch->SequenceIndex; int32 SoundOrderCalls=0;
+	AudioWitness.BeforeBody=[&]() { ++SoundOrderCalls; TestTrue(TEXT("body sound precedes Activated and sequence writes"),Switch->bActivated==BeforeActivated && Switch->SequenceIndex==BeforeSequence); };
+	Switch->InputDeactivate({}); //actual tutorial Spawn starts activated
+	BeforeActivated=Switch->bActivated; BeforeSequence=Switch->SequenceIndex;
+	Switch->InputActivate({});
+	AudioWitness.BeforeBody={}; TestEqual(TEXT("each actual state change emits one ordered body sound"),SoundOrderCalls,2);
+	TestTrue(TEXT("actual switch sound resolver uses body owner/channel2,volume1,pitch100,attenuation1.25 before sequence change"),
+		AudioWitness.Data.BodySounds.Num()>0 && AudioWitness.Data.BodySoundOwners.Last()==Switch->Handle && AudioWitness.Data.BodySounds.Last().Channel==EElysiumSoundChannel::Voice
+		&& AudioWitness.Data.BodySounds.Last().Volume==1.f && AudioWitness.Data.BodySounds.Last().SoundLevelDb==66 && AudioWitness.Data.BodySounds.Last().Pitch==1.f);
+	TestEqual(TEXT("required SetState writes the actual transition sequence index"),Switch->SequenceIndex,ActivateClip->Index);
+	TestEqual(TEXT("transition helper schedules .05, not presentation-length synchronous output"),Switch->NextThink,.05f);
+	Switch->SequenceCycle = .375f; Switch->SequenceCycleRate = 2.f;
+	Switch->SetSequencePlaybackRate(.25f); //adversarial real saved playback word
+	Switch->SequenceAnimTime = .2f; Switch->SequencePrevAnimTime = .1f;
+	Switch->Skin = 7; Switch->bActivated = false;
+	Switch->SpawnFlags |= 0x8000; //saved solid/bounds already exist; Spawn's constructor gate cannot veto restore
+	for (const auto& Name : { TEXT("fallback_zero"), TEXT("fallback_rate") })
+	{
+		auto* Fallback = Entities->FindByName(Name)->AsPropSwitch();
+		Fallback->SequenceCycle=.3f; Fallback->SequenceCycleRate=.3f; Fallback->SetSequencePlaybackRate(FCString::Strcmp(Name,TEXT("fallback_zero"))==0 ? 0.f : .25f);
+		Fallback->bActivated=FCString::Strcmp(Name,TEXT("fallback_zero"))==0;
+		Fallback->SequenceAnimTime=.1f; Fallback->SequencePrevAnimTime=.1f; Fallback->Think();
+		TestEqual(TEXT("native missing-idle fallback retains numeric sequence0"),Fallback->SequenceIndex,0);
+	}
+	const FVector OriginalSwitchMins=Switch->CollMins,OriginalSwitchMaxs=Switch->CollMaxs;
+	const uint16 OriginalSwitchFlags=static_cast<uint16>(Switch->RetailSolidFlags);
+	Switch->UtilSetSize(FVector(-2,-3,-4),FVector(4,5,6)); Switch->SetSolidFlags(0x80);
+	const float SavedSwitchRadius=Switch->CollisionRadius;
+	FElysiumMapSnapshot Snapshot; Entities->Freeze(Snapshot);
+	TestEqual(TEXT("shared former endpoint captured once as typed CUSTOM record"),Snapshot.PhysicsBodies.FilterByPredicate([](const auto& Row){return Row.FieldName.StartsWith(TEXT("m_pConstraint."));}).Num(),1);
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Save(Writer,FElysiumSaveVersion::Latest); Save << Snapshot;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Load(Reader,FElysiumSaveVersion::Latest); Load << Persisted; Persisted.PhysicsBodies.Reset();
+	Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,Services));
+	Entities = Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(Defs));
+	// Saved-present owner must be reconstructed even when its authored baseline native is absent.
+	auto* Shared = static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("shared_owner")));
+	Shared->Constraint->DestroyComponent(); Shared->Constraint = nullptr;
+	bool Applied = false; Entities->OnSnapshotApplied = [&]()
+	{
+		Applied = true; TestEqual(TEXT("reverse restore fence has no premature forward publication"), Entities->CollisionPairs().Num(), 0);
+		TestEqual(TEXT("independent saved skin at applied fence"), Entities->Entities()[0]->AsPropSwitch()->Skin, 7);
+	};
+	if (!TestTrue(TEXT("real native Physics and owner state restore"), Entities->ApplySnapshot(Persisted,42.) >= 0)) return false;
+	Entities->Activate(42.);
+	First = Entities->FindByName(TEXT("pair_a")); Second = Entities->FindByName(TEXT("pair_b"));
+	Owner = static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("pair_owner")));
+	TestTrue(TEXT("actual later activation fence restores nonempty real owner membership"), Applied && Entities->CollisionPairs().ContainsEntities(First->Handle,Second->Handle));
+	TestTrue(TEXT("actual native contact relation uses restored incarnations"), Entities->CollisionPairs().ContainsObjects(First->VPhysicsGetObject(),Second->VPhysicsGetObject()));
+	TestTrue(TEXT("saved disabled native constraint preserved"), Owner->Constraint && Owner->Constraint->IsBroken());
+	FElysiumRetailTrace PairTrace; const FVector PairCenter=ElysiumModelPhysics::ComponentFor(Second->VPhysicsGetObject())->Bounds.Origin;
+	PairTrace.StartCm=PairCenter-FVector(60,0,0); PairTrace.EndCm=PairCenter+FVector(60,0,0); PairTrace.PassEntity=First->Handle; PairTrace.RetailMask=0x0600408b;
+	Map->TraceRetail(PairTrace,Hit); TestTrue(TEXT("actual prop candidate68 consumes restored entity relation in native Simple"),Hit.Fraction==1.f);
+	PairTrace.RetailMask=0x46004003; Map->TraceRetail(PairTrace,Hit);
+	TestTrue(TEXT("exact special mask skips bilateral only and reaches same native prop"),Hit.Fraction<1.f && Hit.HitEntity==Second->Handle);
+	Shared = static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("shared_owner")));
+	TestEqual(TEXT("breaksound SAVE roundtrip through actual archive and entity datamap"),Shared->BreakSound,*SavedBreakSound);
+	UPrimitiveComponent* Bound1 = nullptr; UPrimitiveComponent* Bound2 = nullptr; FName Bone1, Bone2;
+	Owner->Constraint->GetConstrainedComponents(Bound1,Bone1,Bound2,Bone2);
+	const auto RestoredFormer = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Bound1));
+	TestTrue(TEXT("native restored endpoint retains former actual GameData owner and differs from current field"),ElysiumModelPhysics::GameDataFor(RestoredFormer,*Entities)==First && RestoredFormer.Actor != First->VPhysicsGetObject());
+	UPrimitiveComponent* Shared1 = nullptr; UPrimitiveComponent* Shared2 = nullptr;
+	Shared->Constraint->GetConstrainedComponents(Shared1,Bone1,Shared2,Bone2);
+	TestTrue(TEXT("real second owner reconstructs null baseline and shares exact native endpoint"),Shared->Constraint && Shared1==Bound1 && Shared2==Bound2);
+	Owner->QueueRemove(); Entities->PurgeEntityRemovals();
+	TestTrue(TEXT("canonical constraint removal retains shared producer native lifetime"),!Owner->Constraint && ElysiumModelPhysics::IsCurrentOutput(RestoredFormer));
+	TestTrue(TEXT("surviving native constraint remains bound to same output"),Shared->Constraint && !Shared->Constraint->IsBroken());
+	Switch = Entities->Entities()[0]->AsPropSwitch();
+	TestTrue(TEXT("switch embedded GLOBAL|SAVE bounds and SHORT flags survive actual archive"),Switch->CollMins==FVector(-2,-3,-4) && Switch->CollMaxs==FVector(4,5,6) && Switch->RetailSolidFlags==0x80u && Switch->CollisionRadius==SavedSwitchRadius);
+	TestTrue(TEXT("switch restore rebuild consumes saved arbitrary native OBB"),Switch->QueryBody() && Switch->QueryBody()->GetUnscaledBoxExtent().Equals(FVector(3,4,5)*ElysiumMove::U,.001));
+	Switch->UtilSetSize(OriginalSwitchMins,OriginalSwitchMaxs); Switch->SetSolidFlags(OriginalSwitchFlags);
+	TestEqual(TEXT("Activate leaves saved skin independent"), Switch->Skin, 7);
+	TestTrue(TEXT("saved owned OBB rebuild does not reapply Spawn8000 gate"),Switch->QueryBody() && Switch->GetSolid()==3 && (Switch->SpawnFlags&0x8000)!=0);
+	TestEqual(TEXT("later own idle due clock"), Switch->NextThink, 42.05f);
+	const auto* IdleOff = Ready->Clip(Ids[0],TEXT("idle_off"),Error);
+	TestTrue(TEXT("forward Activate resolves real idle identity and resets valid source state"),IdleOff && Switch->SequenceIndex==IdleOff->Index && Switch->SequenceCycle==0.f && Switch->SequencePlaybackRate()==1.f && !Switch->bSequenceFinished);
+	auto NativeIgnoreProbe = [&](void* Actor, void* Partner, double Clock)
+	{
+		auto* A=static_cast<Chaos::FSingleParticlePhysicsProxy*>(Actor); auto* B=static_cast<Chaos::FSingleParticlePhysicsProxy*>(Partner);
+		auto* Solver=A->GetSolver<Chaos::FPBDRigidsSolver>();
+		auto* Probe=Solver->CreateAndRegisterSimCallbackObject_External<ElysiumSwitchNativeTest::FPairProbe>();
+		Probe->GetProducerInputData_External()->First=A->GetGameThreadAPI().UniqueIdx();
+		Probe->GetProducerInputData_External()->Second=B->GetGameThreadAPI().UniqueIdx();
+		Entities->BeginNativePhysicsFrame(Clock,.02);
+		ElysiumModelPhysics::PreparePhysicsFrame(*Fixture.World,.02f,1.f,true); //the production map host's native pre-solve half
+		if (!Fixture.TestWorld.TickTestWorld(.02f)) AddError(TEXT("actual native pair projection frame failed"));
+		Entities->FinishNativePhysicsFrame();
+		bool bRan=false,bIgnored=false;
+		while (auto Output=Probe->PopOutputData_External()) { bRan=true; bIgnored=Output->bIgnored; }
+		Solver->UnregisterAndFreeSimCallbackObject_External(Probe);
+		TestTrue(TEXT("native manager observer executed after actual first solve"),bRan);
+		return bIgnored;
+	};
+	// Move the independent current alias into the second real .phy body through the entity's native transform producer.
+	Shared->InputTurnOff({}); //retain the disabled native hinge; first prove the isolated pair produces contact
+	ElysiumModelPhysics::ComponentFor(RestoredFormer.Actor)->SetWorldLocation(FVector(7000,7000,7000),false,nullptr,ETeleportType::TeleportPhysics);
+	const auto* SecondContactBody=ElysiumModelPhysics::ComponentFor(Second->VPhysicsGetObject());
+	const FTransform AliasContactPose(SecondContactBody->GetComponentQuat(),SecondContactBody->GetComponentLocation()+FVector(2,0,0),SecondContactBody->GetComponentScale());
+	ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(First->VPhysicsGetObject()))->SetBodyTransform(AliasContactPose,ETeleportType::TeleportPhysics);
+	static_cast<FElysiumPhysProp*>(First)->InputWake({});
+	static_cast<FElysiumPhysProp*>(Second)->InputWake({});
+	void* ContactPartner=nullptr;
+	TestFalse(TEXT("native unexcluded alias baseline has no adapter manager contribution"),NativeIgnoreProbe(First->VPhysicsGetObject(),Second->VPhysicsGetObject(),42.));
+	TestTrue(TEXT("isolated actual overlapping native outputs produce selected pair contact before exclusion"),ElysiumModelPhysics::GetContactPoint(First->VPhysicsGetObject(),ContactPartner) && ContactPartner==Second->VPhysicsGetObject());
+	Shared->InputTurnOn({}); //actual owner publication does not re-enable native constraint solving
+	ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(First->VPhysicsGetObject()))->SetBodyTransform(AliasContactPose,ETeleportType::TeleportPhysics);
+	static_cast<FElysiumPhysProp*>(First)->InputWake({});
+	TestTrue(TEXT("real native manager excludes reconstructed current alias through actual GameData relation"),NativeIgnoreProbe(First->VPhysicsGetObject(),Second->VPhysicsGetObject(),42.02));
+	FString ContactEvidence; const bool bExcludedContact=ElysiumModelPhysics::GetContactPoint(First->VPhysicsGetObject(),ContactPartner,&ContactEvidence);
+	AddInfo(FString::Printf(TEXT("excluded native alias contact: result=%d partner=%s evidence=%s first=%s second=%s former=%s"),bExcludedContact,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(ContactPartner)),*ContactEvidence,
+		*ElysiumModelPhysics::ComponentFor(First->VPhysicsGetObject())->GetComponentLocation().ToString(),*ElysiumModelPhysics::ComponentFor(Second->VPhysicsGetObject())->GetComponentLocation().ToString(),*ElysiumModelPhysics::ComponentFor(RestoredFormer.Actor)->GetComponentLocation().ToString()));
+	TestFalse(TEXT("actual solver suppresses contact for overlapping current alias while entity pair is excluded"),bExcludedContact);
+	Shared->InputTurnOff({}); TestEqual(TEXT("final logical pair removal"),Entities->CollisionPairs().Num(),0);
+	TestFalse(TEXT("former endpoint aliases no longer logically excluded after last remove"),Entities->CollisionPairs().ContainsObjects(RestoredFormer.Actor,Second->VPhysicsGetObject()));
+	ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(First->VPhysicsGetObject()))->SetBodyTransform(AliasContactPose,ETeleportType::TeleportPhysics);
+	static_cast<FElysiumPhysProp*>(First)->InputWake({});
+	TestFalse(TEXT("final-pair remove clears actual native current-alias manager projection"),NativeIgnoreProbe(First->VPhysicsGetObject(),Second->VPhysicsGetObject(),42.04));
+	const bool bRemovedContact=ElysiumModelPhysics::GetContactPoint(First->VPhysicsGetObject(),ContactPartner,&ContactEvidence);
+	AddInfo(FString::Printf(TEXT("removed native alias contact: result=%d partner=%s evidence=%s"),bRemovedContact,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(ContactPartner)),*ContactEvidence));
+	TestTrue(TEXT("removing final entity pair admits real native alias contact"),bRemovedContact && ContactPartner==Second->VPhysicsGetObject());
+	TArray<float> RestoredFallbackCycles;
+	auto NativeFallback=[&](FElysiumPropSwitch& Fallback) -> USkeletalMeshComponent*
+	{
+		TArray<USkeletalMeshComponent*> Components; Map->GetComponents(Components);
+		for (auto* Component : Components) if (Component && Component->IsRegistered() && Component->GetComponentLocation().Equals(Fallback.GetAbsOrigin(),.01)) return Component;
+		return nullptr;
+	};
+	const auto* FallbackDescriptor=Ready->Model(Ids[2],Error);
+	const auto* FallbackClip=FallbackDescriptor ? FallbackDescriptor->Clips.FindByPredicate([](const auto& Clip){return Clip.Index==0;}) : nullptr;
+	if (!TestNotNull(TEXT("actual native fallback source descriptor"),FallbackClip)) return false;
+	const float FallbackLength=static_cast<float>((FallbackClip->Frames-1)/FallbackClip->Fps);
+	for (const auto& Name : { TEXT("fallback_zero"), TEXT("fallback_rate") })
+	{
+		auto* Fallback = Entities->FindByName(Name)->AsPropSwitch();
+		const float Rate = FCString::Strcmp(Name,TEXT("fallback_zero"))==0 ? 0.f : .25f;
+		TestTrue(TEXT("actual no-idle model restores saved cycle/rate and numeric sequence0 through forward activation"),Fallback->SequenceIndex==0 && FMath::IsNearlyEqual(Fallback->SequenceCycle,.3f) && Fallback->SequencePlaybackRate()==Rate);
+		TestEqual(TEXT("ordinary restore bool keeps Activated despite reset_state key"),Fallback->bActivated,Rate==0.f);
+		RestoredFallbackCycles.Add(Fallback->SequenceCycle);
+		const auto Body=NativeFallback(*Fallback);
+		AddInfo(FString::Printf(TEXT("fallback native representation: owner=%s skeletal=%s host=%s staticEligible=%d"),Name,*GetPathNameSafe(Body),*GetPathNameSafe(Body ? Body->GetAnimInstance() : nullptr),FallbackDescriptor->CanUseStatic(false)));
+		const auto* NativeHost=Body ? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
+		if (!TestTrue(TEXT("actual registered fallback skeletal component and production animation host"),Body && NativeHost)) return false;
+		Body->TickAnimation(0.f,false); Body->RefreshBoneTransforms(); //commit the production host's requested clip without advancing game time
+		FElysiumClipPhase NativePlayback; const bool bPlayback=NativeHost->GetClipPhase(EElysiumAnimChannel::Base,NativePlayback);
+		float NativePhase=0.f; Map->GetCinematicClipPosition(Body,NativePhase);
+		AddInfo(FString::Printf(TEXT("fallback native playback: owner=%s valid=%d position=%g expected=%g rate=%g expectedRate=%g cycle=%g label=%s"),Name,bPlayback,NativePhase,Fallback->SequenceCycle*FallbackLength,NativePlayback.PlayRate,Rate,NativePlayback.Cycle,*NativePlayback.Label));
+		TestTrue(TEXT("native fallback idle seeks actual saved source cycle and playback"),bPlayback && FMath::IsNearlyEqual(NativePhase,Fallback->SequenceCycle*FallbackLength,.001f) && NativePlayback.PlayRate==Rate);
+	}
+	Entities->Tick(42.1);
+	int32 FallbackIndex = 0;
+	for (const auto& Name : { TEXT("fallback_zero"), TEXT("fallback_rate") })
+	{
+		auto* Fallback = Entities->FindByName(Name)->AsPropSwitch();
+		const float Before = RestoredFallbackCycles[FallbackIndex++];
+		TestTrue(TEXT("subsequent real Think preserves zero and applies nonunit saved playback without resetting phase"),
+			Fallback->SequencePlaybackRate()==0.f ? Fallback->SequenceCycle==Before : Fallback->SequenceCycle>Before && Fallback->SequenceCycle<Before+.1f);
+		const auto Body=NativeFallback(*Fallback); if (Body) { Body->TickAnimation(0.f,false); Body->RefreshBoneTransforms(); } float NativePhase=0.f; Map->GetCinematicClipPosition(Body,NativePhase);
+		const auto* NativeHost=Body ? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr; FElysiumClipPhase NativePlayback;
+		TestTrue(TEXT("subsequent Think keeps native source phase/rate coherent"),NativeHost && NativeHost->GetClipPhase(EElysiumAnimChannel::Base,NativePlayback) && FMath::IsNearlyEqual(NativePhase,Fallback->SequenceCycle*FallbackLength,.001f) && NativePlayback.PlayRate==Fallback->SequencePlaybackRate());
+	}
+	Switch->InputActivate({}); Switch->SequenceCycle=.99f; Switch->SequenceCycleRate=1.f; Switch->SetSequencePlaybackRate(1.f);
+	Switch->SequenceAnimTime=42.1f; Switch->SequencePrevAnimTime=42.f; Switch->bSequenceFinished=false;
+	Switch->Think(); TestTrue(TEXT("frame advance latches completion without prematurely writing skin"),Switch->bSequenceFinished && Switch->Skin==7);
+	Switch->Think(); TestEqual(TEXT("next Think consumes preexisting transition identity and writes skin1"),Switch->Skin,1);
+	// Production finite native scene: thirteen retail group1 refusals before a real admitted body.
+	for (int32 Index=0;Index<13;++Index)
+	{
+		auto Refused=Core.Defs[697]; Refused.TargetName=FString::Printf(TEXT("refused_%d"),Index);
+		Refused.Origin=FVector(20000+Index*30,20000,20000); Refused.ModelQuat=FQuat::Identity; Refused.Keys.Add(TEXT("angles"),TEXT("0 0 0"));
+		Entities->SpawnRuntimeEntity(Refused);
+	}
+	auto AdmittedDef=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"),TEXT("after_thirteen")); AdmittedDef.Origin=FVector(20450,20000,20000);
+	auto Admitted=Entities->SpawnRuntimeEntity(AdmittedDef);
+	Request={}; Request.StartCm=FVector(19900,20000,20000); Request.EndCm=FVector(20600,20000,20000); Request.RetailMask=0x0200408b;
+	Map->TraceRetail(Request,Hit);
+	TestTrue(TEXT("native Simple progress reaches admitted candidate beyond eight refused owners"),Hit.Fraction<1.f && Hit.HitEntity==Admitted);
+	// Real registered callbacks on a prepared static-model native output; only callback actions are adversarial.
+	auto ProbeDef=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"),TEXT("candidate"));
+	ProbeDef.Classname=TEXT("elysium_test_switch_filter"); ProbeDef.Keys.Add(TEXT("solid"),TEXT("6")); ProbeDef.Origin=FVector(25000,25000,25000);
+	const auto CandidateHandle=Entities->SpawnRuntimeEntity(ProbeDef);
+	auto* Candidate=static_cast<ElysiumSwitchNativeTest::FFilterProbe*>(Entities->Resolve(CandidateHandle));
+	if (!TestNotNull(TEXT("callback candidate actual native output"),Candidate->VPhysicsGetObject())) return false;
+	const auto CandidateComponent=ElysiumModelPhysics::ComponentFor(Candidate->VPhysicsGetObject());
+	const FVector CandidateCenter=CandidateComponent->Bounds.Origin;
+	Request={}; Request.StartCm=CandidateCenter-FVector(60,0,0); Request.EndCm=CandidateCenter+FVector(60,0,0); Request.RetailMask=0x0600408b;
+	for (int32 Arm=0;Arm<3;++Arm)
+	{
+		ProbeDef.TargetName=TEXT("pass"); ProbeDef.Origin=FVector(26000+Arm*100,25000,25000);
+		const auto PassHandle=Entities->SpawnRuntimeEntity(ProbeDef);
+		auto* Pass=static_cast<ElysiumSwitchNativeTest::FFilterProbe*>(Entities->Resolve(PassHandle));
+		Request.PassEntity=PassHandle; ElysiumSwitchNativeTest::FilterCalls.Reset();
+		Candidate->On91={}; Candidate->On68={};
+		if (Arm==0) Candidate->On91=[Pass](){Pass->Kill();};
+		if (Arm==1) Candidate->On68=[Pass](){Pass->Kill();};
+		if (Arm==2) Pass->On68=[Pass](){Pass->Kill();};
+		Map->TraceRetail(Request,Hit);
+		TestTrue(TEXT("native callback can retire pass and refuses the candidate"),Hit.Fraction==1.f);
+		const TArray<FString> Expected=Arm==0 ? TArray<FString>{TEXT("candidate91")} : Arm==1
+			? TArray<FString>{TEXT("candidate91"),TEXT("candidate68")} : TArray<FString>{TEXT("candidate91"),TEXT("candidate68"),TEXT("pass68")};
+		TestTrue(TEXT("actual native query virtual order/count and lifetime short-circuit"),ElysiumSwitchNativeTest::FilterCalls==Expected);
+	}
+	Candidate->On91={}; Candidate->On68={};
+	TArray<FElysiumEntityHandle> Rechecks;
+	Entities->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event){if(Event.Kind==TEXT("collision_recheck")) Rechecks.Add(Event.Entity);});
+	Entities->CollisionPairs().AddDirect(RestoredFormer.Actor,Second->VPhysicsGetObject());
+	Entities->CollisionPairs().AddDirect(RestoredFormer.Actor,Second->VPhysicsGetObject());
+	TestTrue(TEXT("direct native domain membership does not invent entity relation"),Entities->CollisionPairs().ContainsObjects(RestoredFormer.Actor,Second->VPhysicsGetObject()) && !Entities->CollisionPairs().ContainsEntities(First->Handle,Second->Handle));
+	Entities->CollisionPairs().RemoveDirect(RestoredFormer.Actor,Second->VPhysicsGetObject());
+	Entities->CollisionPairs().RemoveDirect(RestoredFormer.Actor,Second->VPhysicsGetObject());
+	const TArray<FElysiumEntityHandle> ExpectedRechecks={First->Handle,Second->Handle,First->Handle,Second->Handle,First->Handle,Second->Handle,First->Handle,Second->Handle};
+	TestTrue(TEXT("actual nonstatic first/second recheck on duplicate add and absent remove"),Rechecks==ExpectedRechecks);
+	Entities->SetAiTraceSink({});
+	Entities->CollisionPairs().AddTranslated(RestoredFormer.Actor,Second->VPhysicsGetObject());
+	ElysiumModelPhysics::DestroyActor(First->VPhysicsGetObject());
+	TestTrue(TEXT("entity relation survives actual current-alias native retirement"),Entities->CollisionPairs().ContainsEntities(First->Handle,Second->Handle));
+	TestTrue(TEXT("remaining former output still consumes GameData entity relation"),Entities->CollisionPairs().ContainsObjects(RestoredFormer.Actor,Second->VPhysicsGetObject()));
+	Entities->CollisionPairs().RemoveTranslated(RestoredFormer.Actor,Second->VPhysicsGetObject());
+	const auto RetiringSecond=ElysiumModelPhysics::CaptureIdentity(Second->VPhysicsGetObject());
+	Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,Services));
+	Entities=Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(Defs));
+	Entities->OnSnapshotApplied={};
+	if (!TestTrue(TEXT("actual level-transition native persisted restore"),Entities->ApplySnapshot(Persisted,100.,true)>=0)) return false;
+	TestFalse(TEXT("old native incarnation cannot query membership in reconstructed world"),Entities->CollisionPairs().ContainsObjects(RestoredFormer.Actor,RetiringSecond.Actor));
+	for (const auto& Name : {TEXT("fallback_zero"),TEXT("fallback_rate")})
+	{
+		auto* Fallback=Entities->FindByName(Name)->AsPropSwitch();
+		TestEqual(TEXT("true restore bool consumes actual reset_state1/2"),Fallback->bActivated,FCString::Strcmp(Name,TEXT("fallback_rate"))==0);
+	}
+	Entities->Activate(100.);
+	TestTrue(TEXT("native former endpoint retired by its world lifetime"),!ElysiumModelPhysics::IsCurrentOutput(RestoredFormer));
+	// Actual restored owner/endpoints: Break clears native flags/pair before sound, output and removal.
+	First=Entities->FindByName(TEXT("pair_a")); Second=Entities->FindByName(TEXT("pair_b"));
+	Shared=static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("shared_owner")));
+	TestTrue(TEXT("actual restored Break owner starts with enabled native constraint"),Shared->Constraint && Shared->Constraint->ConstraintInstance.IsValidConstraintInstance() && !Shared->Constraint->IsBroken());
+	Shared->Constraint->GetConstrainedComponents(Bound1,Bone1,Bound2,Bone2);
+	const auto BreakEndpoint=ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Bound1));
+	ElysiumModelPhysics::SetGameFlags(BreakEndpoint,6); ElysiumModelPhysics::SetGameFlags(ElysiumModelPhysics::CaptureIdentity(Second->VPhysicsGetObject()),6);
+	const auto BreakOwnerHandle=Shared->Handle; TArray<FString> BreakOrder;
+	AudioWitness.BeforeBody=[&]()
+	{
+		BreakOrder.Add(TEXT("sound")); uint16 Flag1=0,Flag2=0;
+		ElysiumModelPhysics::GetGameFlags(BreakEndpoint,Flag1); ElysiumModelPhysics::GetGameFlags(ElysiumModelPhysics::CaptureIdentity(Second->VPhysicsGetObject()),Flag2);
+		TestTrue(TEXT("Break sound observes deactivated native owner, cleared endpoint flags and removed relation before queued removal"),Shared->Constraint->IsBroken() && Flag1==4 && Flag2==4 && !Entities->CollisionPairs().ContainsEntities(First->Handle,Second->Handle) && !Shared->bRemovalPending);
+	};
+	auto BreakSink=MakeUnique<ElysiumSwitchNativeTest::FBreakSink>();
+	BreakSink->Output=[&](const FElysiumEntity& Source,const FElysiumOutputDef& Row)
+	{ if (Source.Handle==BreakOwnerHandle && Row.Name==TEXT("OnBreak")) { BreakOrder.Add(TEXT("output")); TestFalse(TEXT("OnBreak precedes removal"),Source.bRemovalPending); } };
+	BreakSink->Queued=[&](const FElysiumIOEvent& Event)
+	{ if (Event.Caller==BreakOwnerHandle) { BreakOrder.Add(TEXT("queue")); TestTrue(TEXT("Break output uses self caller and activator despite foreign input activator"),Event.Activator==BreakOwnerHandle && Event.Input==TEXT("Wake") && !Shared->bRemovalPending); } };
+	Entities->AddSink(MoveTemp(BreakSink));
+	FElysiumInputArgs BreakArgs; BreakArgs.Activator=First->Handle;
+	const int32 BreakSoundCount=AudioWitness.Data.BodySounds.Num(); Shared->InputBreak(BreakArgs); AudioWitness.BeforeBody={};
+	TestTrue(TEXT("Break sound/output/queue ordering and final queued removal"),BreakOrder==TArray<FString>{TEXT("sound"),TEXT("output"),TEXT("queue")} && Shared->bRemovalPending && Entities->Resolve(BreakOwnerHandle)==Shared);
+	TestTrue(TEXT("saved authored raw Break sound preserves owner/channel6/volume1/attenuation1.25/pitch100"),AudioWitness.Data.BodySounds.Num()==BreakSoundCount+1 && AudioWitness.Data.BodySoundOwners.Last()==BreakOwnerHandle && AudioWitness.Data.BodySounds.Last().Rel==*SavedBreakSound && AudioWitness.Data.BodySounds.Last().Channel==EElysiumSoundChannel::Static && AudioWitness.Data.BodySounds.Last().SoundLevelDb==66 && AudioWitness.Data.BodySounds.Last().Volume==1.f && AudioWitness.Data.BodySounds.Last().Pitch==1.f);
+	Entities->PurgeEntityRemovals(); TestTrue(TEXT("Break removal retires constraint but preserves independently owned native endpoints"),!Entities->Resolve(BreakOwnerHandle) && !Shared->Constraint && ElysiumModelPhysics::IsCurrentOutput(BreakEndpoint));
+	Switch=Entities->Entities()[0]->AsPropSwitch(); const auto RemovedHandle=Switch->Handle; const auto RemovedShape=TWeakObjectPtr<UElysiumEntityQueryBox>(Switch->QueryBody());
+	Request={}; Request.StartCm=Switch->QueryBody()->GetComponentLocation()-FVector(30,0,0); Request.EndCm=Switch->QueryBody()->GetComponentLocation()+FVector(30,0,0); Request.RetailMask=0x0600408b;
+	Switch->QueueRemove(); Entities->PurgeEntityRemovals(); Map->TraceRetail(Request,Hit);
+	TestTrue(TEXT("actual removal retires native owned query identity and shape"),!Entities->Resolve(RemovedHandle) && Hit.Fraction==1.f && (!RemovedShape.IsValid() || (!RemovedShape->Entity.IsSet() && !RemovedShape->IsRegistered())));
+	Owner=static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("pair_owner")));
+	Owner->KeyValue(TEXT("breaksound"),TEXT("")); const int32 SilentBreakCount=AudioWitness.Data.BodySounds.Num();
+	Owner->Precache(); Owner->InputBreak({});
+	TestEqual(TEXT("absent authored break sound emits no body sound"),AudioWitness.Data.BodySounds.Num(),SilentBreakCount);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSwitchConstraintRestoreFailureTest,"Elysium.Arm.ModelPhysics.SwitchConstraintRestoreFailure",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumSwitchConstraintRestoreFailureTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map=Fixture.SpawnMapActorDeferred(); if (!TestNotNull(TEXT("real restore owner"),Map)) return false;
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	auto* Placed=LoadObject<UElysiumPlacedModelCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins=LoadObject<UElysiumPropSkinCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> Ids={ElysiumModelPhysicsTest::BodyId}; TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed,Skins,Ids,Paths,Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for (const auto& Path:Paths) Assets.Add(Path.TryLoad());
+	const auto Prepared=FElysiumPreparedPropModels::Create(Map,1,Placed,Skins,Ids,Assets,Error);
+	if (!TestTrue(TEXT("actual native recipe admission"),Prepared.IsValid())) return false;
+	FElysiumEntityDefs Defs; Defs.MapName=TEXT("switch_constraint_restore_native");
+	for (const auto* Name:{TEXT("first"),TEXT("second"),TEXT("alias_first"),TEXT("alias_second")})
+	{
+		auto Def=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"),Name);
+		Def.Origin=FVector(10000+Defs.Defs.Num()*300,10000,10000); Defs.Defs.Add(Def);
+	}
+	FElysiumEntityDef Hinge; Hinge.Classname=TEXT("phys_hinge"); Hinge.TargetName=TEXT("both");
+	Hinge.Keys.Add(TEXT("attach1"),TEXT("first")); Hinge.Keys.Add(TEXT("attach2"),TEXT("second")); Hinge.Keys.Add(TEXT("spawnflags"),TEXT("1"));
+	Hinge.Origin=Defs.Defs[0].Origin; Hinge.HingeAxis=FVector::UpVector; Defs.Defs.Add(Hinge);
+	Hinge.TargetName=TEXT("world_end"); Hinge.Keys.Add(TEXT("attach2"),TEXT("")); Defs.Defs.Add(Hinge);
+	FElysiumWorldServices Services; Services.Embodiment=Map;
+	auto Fresh=[&]() -> FElysiumEntityWorld*
+	{
+		Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,Services));
+		auto* World=Map->GetEntityWorld(); World->Load(FElysiumEntityDefs(Defs)); return World;
+	};
+	auto* Entities=Fresh(); Entities->Activate(0.);
+	for (const auto& Pair:{TPair<const TCHAR*,const TCHAR*>(TEXT("first"),TEXT("alias_first")),{TEXT("second"),TEXT("alias_second")}})
+	{
+		AddExpectedError(TEXT("Overwriting physics object for prop_physics"),EAutomationExpectedErrorFlags::Contains,1);
+		Entities->FindByName(Pair.Key)->VPhysicsSetObject(Entities->FindByName(Pair.Value)->VPhysicsGetObject());
+	}
+	FElysiumMapSnapshot Captured; Entities->Freeze(Captured);
+	TestEqual(TEXT("two actual former outputs captured as constraint CUSTOM rows"),Captured.PhysicsBodies.FilterByPredicate([](const auto& Row){return Row.FieldName.StartsWith(TEXT("m_pConstraint."));}).Num(),2);
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Save(Writer,FElysiumSaveVersion::Latest); Save << Captured;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Load(Reader,FElysiumSaveVersion::Latest); Load << Persisted;
+	Entities=Fresh(); if (!TestTrue(TEXT("actual archive world endpoint restore"),Entities->ApplySnapshot(Persisted,20.)>=0)) return false;
+	Entities->Activate(20.);
+	auto* WorldEnd=static_cast<FElysiumPhysHinge*>(Entities->FindByName(TEXT("world_end")));
+	UPrimitiveComponent* Body1=nullptr; UPrimitiveComponent* Body2=nullptr; FName Bone1,Bone2;
+	WorldEnd->Constraint->GetConstrainedComponents(Body1,Bone1,Body2,Bone2);
+	TestTrue(TEXT("restored world endpoint binds an actual live Chaos constraint"),WorldEnd->Constraint->ConstraintInstance.IsValidConstraintInstance() && !WorldEnd->Constraint->IsBroken());
+	TestTrue(TEXT("saved world endpoint stays null without native object or GameData"),Body1 && !Body2 && !WorldEnd->VPhysicsGetObject() && ElysiumModelPhysics::GameDataFor(ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(Body1)),*Entities)==Entities->FindByName(TEXT("first")));
+	TestEqual(TEXT("world/null owner contributes no extra membership"),Entities->CollisionPairs().Num(),1);
+	// Corrupt the second real row only: the first native endpoint must be allocated, then retired.
+	for (int32 Failure=0;Failure<2;++Failure)
+	{
+		auto Bad=Captured; int32 Seen=0;
+		if (Failure==0)
+		{
+			for (auto& Row:Bad.PhysicsBodies) if (Row.FieldName.StartsWith(TEXT("m_pConstraint.")) && ++Seen==2) Row.GameDataEntityIndex=100000;
+		}
+		else
+			Bad.PhysicsBodies.RemoveAll([](const auto& Row){return Row.FieldName==TEXT("m_pConstraint.endpoint2");});
+		Bad.BlockStream.Reset(); ElysiumSaveRestore::EncodeMapBlocks(Bad,nullptr,nullptr);
+		// Actual persisted block bytes, not the arrays supplied to ApplySnapshot.
+		Bytes.Reset(); FMemoryWriter BadWriter(Bytes,true); FElysiumSaveArchive BadSave(BadWriter,FElysiumSaveVersion::Latest); BadSave << Bad;
+		FElysiumMapSnapshot BadPersisted; FMemoryReader BadReader(Bytes,true); FElysiumSaveArchive BadLoad(BadReader,FElysiumSaveVersion::Latest); BadLoad << BadPersisted;
+		Entities=Fresh();
+		AddExpectedError(Failure==0 ? TEXT("restored constraint native endpoint has no live GameData owner") : TEXT("has no reconstructed native output"),EAutomationExpectedErrorFlags::Contains,1);
+		TestEqual(TEXT("actual Physics block rejects invalid owner or unresolved typed endpoint"),Entities->ApplySnapshot(BadPersisted,30.),INDEX_NONE);
+		TArray<UElysiumPhysicsPropComponent*> Components; Map->GetComponents(Components); int32 LiveNative=0;
+		for (auto* Component:Components) if (Component && Component->IsRegistered() && ElysiumModelPhysics::ActorIdentity(Component)) ++LiveNative;
+		TestEqual(TEXT("failed restore retires all reconstructed bodies and world-owned former endpoint cohort"),LiveNative,0);
+		TestEqual(TEXT("failed restore publishes no pairs"),Entities->CollisionPairs().Num(),0);
+	}
+	return true;
+}
+#endif
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsNativeTest, "Elysium.Substrate.ModelPhysics.NativeInputs",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
@@ -460,8 +1418,8 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 		if (FMemory::Memcmp(Malformed.BlockStream.GetData() + Offset, RowBytes.GetData(), RowBytes.Num()) == 0)
 		{ RowOffset = Offset; break; }
 	if (!TestTrue(TEXT("actual persisted Physics row located"), RowOffset != INDEX_NONE)) return false;
-	FMemoryReader PrefixReader(RowBytes, true); int32 SavedIndex; FString SavedField;
-	PrefixReader << SavedIndex << SavedField;
+	FMemoryReader PrefixReader(RowBytes, true); int32 SavedIndex, SavedGameDataIndex; FString SavedField;
+	PrefixReader << SavedIndex << SavedField << SavedGameDataIndex;
 	Malformed.BlockStream[RowOffset + PrefixReader.Tell()] = 255; // corrupt the actual persisted kind byte
 	TArray<uint8> MalformedBytes; FMemoryWriter MalformedWriter(MalformedBytes, true);
 	FElysiumSaveArchive MalformedSave(MalformedWriter, FElysiumSaveVersion::Latest); MalformedSave << Malformed;

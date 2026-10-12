@@ -1,5 +1,6 @@
 #include "Misc/ScopeExit.h"
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumCollisionPairs.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumPlayer.h"
@@ -222,6 +223,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot, do
 		return INDEX_NONE; // refused, distinguish an empty successful snapshot
 	}
 	bSnapshotApplied = false; // true only after complete decode/post-restore
+	CollisionPairs().Reset(); // fresh level table; restore owner state republishes at ServerActivate
 	SnapshotEntityIndices.Reset();
 	// A restore re-runs `CWorld::Precache` (`0x101a2e40`), so the network manager's 0.8 s first
 	// think (`0x102f6690`) is armed afresh: the gate re-stamps here (0018 story 5, lane D).
@@ -269,6 +271,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot, do
 			if (&Restored == FindPlayer()) Character->AddToTeam(TEXT("player")); // 0x1016ebd0
 		}
 		Restored.OnPostRestore(*this); // 0x1027bf50/0x102998c0, later callback/deadline writes WIN
+		if (Restored.ReplayActivationAfterRestore()) Restored.bActivateCalled = false;
 		Restored.OnRuntimeTransformChanged(); // 0x100aa140 POSITION physical reconnect after coherent words
 		Restored.OnDormancyChanged(); // reconnect presentation after coherent restore
 		NotifyVisualChanged(Restored);

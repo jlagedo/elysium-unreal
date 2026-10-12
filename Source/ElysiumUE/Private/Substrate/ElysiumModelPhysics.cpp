@@ -12,6 +12,7 @@
 #include "Chaos/SimCallbackObject.h"
 #include "Chaos/Collision/CollisionConstraintAllocator.h"
 #include "PBDRigidsSolver.h"
+#include "Substrate/ElysiumCollisionPairs.h"
 #include "PhysicsProxy/SingleParticlePhysicsProxy.h"
 #include "Chaos/PBDRigidsEvolutionGBF.h"
 #include "Components/StaticMeshComponent.h"
@@ -48,6 +49,32 @@ namespace
 		uint16 GameFlags = 0; //26016930: semantic object#7/#8 word, owned by this actual incarnation
 	};
 	TArray<FNativeAssociation> NativeAssociations;
+	struct FNativeIgnoredPair
+	{
+		uint64 First, Second;
+		const void* FirstProxy; const void* SecondProxy;
+		Chaos::FUniqueIdx FirstId, SecondId;
+		UWorld* World;
+		TAtomic<bool> bWanted{false}, bApplied{false};
+	};
+	TArray<TSharedPtr<FNativeIgnoredPair, ESPMode::ThreadSafe>> NativeIgnoredPairs; //GT requests; PT contributes once
+	void ApplyNativeIgnoredPair(Chaos::FPBDRigidsSolver& Solver, FNativeIgnoredPair& Pair)
+	{
+		const bool bWanted = Pair.bWanted.Load();
+		if (bWanted == Pair.bApplied.Load()) return;
+		auto* A = Solver.GetParticleProxy_PT(Pair.FirstId); auto* B = Solver.GetParticleProxy_PT(Pair.SecondId);
+		if (!A || !B || A != Pair.FirstProxy || B != Pair.SecondProxy || !A->GetHandle_LowLevel() || !B->GetHandle_LowLevel())
+		{
+			// Creation can precede PT admission; retain a wanted request for presimulate retry.
+			// Unregister removes dead-particle manager entries; never dereference a retired proxy.
+			if (!bWanted) Pair.bApplied.Store(false);
+			return;
+		}
+		auto& Manager = Solver.GetEvolution()->GetBroadPhase().GetIgnoreCollisionManager();
+		if (bWanted) Manager.AddIgnoreCollisions(A->GetHandle_LowLevel(),B->GetHandle_LowLevel());
+		else Manager.RemoveIgnoreCollisions(A->GetHandle_LowLevel(),B->GetHandle_LowLevel());
+		Pair.bApplied.Store(bWanted);
+	}
 	struct FSemanticQueryAssociation
 	{
 		TWeakObjectPtr<UPrimitiveComponent> Component;
@@ -84,9 +111,11 @@ namespace
 	struct FSolveFilterInput : Chaos::FSimCallbackInput
 	{
 		TArray<FSolveFilterIdentity> Identities;
+		TArray<TPair<uint64,uint64>> IgnoredPairs;
+		TArray<TSharedPtr<FNativeIgnoredPair, ESPMode::ThreadSafe>> NativePairs;
 		TArray<FShadowEventInput> Shadows;
 		bool bObservePostSolve = false;
-		void Reset() { Identities.Reset(); Shadows.Reset(); bObservePostSolve = false; }
+		void Reset() { Identities.Reset(); IgnoredPairs.Reset(); NativePairs.Reset(); Shadows.Reset(); bObservePostSolve = false; }
 	};
 	double FrictionContactSkinCm();
 	struct FNativeContactOutput
@@ -129,6 +158,7 @@ namespace
 		{
 			const auto* Input = GetConsumerInput_Internal(); if (!Input) return;
 			auto* NativeSolver = static_cast<Chaos::FPBDRigidsSolver*>(GetSolver());
+			for (const auto& Pair : Input->NativePairs) ApplyNativeIgnoredPair(*NativeSolver, *Pair);
 			Controllers.RemoveAll([&](const auto& Controller)
 			{ return !Input->Shadows.ContainsByPredicate([&](const auto& Entry)
 				{ return Entry.Proxy == Controller.Proxy && Entry.UniqueIdx == Controller.UniqueIdx && Entry.Generation == Controller.Generation; }); });
@@ -262,6 +292,10 @@ namespace
 						Identities[Side] = Input->Identities.FindByPredicate([&](const FSolveFilterIdentity& Entry)
 						{ return Entry.Proxy == Particles[Side]->PhysicsProxy() && Entry.UniqueIdx == Particles[Side]->UniqueIdx(); });
 				bool bRejected = false;
+				if (Identities[0] && Identities[1] && Input->IgnoredPairs.ContainsByPredicate([&](const auto& Ignored)
+				{ return (Ignored.Key == Identities[0]->Generation && Ignored.Value == Identities[1]->Generation)
+					|| (Ignored.Key == Identities[1]->Generation && Ignored.Value == Identities[0]->Generation); }))
+				{ Pair.Disable(); bRejected = true; }
 				if (Identities[0] && Identities[1]) for (int32 Side = 0; Side < 2; ++Side)
 					if (Identities[Side]->bWorld && !Identities[Side]->bCommonSolid && !Identities[1 - Side]->bWorld
 						&& Identities[1 - Side]->bBaseMask)
@@ -327,6 +361,7 @@ namespace
 		if (const FSolveFilterRegistration* Registration = SolveFilters.Find(World))
 			Registration->Solver->UnregisterAndFreeSimCallbackObject_External(Registration->Callback);
 		SolveFilters.Remove(World);
+		NativeIgnoredPairs.RemoveAll([World](const auto& Pair) { return Pair->World == World; });
 		PostSolveObservationWorlds.Remove(World);
 		SemanticQueryAssociations.RemoveAll([World](const auto& Entry)
 		{ return !Entry.Component.IsValid() || Entry.Component->GetWorld() == World; });
@@ -354,6 +389,25 @@ namespace
 		FSolveFilterInput* Input = Registration->Callback->GetProducerInputData_External();
 		Input->bObservePostSolve = PostSolveObservationWorlds.Contains(&World);
 		Input->Identities.Reset();
+		Input->IgnoredPairs.Reset();
+		Input->NativePairs.Reset();
+		// Native solve reads creation-owned GameData pairs, independently of mutable entity fields.
+		for (int32 A = 0; A < NativeAssociations.Num(); ++A)
+		{
+			const auto& First = NativeAssociations[A];
+			if (!First.World || !First.Component.IsValid()
+				|| First.Component->GetWorld() != &World) continue;
+			for (int32 B = A + 1; B < NativeAssociations.Num(); ++B)
+			{
+				const auto& Second = NativeAssociations[B];
+				if (Second.World != First.World) continue;
+				const bool bIgnore = First.World->CollisionPairs().ContainsObjects(First.Actor,Second.Actor);
+				ElysiumModelPhysics::SetNativePairIgnored({First.Actor,First.Incarnation},{Second.Actor,Second.Incarnation},bIgnore);
+				if (bIgnore) Input->IgnoredPairs.Emplace(First.Incarnation,Second.Incarnation);
+			}
+		}
+		NativeIgnoredPairs.RemoveAll([](const auto& Pair) { return !Pair->bWanted.Load() && !Pair->bApplied.Load(); });
+		for (const auto& Pair : NativeIgnoredPairs) if (Pair->World == &World) Input->NativePairs.Add(Pair);
 		for (const FNativeAssociation& Entry : NativeAssociations)
 			if (UPrimitiveComponent* Component = Entry.Component.Get(); Component && Component->GetWorld() == &World
 				&& ElysiumModelPhysics::ActorIdentity(Component) == Entry.Actor)
@@ -588,7 +642,7 @@ namespace
 FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 {
 	uint8 Kind = static_cast<uint8>(State.Recipe.Kind);
-	Ar << State.EntityIndex << State.FieldName << Kind;
+	Ar << State.EntityIndex << State.FieldName << State.GameDataEntityIndex << Kind;
 	if (Kind > static_cast<uint8>(EElysiumPhysicsRecipeKind::Brush)) Ar.SetError();
 	State.Recipe.Kind = static_cast<EElysiumPhysicsRecipeKind>(Kind);
 	Ar << State.bHasObject << State.bRebuildFromEntity;
@@ -1051,6 +1105,9 @@ void ElysiumModelPhysics::RetireNative(UPrimitiveComponent* Component)
 	for (int32 Index = NativeAssociations.Num() - 1; Index >= 0; --Index)
 	{
 		if (NativeAssociations[Index].Producer != Component) continue;
+		const auto Retiring = FNativeOutput{NativeAssociations[Index].Actor,NativeAssociations[Index].Incarnation};
+		for (const auto& Other : NativeAssociations) if (Other.Incarnation != Retiring.Incarnation)
+			SetNativePairIgnored(Retiring,{Other.Actor,Other.Incarnation},false);
 		RemoveShadow(NativeAssociations[Index].Actor);
 		if (auto* Order = NativeActiveOrders.Find(Component->GetWorld())) Order->RemoveSingleSwap(NativeAssociations[Index].Incarnation);
 		RetiringActors.Add(NativeAssociations[Index].Actor);
@@ -1083,6 +1140,44 @@ void ElysiumModelPhysics::RetireNative(UPrimitiveComponent* Component)
 void ElysiumModelPhysics::DestroyActor(void* Actor)
 {
 	Destroy(ComponentFor(Actor)); // generic225 destroys the supplied object, including an alias.
+}
+void ElysiumModelPhysics::RecheckCollisionFilter(const FNativeOutput& Object)
+{
+ if (!IsCurrentOutput(Object)) return;
+ auto* Component = ComponentFor(Object.Actor);
+ auto* NativeBody = Identity(Component);
+ if (!NativeBody || NativeBody->GetPhysicsActor()->GetGameThreadAPI().ObjectState() == Chaos::EObjectStateType::Static) return;
+ NativeBody->UpdatePhysicsFilterData();
+ if (auto* Owner = GameDataForObject(Object.Actor); Owner && Owner->World)
+  Owner->World->EmitAiTrace(*Owner, TEXT("collision_recheck"), FString::Printf(TEXT("native=%llu object25=1"), Object.Incarnation));
+}
+void ElysiumModelPhysics::SetNativePairIgnored(const FNativeOutput& First, const FNativeOutput& Second, bool bIgnore)
+{
+ if (!IsCurrentOutput(First) || !IsCurrentOutput(Second)) return;
+ auto* Component = ComponentFor(First.Actor);
+ auto* Other = ComponentFor(Second.Actor);
+ auto* Scene = Component && Other && Component->GetWorld() == Other->GetWorld() ? Component->GetWorld()->GetPhysicsScene() : nullptr;
+ auto* Solver = Scene ? Scene->GetSolver() : nullptr;
+ if (!Solver) return;
+ auto* Found = NativeIgnoredPairs.FindByPredicate([&](const auto& Pair)
+ { return (Pair->First == First.Incarnation && Pair->Second == Second.Incarnation)
+   || (Pair->First == Second.Incarnation && Pair->Second == First.Incarnation); });
+ if (!Found && !bIgnore) return;
+ const auto* FirstProxy = static_cast<Chaos::FSingleParticlePhysicsProxy*>(First.Actor);
+ const auto* SecondProxy = static_cast<Chaos::FSingleParticlePhysicsProxy*>(Second.Actor);
+ TSharedPtr<FNativeIgnoredPair,ESPMode::ThreadSafe> Pair;
+ if (Found) Pair = *Found;
+ else
+ {
+  Pair = MakeShared<FNativeIgnoredPair,ESPMode::ThreadSafe>();
+  Pair->First=First.Incarnation; Pair->Second=Second.Incarnation; Pair->World=Component->GetWorld();
+  Pair->FirstProxy=FirstProxy; Pair->SecondProxy=SecondProxy;
+  Pair->FirstId=FirstProxy->GetGameThreadAPI().UniqueIdx(); Pair->SecondId=SecondProxy->GetGameThreadAPI().UniqueIdx();
+  NativeIgnoredPairs.Add(Pair);
+ }
+ if (Pair->bWanted.Load()==bIgnore && Pair->bApplied.Load()==bIgnore) return;
+ Pair->bWanted.Store(bIgnore);
+ Solver->EnqueueCommandImmediate([Solver,Pair]() { ApplyNativeIgnoredPair(*Solver,*Pair); });
 }
 
 const FElysiumPhysicsBodyRecipe* ElysiumModelPhysics::RecipeFor(void* Actor)

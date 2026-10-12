@@ -236,6 +236,9 @@ public:
 	int32   VSoundTableIdx = -2;
 	FString UseScript;                             // usescript — the level-script module
 	bool    bNpcTransparent = false;                 // npc_transparent
+	bool    bOccludesSound = false; //100a93d0/100a9470 semantic flag; downstream sound occlusion remains D03.
+	bool OccludesSound() const { return bOccludesSound; }
+	void SetOccludesSound(bool bValue) { bOccludesSound = bValue; }
 	bool    bBlocksTraces = false;                   // blocks_traces
 	FString DamageFilterName;                        // dmg_filter_name
 	FString UseFilterName;                           // use_filter_name
@@ -556,6 +559,9 @@ public:
 	// A leaf with a movable body (FElysiumNpc) overrides OnRuntimeTransformChanged to move/re-face
 	// its skeletal component and OnRuntimeModelChanged to rebuild it with the new model.
 	virtual void OnRuntimeTransformChanged();
+	// Native partition carrier notification after collision setters finish their retail writes.
+	// It changes geometry/gates only; saved direct fields are rebuilt at OnPostRestore.
+	virtual void OnRuntimeCollisionChanged() {}
 	virtual void OnRuntimeModelChanged();
 	// The map admitted this entity's model late (it was not in the load-time residency and has
 	// just become resident). Base: rebuild exactly as a runtime model change would. A leaf whose
@@ -674,6 +680,8 @@ public:
 	// point props return their standing component and physics props return their simulating body.
 	// Null = nothing physical to attach.
 	virtual class UPrimitiveComponent* GetAttachBody() const;
+	// Native touch/query carrier is independent of attachment/socket presentation.
+	virtual class UPrimitiveComponent* GetCollisionQueryBody() const { return GetAttachBody(); }
 	// The component this entity hangs under its `parentname` body: the attach body, unless a leaf
 	// with no primitive body offers a scene component of its own (a `light_dynamic`'s light, R6.2).
 	virtual class USceneComponent* GetAttachChild() const;
@@ -1014,6 +1022,9 @@ public:
 	// activation result depends on transient residency state can keep the pre-activation baseline
 	// so that result remains explicit in snapshots and survives a later rebuild.
 	virtual bool ActivationStateMustPersist() const { return false; }
+	// Reached L0 leaves replay ServerActivate after reverse OnRestore. Higher leaves retain
+	// their existing restore owner until their activation contract is independently reviewed.
+	virtual bool ReplayActivationAfterRestore() const { return false; }
 
 	// Map-load residency pass. All map entities and the player have spawned, but the entity world is
 	// still dormant: a leaf contributes its authored animation references here without starting any

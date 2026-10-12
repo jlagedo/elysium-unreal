@@ -1921,6 +1921,11 @@ struct FElysiumRecordingServices final
 		UseAnchorEnabled.Add(Owner, true);
 		Record(FString::Printf(TEXT("RegisterUseAnchor %s"), *Owner.ToString()));
 	}
+	// Recording compatibility only; production physical/visual attribution is witnessed on MapActor.
+	virtual void RegisterPhysicalUseAnchor(UPrimitiveComponent* Physical, UPrimitiveComponent* Visual, const FElysiumEntityHandle& Owner) override
+	{
+		RegisterUseAnchor(Physical ? Physical : Visual, Owner);
+	}
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override
 	{
 		UseAnchorEnabled.Add(Owner, bEnabled);

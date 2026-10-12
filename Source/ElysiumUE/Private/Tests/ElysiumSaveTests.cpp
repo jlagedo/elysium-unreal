@@ -689,11 +689,11 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `NpcAmbientExecutorRetired` (0002 V3b) took the ambient executor's two timers out of the middle
 	// of the NPC's patrol block, which moved it again. `NpcMindOwnerRetired` (0002 V3d) took the
 	// body-owner byte out of the NPC's mind block, which moved it once more.
-	// PhysicsFieldPresence adds the registered false128/count0 rebuild marker beside the
-	// omitted-null and positive native snapshot states. The disposable floor moves with this
-	// Physics record layout; historical pending-state/pose-cache payloads are refused.
-	TestEqual(TEXT("the disposable floor distinguishes omitted-null, rebuild and positive Physics fields"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::PhysicsFieldPresence);
+	// SwitchAndConstraintRestore retains switch source cycle/playback clocks and native
+	// constraint owner/typed endpoint state, including Physics GameData identity. This breaking
+	// record layout moves the disposable floor; earlier PhysicsFieldPresence payloads are refused.
+	TestEqual(TEXT("the disposable floor carries switch clocks and native constraint restore state"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::SwitchAndConstraintRestore);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -775,8 +775,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `ComfortSweep` appends the comfort sweep's `m_flNextComfortCheckTime` and the NPC's
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
-	TestEqual(TEXT("the newest schema explicitly carries Physics field presence"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::PhysicsFieldPresence);
+	TestEqual(TEXT("the newest schema explicitly carries switch clocks and native constraint restore state"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::SwitchAndConstraintRestore);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

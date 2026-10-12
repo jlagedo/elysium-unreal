@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumEntity.h"
+#include "Substrate/ElysiumModelPhysics.h"
 
 class UPhysicsConstraintComponent;
 class UPrimitiveComponent;
@@ -31,6 +32,7 @@ public:
 	bool  bSimulating = false;                // elysium.PhysicsProps decided sim on at spawn
 
 	virtual void Spawn() override;
+	bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
 	virtual void Kill() override;
 	virtual void VPhysicsDestroyObject() override;
 	void OnPhysicsActorRetired() override { bSimulating = false; bRestoredNativePhysics = false; }
@@ -97,22 +99,46 @@ class FElysiumPhysHinge final : public FElysiumEntity
 {
 public:
 	UPhysicsConstraintComponent* Constraint = nullptr;
+	// CPhysConstraint +45c, FIELD_SOUNDNAME SAVE|KEY (breaksound).
+	FString BreakSound;
+	virtual void Precache() override;
 
 	// Second-phase init (both attached bodies must already exist — see FElysiumEntity::PostSpawn).
 	virtual void PostSpawn() override;
+	virtual void Activate() override;
+	virtual void OnPostRestore(FElysiumEntityWorld&) override;
+	virtual void Serialize(FElysiumSaveArchive&) override;
+	virtual bool RestoreSavedPhysics(const FElysiumSavedPhysicsBody&, FString&) override;
+	virtual ~FElysiumPhysHinge() override;
+	virtual void ReleaseForRemoval() override;
+	bool CaptureConstraintPhysics(TArray<FElysiumSavedPhysicsBody>& Rows) const;
+	bool ValidateRestoredConstraintEndpoints(FString& Error) const;
+	virtual bool ReplayActivationAfterRestore() const override { return true; }
 
-	// Break is permanent and fires OnBreak; TurnOn re-wires a broken constraint.
+	//1002af70 only republishes the existing native owner; TurnOff retains it disabled.
 	void InputTurnOff(const FElysiumInputArgs&);
-	void InputTurnOn(const FElysiumInputArgs&) { ReinitConstraint(); }
+	void InputTurnOn(const FElysiumInputArgs&) { Activate(); }
 
 	void InputBreak(const FElysiumInputArgs& Args);
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 private:
+	FElysiumEntityHandle Endpoint1, Endpoint2;
+	ElysiumModelPhysics::FNativeOutput NativeEndpoint1, NativeEndpoint2;
+	ElysiumModelPhysics::FNativeOutput AdditionalEndpoint1, AdditionalEndpoint2;
+	int32 EndpointFieldOwner1 = INDEX_NONE, EndpointFieldOwner2 = INDEX_NONE;
+	FString EndpointField1, EndpointField2;
+	FTransform SavedConstraintFrame;
+	void SavedEndpointReference(const ElysiumModelPhysics::FNativeOutput&, int32&, FString&) const;
+	ElysiumModelPhysics::FNativeOutput ResolveEndpointReference(int32, const FString&) const;
+	bool bSavedConstraintPresent = false;
+	bool bSavedConstraintEnabled = true;
+	bool bConstraintBroken = false;
+	void PublishPair(bool bAdd);
 	UPrimitiveComponent* ResolveBody(const TCHAR* Key);
 	void ConfigureAsHinge();
 
-	// Re-wire a TurnOff'd (broken) constraint from the stored attach targets.
+	// Bind the actual registered saved native endpoints after all Physics records exist.
 	void ReinitConstraint();
 };

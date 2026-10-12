@@ -9,6 +9,7 @@
 
 struct FElysiumTerminalView;
 class UPrimitiveComponent;
+class UElysiumEntityQueryBox;
 
 // The view's reading of the session's input state, derived from retail's `m_HackFlags` and the
 // pending-password target (docs/vtmb/computer-terminals.md §8.1, §9). `Raw` is `m_HackFlags 0x4`,
@@ -273,6 +274,14 @@ FString ElysiumTerminalFormat(const FString& Format,
 class FElysiumTerminal : public FElysiumSkillEntity
 {
 public:
+	~FElysiumTerminal() override;
+	void ReleaseForRemoval() override;
+	void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+	void OnRuntimeCollisionChanged() override;
+	bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
+	void OnRuntimeModelAdmitted() override;
+	UElysiumEntityQueryBox* QueryBody() const { return QueryBox; }
+	UPrimitiveComponent* GetCollisionQueryBody() const override;
 	bool bStartEnabled = true;
 	// The AUTHORED grid, before `Spawn` clamps it. The corpus really does author values outside the
 	// clamp — la_chantry_1 `textcolumns 72`, hw_sinbin_1 42x32, la_skyline_1's
@@ -472,8 +481,16 @@ protected:
 	// The body build and its teardown, split out of `Spawn` so a runtime `SetModel` can replay the
 	// whole thing the way `FElysiumProp::OnRuntimeModelChanged` does — a re-registered anchor on a
 	// STALE body would leave the glass bound to a component the model change replaced.
-	void BuildBody();
+	void BuildBody(bool bUseSavedBounds = false);
 	void DestroyBody();
+	void BuildQuery(bool bUseSavedBounds);
+	void RetireQuery();
+	void GateQuery();
+	void PublishBody();
+	UElysiumEntityQueryBox* QueryBox = nullptr;
+	bool bSavedQueryBounds = false;
+	bool bSpawnQueryPending = true;
+	bool bBodyPublished = false;
 
 	UPrimitiveComponent* WorldBody = nullptr;
 	FString VisualStem;

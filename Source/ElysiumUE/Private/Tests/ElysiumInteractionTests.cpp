@@ -98,6 +98,13 @@
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumScratchCorpusRoot.h"
 #include "Tests/ElysiumTestServices.h"
+#include "Tests/ElysiumPlayerWorldFixture.h"
+#include "ElysiumMapEntities.h"
+#include "ElysiumModelCatalogues.h"
+#include "ElysiumEntityQueryBox.h"
+#include "Visual/ElysiumPreparedPropModels.h"
+#include "ElysiumModelPhysicsInputs.h"
+#include "Substrate/ElysiumPropLeaves.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumUseIcons.h"
 #include "ElysiumUserCmd.h"
@@ -736,6 +743,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSwitchUseTest,
 	"Elysium.Substrate.PropSwitchUse", GElysiumTestFlags)
 bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 {
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map=Fixture.SpawnMapActorDeferred();
+	if (!TestNotNull(TEXT("actual native map owner"),Map)) return false;
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	auto* Placed=LoadObject<UElysiumPlacedModelCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins=LoadObject<UElysiumPropSkinCatalogue>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const FString SwitchId=TEXT("vtmb:model:scenery/structural/switches/switch");
+	const TArray<FString> Ids={SwitchId}; TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed,Skins,Ids,Paths,Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for (const auto& Path:Paths) Assets.Add(Path.TryLoad());
+	const auto Prepared=FElysiumPreparedPropModels::Create(Map,1,Placed,Skins,Ids,Assets,Error);
+	if (!TestTrue(TEXT("actual switch prepared admission"),Prepared.IsValid())) return false;
+	FElysiumEntityDefs Core;
+	if (!TestTrue(TEXT("actual tutorial switch producer"),ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"),Core)!=EElysiumEntityDefSource::None && Core.Defs.IsValidIndex(697) && Core.Defs[697].Classname==TEXT("prop_switch"))) return false;
 	auto Counter = [](const TCHAR* Name)
 	{
 		FElysiumEntityDef Def;
@@ -759,12 +781,11 @@ bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__prop_switch_use__");
-	FElysiumEntityDef Switch;
-	Switch.Classname = TEXT("prop_switch");
+	FElysiumEntityDef Switch=Core.Defs[697];
 	Switch.TargetName = TEXT("switch");
-	Switch.ModelMesh = TEXT("switch_static");
-	Switch.Keys.Add(TEXT("model"), TEXT("models/test/switch.mdl"));
+	Switch.Outputs.Reset();
 	Switch.Keys.Add(TEXT("spawnflags"), TEXT("8192")); // starts activated
+	Switch.Keys.Add(TEXT("skin"), TEXT("7")); // independent saved/source field, not a transition clock
 	Switch.Keys.Add(TEXT("use_icon"), TEXT("7"));
 	Switch.Keys.Add(TEXT("locked_icon"), TEXT("8"));
 	Wire(Switch, TEXT("OnUse"), TEXT("used"));
@@ -779,12 +800,9 @@ bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
-	Services.ClipSeconds = 1.0f;
-	Services.AnimatedPropModels.Add(TEXT("models/test/switch.mdl"), TEXT("switch_anim"));
-	Services.AnimatedPropRestClips.Add(TEXT("switch_anim"), TEXT("idle_off"));
-	Services.AnimatedPropClipLoops.Add(TEXT("switch_anim|idle_on"), true);
-	Services.AnimatedPropClipLoops.Add(TEXT("switch_anim|idle_off"), true);
-	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	auto NativeServices=Services.Bundle(); NativeServices.Embodiment=Map;
+	Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,NativeServices));
+	auto& World=*Map->GetEntityWorld();
 	World.Load(MoveTemp(Defs));
 	const FElysiumEntityHandle Player = World.SpawnPlayer();
 	World.Activate(0.0);
@@ -793,6 +811,36 @@ bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	auto* Leaf=Live->AsPropSwitch();
+	if (!TestTrue(TEXT("actual Source studio owned query and null semantic Physics"),Leaf && Leaf->QueryBody() && Leaf->QueryBody()->IsRegistered() && !Leaf->VPhysicsGetObject())) return false;
+	const auto* DeactivateClip=Prepared->Clip(SwitchId,TEXT("deactivate"),Error);
+	const auto* ActivateClip=Prepared->Clip(SwitchId,TEXT("activate"),Error);
+	if (!TestTrue(TEXT("real nonloop source transition clips"),DeactivateClip && ActivateClip && DeactivateClip->Frames>1 && ActivateClip->Frames>1 && DeactivateClip->Fps>0 && ActivateClip->Fps>0 && (DeactivateClip->Flags&1)==0 && (ActivateClip->Flags&1)==0)) return false;
+	//1020dd70 reads the existing finished word before1008f120 advances on the source clock.
+	auto FinishTransition=[&](const auto& Clip,const TCHAR* CounterName,int32 FinishedSkin)
+	{
+		TestEqual(TEXT("actual input selects recovered numeric transition identity"),Leaf->SequenceIndex,Clip.Index);
+		const float SourceRate=static_cast<float>(Clip.Fps/(Clip.Frames-1));
+		TestTrue(TEXT("source cycle rate comes from actual admitted frames/fps"),FMath::IsNearlyEqual(Leaf->SequenceCycleRate,SourceRate));
+		const int32 PreviousSkin=Leaf->Skin;
+		const int32 SourceStepBound=FMath::CeilToInt((Clip.Frames-1)/Clip.Fps/.05)+4;
+		for (int32 Step=0;Step<SourceStepBound && !Leaf->bSequenceFinished;++Step)
+		{
+			const float Due=Leaf->NextThink;
+			const float Stamp=Leaf->SequencePrevAnimTime==0.f ? Due : Leaf->SequenceAnimTime;
+			const float ExpectedCycle=FMath::Clamp(Leaf->SequenceCycle+SourceRate*Leaf->SequencePlaybackRate()*((.1f+Due)-Stamp),0.f,1.f);
+			World.Tick(Due);
+			TestTrue(TEXT("native-backed source clock advances with recovered .1 interpolation term"),FMath::IsNearlyEqual(Leaf->SequenceCycle,ExpectedCycle,.00001f));
+			TestEqual(TEXT("advance cannot consume its newly produced finished latch"),ReadCounter(World.FindByName(CounterName)),0.f);
+			TestEqual(TEXT("frame advance leaves skin for later completion consumer"),Leaf->Skin,PreviousSkin);
+			TestTrue(TEXT("source Think reschedules at now+.05"),FMath::IsNearlyEqual(Leaf->NextThink,static_cast<float>(World.NowSeconds()+.05),.000001f));
+		}
+		TestTrue(TEXT("actual source nonloop advance produces the finished latch"),Leaf->bSequenceFinished && Leaf->SequenceCycle==1.f);
+		World.Tick(Leaf->NextThink);
+		TestEqual(TEXT("next scheduled Think consumes preexisting finished latch and delivers output"),ReadCounter(World.FindByName(CounterName)),1.f);
+		TestEqual(TEXT("completion writes retail skin before selecting idle"),Leaf->Skin,FinishedSkin);
+		TestTrue(TEXT("completion selects real idle sequence and clears transition"),Leaf->SequenceIndex!=Clip.Index && !Leaf->bTransitioning);
+	};
 	TestEqual(TEXT("unlocked switch publishes its use icon"), Live->GetUseIcon(), 7);
 
 	Live->Use(Player);
@@ -801,18 +849,13 @@ bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 		ReadCounter(World.FindByName(TEXT("used"))), 1.0f);
 	TestEqual(TEXT("deactivation output waits for its clip"),
 		ReadCounter(World.FindByName(TEXT("deactivated"))), 0.0f);
-	World.Tick(0.99);
-	TestEqual(TEXT("transition remains pending before authored duration"),
-		ReadCounter(World.FindByName(TEXT("deactivated"))), 0.0f);
-	World.Tick(1.0);
-	TestEqual(TEXT("deactivation output fires when the clip finishes"),
-		ReadCounter(World.FindByName(TEXT("deactivated"))), 1.0f);
+	FinishTransition(*DeactivateClip,TEXT("deactivated"),0);
 
 	World.AcceptInput(TEXT("switch"), FName(TEXT("Lock")), FElysiumVariant::Void(), Player, Player);
 	TestTrue(TEXT("Lock changes switch interaction state"), Live->IsUseLocked());
 	TestEqual(TEXT("locked switch publishes its locked icon"), Live->GetUseIcon(), 8);
 	Live->Use(Player);
-	World.Tick(1.0);
+	World.Tick(World.NowSeconds());
 	TestEqual(TEXT("locked use fires only OnLockedUse"),
 		ReadCounter(World.FindByName(TEXT("locked"))), 1.0f);
 	TestEqual(TEXT("locked use does not refire OnUse"),
@@ -820,7 +863,8 @@ bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 
 	World.AcceptInput(TEXT("switch"), FName(TEXT("Unlock")), FElysiumVariant::Void(), Player, Player);
 	World.AcceptInput(TEXT("switch"), FName(TEXT("Activate")), FElysiumVariant::Void(), Player, Player);
-	World.Tick(2.0);
+	TestFalse(TEXT("Unlock restores use admission"),Live->IsUseLocked());
+	FinishTransition(*ActivateClip,TEXT("activated"),1);
 	TestEqual(TEXT("Activate input shares the transition/output path"),
 		ReadCounter(World.FindByName(TEXT("activated"))), 1.0f);
 	return true;
@@ -855,6 +899,31 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	Owner->SetRootComponent(Root);
 	Root->RegisterComponent();
 	Owner->AddInstanceComponent(Root);
+
+	// 10215750 only publishes the button OBB on studio-header success. Use the real,
+	// already admitted tutorial523 producer; the recording visual supplies no header.
+	FElysiumEntityDefs ButtonCore;
+	if (!TestTrue(TEXT("actual tutorial elevator button definition"),
+		ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"), ButtonCore) != EElysiumEntityDefSource::None
+		&& ButtonCore.Defs.IsValidIndex(523) && ButtonCore.Defs[523].Classname == TEXT("prop_button"))) return false;
+	const auto& AuthoredButton = ButtonCore.Defs[523];
+	const FString ButtonId = ElysiumPreparedProps::ModelId(AuthoredButton.Keys.FindRef(TEXT("model")));
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	TSet<FSoftObjectPath> ButtonPaths; FString ButtonError;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, { ButtonId }, ButtonPaths, ButtonError)) { AddError(ButtonError); return false; }
+	TArray<UObject*> ButtonAssets;
+	for (const auto& Path : ButtonPaths)
+	{
+		auto* Asset = Path.TryLoad();
+		if (!TestNotNull(TEXT("actual tutorial button resident asset"), Asset)) return false;
+		ButtonAssets.Add(Asset);
+	}
+	const auto ButtonPrepared = FElysiumPreparedPropModels::Create(Owner, 1, Placed, Skins, { ButtonId }, ButtonAssets, ButtonError);
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Owner); };
+	if (!TestTrue(TEXT("actual tutorial button prepared admission"), ButtonPrepared.IsValid())) { AddError(ButtonError); return false; }
+	const auto* ButtonInputs = UElysiumModelPhysicsInputs::Find(ButtonPrepared->StaticMesh(ButtonId, ButtonError));
+	if (!TestTrue(TEXT("actual tutorial button typed studio hull"), ButtonInputs && ButtonInputs->bStudioBounds)) return false;
 
 	auto BoxHull = []()
 	{
@@ -926,8 +995,8 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	FElysiumEntityDef Button;
 	Button.Classname = TEXT("prop_button");
 	Button.TargetName = TEXT("elev_button");
-	Button.ModelMesh = TEXT("elevator_button");
-	Button.Keys.Add(TEXT("model"), TEXT("models/elevator_button.mdl"));
+	Button.ModelMesh = AuthoredButton.ModelMesh;
+	Button.Keys.Add(TEXT("model"), AuthoredButton.Keys.FindRef(TEXT("model")));
 	Button.Keys.Add(TEXT("parentname"), TEXT("lift"));
 	Button.Keys.Add(TEXT("max_states"), TEXT("2"));
 	Button.Keys.Add(TEXT("current_state"), TEXT("0"));
@@ -1069,6 +1138,11 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 		&& LiveButton->GetAttachBody()->GetAttachParent() == LiveElevator->Body);
 	TestTrue(TEXT("model-backed prop_button registers an enabled use anchor"),
 		Services.UseAnchorEnabled.FindRef(LiveButton->Handle));
+	if (!TestTrue(TEXT("actual registered button producer"), LiveButton->Class && LiveButton->Class->ClassName == FName(TEXT("prop_button")))) return false;
+	const auto* ButtonQuery = static_cast<FElysiumPropButton*>(LiveButton)->QueryBody();
+	TestTrue(TEXT("recorded button anchor is backed by actual owned studio query geometry"),
+		ButtonQuery && ButtonQuery->GetOwner() == Owner && ButtonQuery->Entity == LiveButton->Handle
+		&& ButtonQuery->GetUnscaledBoxExtent().Equals((ButtonInputs->StudioMaxsCm - ButtonInputs->StudioMinsCm) * .5, .001));
 	TestTrue(TEXT("attachment preserves the exported world pose"),
 		LiveDoor->Body->GetComponentLocation().Equals(FVector(50.f, 0.f, 0.f), 0.1f));
 

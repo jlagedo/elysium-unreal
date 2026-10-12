@@ -1189,6 +1189,15 @@ Who asks for an untouch pass, and when it runs (`docs/specs/layers/L0-entity/wal
 
 ### The collision box, the size word and the base constructor (L0-r016, decompiled)
 
+The complete `CCollisionProperty` datamap (`vampire.dll:0x10560c20`, eleven rows in the
+datamap replay) saves `m_vecMins` and `m_vecMaxs` as VECTOR with GLOBAL|SAVE (`0x3`),
+`m_usSolidFlags` as SHORT with SAVE (`0x2`), and `m_flRadius` as FLOAT with SAVE (`0x2`).
+These are semantic restore inputs to the selected terminal, switch, button and sign query
+carriers: rebuilding from the model hull would overwrite saved bounds. The port binds these
+four rows through the existing embedded field codec; GLOBAL metadata does not implement
+cross-map global merging. The other collision-property SAVE rows remain a separate P2/P3
+restore obligation.
+
 `docs/specs/layers/L0-entity/walks/L0-r016.md` (confirmed); port
 `Source/ElysiumUE/Private/Substrate/ElysiumEntityCollision.cpp`, `ElysiumEntity.cpp`,
 `ElysiumEntitySlotBodies.cpp`; records `l0_collision_bounds_size`, `l0_entity_constructor_defaults`.
@@ -1864,7 +1873,7 @@ Factory `FUN_1020d0e0`, ctor `FUN_1020d5f0`, vftable `0x104862fc`, instance size
 | --- | --- | --- | --- |
 | — | `m_bLocked` | `+0x7a4` | save-only |
 | — | `m_bActivated` | `+0x7a5` | save-only |
-| `linkedswitch` | `m_sLinkedSwitch` | `+0x730` | targetname of a second `prop_switch` mirrored on every state change; never authored in the exported corpus |
+| `linkedswitch` | `m_sLinkedSwitch` | `+0x730` | targetname resolved at Activate to a second `prop_switch`; Use mirrors the stored handle, while Activate/Deactivate inputs change only their receiver; never authored in the exported corpus |
 | `use_icon` | `m_UseIcon` | `+0x734` | |
 | `locked_icon` | `m_LockedIcon` | `+0x738` | |
 | `reset_state` | `m_nResetState` | `+0x73c` | `0` keep, `1` force deactivated, `2` force activated, applied by the reset hook (vtable `+0x208`, `FUN_1020e100`) |
@@ -1882,8 +1891,8 @@ Factory `FUN_1020d0e0`, ctor `FUN_1020d5f0`, vftable `0x104862fc`, instance size
 **A switch is a sequence player, not a mover.** `CPropSwitch::Activate` (`FUN_1020d9c0`) resolves the
 linked switch — which must also be classname `prop_switch`, checked by `_stricmp` plus an RTTI cast —
 then looks up four sequences by name: **`activate`, `deactivate`, `idle_on`, `idle_off`**, holding the
-matching idle at spawn (resolved indices at `+0x7a8`/`+0x7ac`/`+0x7b0`/`+0x7b4`). `SetState`
-(`FUN_1020dce0`) plays the transition clip and emits the `soundgroup` event `on` or `off`; the think
+matching idle at Activate (resolved indices at `+0x7a8`/`+0x7ac`/`+0x7b0`/`+0x7b4`). `SetState`
+(`FUN_1020dce0`) emits the `soundgroup` event `on` or `off` before writing Activated and starting the transition; the think
 (`FUN_1020dd70`) waits for that clip to end, writes `m_nSkin` (`+0x670`) to `1`/`0`, fires
 `OnActivate`/`OnDeactivate`, then loops `idle_on`/`idle_off`. Nothing in the class touches the
 inherited `CBaseToggle` mover — a `prop_switch` animates only through its own `.mdl` clips.
@@ -1891,8 +1900,42 @@ inherited `CBaseToggle` mover — a `prop_switch` animates only through its own 
 `Use` (`FUN_1020db30`, vtable `+0x2b4`): locked fires `OnLockedUse` and stops; otherwise `OnUse`,
 then its own state flips, then `linkedswitch` is set to the same value. `GetUseIcon`
 (`FUN_1020dfc0`) returns `locked_icon` while locked. Spawn (`FUN_1020d850`) spawnflags: `0x2000`
-start activated (skin 1), `0x4000` start locked, `0x8000` skip the `SOLID_BBOX` model-bbox
+start activated (skin 1), `0x4000` start locked, `0x8000` skip the `SOLID_OBB` studio-header hull
 collision setup.
+
+### Coupled physical, sequence and restored-switch consumer
+
+`vampire.dll:1020d850` calls `CBaseProp::Spawn 1018df70`, not the dynamic-prop Spawn.
+Base rest selects ACT_IDLE/fallback sequence0, writes cycle/playback0, animation time curtime
+and NextThink0; an empty model warns and queues removal. Switch assigns effects `0xa0`.
+With flag `0x8000` clear and a studio header, it writes solid3, calls size wrapper `100b5080`
+with header hull mins/maxs `+0xb4/+0xc0` (then `UTIL_SetSize 100adf10`), writes collision group1
+and relinks. It never calls virtual223 and does not produce a semantic VPhysics object.
+The port's query-only `UElysiumEntityQueryBox` carries its real entity handle, full Source
+rotation and typed prepared studio bounds; `.phy` geometry and render bounds are not this input.
+Source inches reflect Y and convert by2.54 to UE cm; the exported header already contains
+source globalScale. The original authored `.phy` lane remains independent.
+
+`1020df00` writes sequence0 only on a negative lookup: cycle, playback, cached cycle rate,
+finished/loop words and animation clock survive. A valid index calls ResetSequenceInfo
+`10090950`, resets cycle/clock, clears flag `0x40000`; both arms force transmit, install own
+Think and schedule float(curtime + double0.05). `1020dd70` consumes the existing finished
+word BEFORE frame advance: a matching transition index writes skin1/0, fires output using
+owner EHANDLE `+0x10c`, then selects its idle; another nonloop sequence adds `0x40000` and
+clears Think. Finished plus nonloop returns; otherwise virtual250 `1008f120` advances and
+reschedules +0.05. Its default interval is `(0.1+curtime)-animtime`, with <=0.001 early-out;
+cycle advances by cached-cycle-rate * playback * interval, loops subtract trunc(cycle),
+nonloops clamp0/1, and crossing the cycle bounds latches finished even for a loop.
+
+`1020dce0 -> 101f5950` uses the engine attenuation overload with owner, channel2, volume1,
+attenuation1.25 and pitch100. Source's conversion trunc(20/attenuation+50) gives sound level66;
+`FElysiumBodySound`/PlayBodySound preserves owner/channel replacement and sound-before-state order.
+`OnRestore 1020e100` changes Activated only when its bool is true (reset_state2 true,1 false),
+then chains `1008df10`; it does not write skin or start idle. Reverse restore preserves those
+independent saved words and the owned saved OBB bounds/solid. Later forward ServerActivate
+`1011aaf0` invokes `1020d9c0`: valid idle resets phase, negative idle retains it, both +0.05.
+The port replays that later barrier for this leaf; it does not move OnSnapshotApplied or replay
+unreviewed higher-layer callbacks. See the shared pair/filter producer in `physics-interaction.md`.
 
 ## `func_door` / `func_door_rotating` locked I/O
 
@@ -2277,6 +2320,16 @@ from the maker template.
 `FUN_10211970` — stores `definition_file` at `+0x730`, `OnReadBegin` at `+0x734` and
 `OnReadEnd` at `+0x74c`. The UI consumes `use_icon` separately from `+0x76c`; it is not the
 `+0x734` output field.
+
+Spawn (`vampire.dll:0x10211b40`) first runs `CBaseProp::Spawn` (`0x1018df70`), then asks for
+the studio header. Header success writes move type/collide `0,0`, solid type 3, the header
+`+0xb4/+0xc0` hull through the size setter, collision group 1, collision notification
+`0x100ddd90`, then Relink. It does not require an authored `solid` key. Header failure
+does not create this query shape. The hull is a Source OBB query with null semantic physics;
+the visual remains the attachment/UI carrier. Tutorial rows 33 (lined paper) and 1282
+(bus-stop sign) are actual native admission, query, saved-bound and lifecycle witnesses.
+The sign's slot 68 is `CBaseAnimating::ShouldIgnoreCollision` (`0x1008bfe0`); slot 223 is
+the false `0x100b5080` body-policy leaf.
 
 Use begin (`FUN_10211db0`) runs the inherited use-begin path, fires `OnReadBegin` with the player
 activator, then loads the sign definition and acquires one exclusive player/sign session. The sign

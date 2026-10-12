@@ -3,6 +3,7 @@
 
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBrushComponent.h"
+#include "ElysiumEntityQueryBox.h"
 #include "ElysiumCollisionChannels.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
@@ -1049,7 +1050,7 @@ void AElysiumMapActor::RegisterUseAnchor(UPrimitiveComponent* Source,
 	}
 
 	UPrimitiveComponent* Anchor = Source;
-	if (!Source->IsA<UElysiumBrushComponent>())
+	if (!Source->IsA<UElysiumBrushComponent>() && !Source->IsA<UElysiumEntityQueryBox>())
 	{
 		// A visual prop remains non-solid. Give only its rendered bounds a query body: this is a
 		// target surface, not a proximity/action volume, and it follows the source component through
@@ -1079,6 +1080,22 @@ void AElysiumMapActor::RegisterUseAnchor(UPrimitiveComponent* Source,
 	Record.Owner = OwnerHandle;
 
 	StandTerminalProjection(OwnerHandle, Source);
+}
+
+void AElysiumMapActor::RegisterPhysicalUseAnchor(UPrimitiveComponent* Physical, UPrimitiveComponent* Visual,
+	const FElysiumEntityHandle& OwnerHandle)
+{
+	if ((!Physical && !Visual) || !OwnerHandle.IsSet()) return;
+	for (const auto& Record : UseAnchors)
+		if (Record.Owner == OwnerHandle && Record.bNativePhysical
+			&& Record.Component.Get() == Physical && Record.Visual.Get() == Visual) return;
+	UnregisterUseAnchor(OwnerHandle);
+	auto& Record = UseAnchors.AddDefaulted_GetRef();
+	Record.Component = Physical;
+	Record.Visual = Visual;
+	Record.Owner = OwnerHandle;
+	Record.bNativePhysical = true;
+	if (Visual) StandTerminalProjection(OwnerHandle, Visual);
 }
 
 void AElysiumMapActor::StandTerminalProjection(const FElysiumEntityHandle& OwnerHandle,
@@ -1311,12 +1328,15 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 	FCollisionQueryParams Params(FName(TEXT("ElysiumPlayerUse")), /*bTraceComplex*/ false);
 	Params.AddIgnoredActor(Pawn);
 
-	auto FindAnchor = [this](const UPrimitiveComponent* Component) -> const FUseAnchorRecord*
+	auto FindAnchor = [this](const UPrimitiveComponent* Component,
+		const FElysiumEntityHandle& NativeOwner = FElysiumEntityHandle::Invalid()) -> const FUseAnchorRecord*
 	{
 		const FUseAnchorRecord* Exact = UseAnchors.FindByPredicate(
-			[Component](const FUseAnchorRecord& Record)
+			[this, Component, NativeOwner](const FUseAnchorRecord& Record)
 			{
-				return Record.bEnabled && Record.Component.Get() == Component;
+				if (!Record.bEnabled || !Record.Component.IsValid()) return false;
+				if (Record.bNativePhysical && (!EntityWorld || !EntityWorld->Resolve(Record.Owner))) return false;
+				return Record.Component.Get() == Component || (Record.bNativePhysical && NativeOwner.IsSet() && Record.Owner == NativeOwner);
 			});
 		if (Exact || !Component || !Cast<const APawn>(Component->GetOwner()))
 		{
@@ -1352,28 +1372,60 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 		return Out;
 	};
 
-	auto TraceUse = [World, &Eye, &Forward, &Params](float Length, FHitResult& Hit) -> bool
+	FElysiumEntityHandle NativeUseOwner;
+	auto TraceUse = [this, World, &Eye, &Forward, &Params, &NativeUseOwner](float Length, FHitResult& Hit) -> bool
 	{
-		return World->LineTraceSingleByChannel(
-			Hit, Eye, Eye + Forward * Length, ELYSIUM_USE_CHANNEL, Params);
+		NativeUseOwner = FElysiumEntityHandle::Invalid();
+		FElysiumRetailTrace Request;
+		Request.StartCm = Eye; Request.EndCm = Eye + Forward * Length;
+		Request.RetailMask = 0x0600408b; Request.CollisionGroup = 0;
+		Request.PassEntity = EntityWorld ? EntityWorld->PlayerHandle() : FElysiumEntityHandle::Invalid();
+		FElysiumRetailTraceResult Native;
+		TraceRetail(Request, Native);
+		// Characters retain their existing higher-layer body path. The L0 world answer uses Simple.
+		FCollisionQueryParams CharacterParams = Params;
+		FHitResult Character;
+		for (int32 Attempt = 0; Attempt < 32; ++Attempt)
+		{
+			if (!World->LineTraceSingleByChannel(Character, Eye, Request.EndCm, ELYSIUM_USE_CHANNEL, CharacterParams)) break;
+			if (Character.GetActor() && Character.GetActor()->IsA<APawn>())
+			{
+				if (Character.Time <= Native.Fraction) { Hit = Character; return true; }
+				break;
+			}
+			if (!Character.GetComponent()) break;
+			CharacterParams.AddIgnoredComponent(Character.GetComponent());
+		}
+		Hit = FHitResult();
+		Hit.bBlockingHit = Native.Fraction < 1.f || Native.bStartSolid;
+		Hit.Time = Native.Fraction; Hit.ImpactPoint = Native.EndPosCm; Hit.Location = Native.EndPosCm;
+		Hit.Normal = Native.Normal; Hit.ImpactNormal = Native.Normal; Hit.Component = Native.HitComponent;
+		NativeUseOwner = Native.HitEntity;
+		return Hit.bBlockingHit;
 	};
 
-	auto VisibleTo = [World, &Eye, &Params, &FindAnchor](const FVector& Point,
+	auto VisibleTo = [this, World, &Eye, &Params, &FindAnchor](const FVector& Point,
 		const FElysiumEntityHandle& Target) -> bool
 	{
+		FElysiumRetailTrace Request;
+		Request.StartCm = Eye; Request.EndCm = Point; Request.RetailMask = 0x02004089;
+		Request.PassEntity = EntityWorld ? EntityWorld->PlayerHandle() : FElysiumEntityHandle::Invalid();
+		FElysiumRetailTraceResult Native; TraceRetail(Request, Native);
+		if ((Native.Fraction < 1.f || Native.bStartSolid) && Native.HitEntity != Target) return false;
 		FHitResult Hit;
 		if (!World->LineTraceSingleByChannel(Hit, Eye, Point, ELYSIUM_USE_CHANNEL, Params))
 		{
 			return true;
 		}
 		const FUseAnchorRecord* Blocking = FindAnchor(Hit.GetComponent());
-		return Blocking && Blocking->Owner == Target;
+		// Owned L0 components have already passed the retail filter; characters remain caller-owned.
+		return (Blocking && Blocking->Owner == Target) || !Cast<APawn>(Hit.GetActor());
 	};
 
 	FHitResult RayHit;
 	if (TraceUse(UseReachCm, RayHit))
 	{
-		if (const FUseAnchorRecord* Anchor = FindAnchor(RayHit.GetComponent()))
+		if (const FUseAnchorRecord* Anchor = FindAnchor(RayHit.GetComponent(), NativeUseOwner))
 		{
 			Result.Candidates.Add(MakeCandidate(*Anchor, RayHit.ImpactPoint,
 				EElysiumUseSelection::Exact, FVector::Distance(Eye, RayHit.ImpactPoint), 1.0f));
@@ -1449,7 +1501,7 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 
 	if (TraceUse(FallbackReachCm, RayHit))
 	{
-		if (const FUseAnchorRecord* Anchor = FindAnchor(RayHit.GetComponent()))
+		if (const FUseAnchorRecord* Anchor = FindAnchor(RayHit.GetComponent(), NativeUseOwner))
 		{
 			Result.Candidates.Add(MakeCandidate(*Anchor, RayHit.ImpactPoint,
 				EElysiumUseSelection::Exact, FVector::Distance(Eye, RayHit.ImpactPoint), 1.0f));

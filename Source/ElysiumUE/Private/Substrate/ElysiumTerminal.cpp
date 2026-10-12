@@ -19,6 +19,15 @@
 #include "Substrate/ElysiumMoverSounds.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+#include "ElysiumEntityQueryBox.h"
+#include "Substrate/ElysiumCollisionPairs.h"
+#include "ElysiumModelPhysicsInputs.h"
+#include "ElysiumCollisionChannels.h"
+#include "ElysiumUseIcons.h"
+#include "ElysiumMoveSolve.h"
+#include "Map/ElysiumRetailMaskRecipe.h"
+#include "Visual/ElysiumPreparedPropModels.h"
+#include "GameFramework/Actor.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -382,6 +391,8 @@ void FElysiumTerminal::ClampGrid(int32& InOutColumns, int32& InOutRows)
 
 void FElysiumTerminal::Spawn()
 {
+	FElysiumSkillEntity::Spawn();
+	BuildBody(); //10217880: solid/bounds/flags/movetype/Relink precede grid and input setup.
 	// `CBaseTerminal::Spawn` `0x10217880` clamps the grid and zeroes `m_HackFlags`, `m_nMaxInput`
 	// and `m_bAllowDirKeys` (`+0x824`, the field's ONLY writer in vampire.dll). The colour scheme is
 	// replicated in four bits and clamped by the client's rasterizer to `0..3` (`client+0xf08`,
@@ -412,12 +423,15 @@ void FElysiumTerminal::Spawn()
 
 	// The body build is conditional; resolving the screen attachments at the end is not, because a
 	// bodiless terminal still has to report WHICH part it is missing.
-	BuildBody();
 	ResolveScreenAttachments();
 	ReportMissingAttachments();
 }
 
-void FElysiumTerminal::BuildBody()
+FElysiumTerminal::~FElysiumTerminal() { DestroyBody(); }
+UPrimitiveComponent* FElysiumTerminal::GetCollisionQueryBody() const { return QueryBox; }
+void FElysiumTerminal::ReleaseForRemoval() { DestroyBody(); FElysiumEntity::ReleaseForRemoval(); }
+
+void FElysiumTerminal::BuildBody(bool bUseSavedBounds)
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (!Embodiment || !Def || Model.IsEmpty())
@@ -449,22 +463,112 @@ void FElysiumTerminal::BuildBody()
 	{
 		// This is also the one site that stands the glass: `AElysiumMapActor::RegisterUseAnchor`
 		// registers the projection on the visual it was handed (slice C).
-		World->RegisterPropBody(WorldBody, Handle);
+		World->RegisterPropBody(WorldBody, FElysiumEntityHandle::Invalid());
 		// Dormancy alone: `m_bEnabled` never touched retail's collision box (`InputDisable`).
 		World->SetUseAnchorEnabled(Handle, !IsInert());
 	}
+	BuildQuery(bUseSavedBounds);
+}
+
+void FElysiumTerminal::RetireQuery()
+{
+	if (World && bBodyPublished) World->UnregisterUseAnchor(Handle);
+	bBodyPublished = false;
+	if (QueryBox) { QueryBox->Entity = {}; QueryBox->DestroyComponent(); QueryBox = nullptr; }
+}
+
+void FElysiumTerminal::PublishBody()
+{
+	if (World && (QueryBox || WorldBody) && !IsInert() && !bBodyPublished)
+	{
+		World->RegisterPhysicalUseAnchor(QueryBox, WorldBody, Handle);
+		bBodyPublished = true;
+	}
+}
+
+void FElysiumTerminal::BuildQuery(bool bUseSavedBounds)
+{
+	RetireQuery();
+	if (!World || IsDead()) return;
+	if (!World->GetOwnerActor()) { PublishBody(); return; }
+	if (bUseSavedBounds && GetSolid() != 2 && !(bHidden && ScriptSavedSolid == 2)) { PublishBody(); return; }
+	if (!bUseSavedBounds)
+	{
+		if (bSpawnQueryPending) SetSolid(2); //102178fa; only initial/deferred Spawn.
+		const auto Prepared = ElysiumPreparedProps::ForOwner(World->GetOwnerActor());
+		FString Error;
+		const auto* Mesh = Prepared ? Prepared->StaticMesh(ElysiumPreparedProps::ModelId(Model), Error) : nullptr;
+		const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh);
+		if (!Inputs || !Inputs->bStudioBounds) { PublishBody(); return; }
+		UtilSetSize(FVector(Inputs->StudioMinsCm.X, -Inputs->StudioMaxsCm.Y, Inputs->StudioMinsCm.Z) / ElysiumMove::U,
+			FVector(Inputs->StudioMaxsCm.X, -Inputs->StudioMinsCm.Y, Inputs->StudioMaxsCm.Z) / ElysiumMove::U);
+		if (bSpawnQueryPending)
+		{
+			RetailSolidFlags &= ~0xcu; //10217997-a0
+			SetMoveType(0, 0); //slot93/100aad70, before Relink102179bf
+		}
+		bSpawnQueryPending = false;
+	}
+	const FVector Minimum = FVector(CollMins.X, -CollMaxs.Y, CollMins.Z) * ElysiumMove::U;
+	const FVector Maximum = FVector(CollMaxs.X, -CollMins.Y, CollMaxs.Z) * ElysiumMove::U;
+	if (Minimum.ContainsNaN() || Maximum.ContainsNaN() || (Maximum - Minimum).GetMin() < 0.) return;
+	auto* Outer = World->GetOwnerActor();
+	QueryBox = NewObject<UElysiumEntityQueryBox>(Outer);
+	QueryBox->Entity = Handle;
+	QueryBox->SetMobility(EComponentMobility::Movable);
+	QueryBox->SetCanEverAffectNavigation(false);
+	QueryBox->InitBoxExtent((Maximum - Minimum) * .5);
+	QueryBox->SetWorldLocationAndRotation(GetAbsOrigin() + (Minimum + Maximum) * .5, FQuat::Identity);
+	QueryBox->SetCollisionObjectType(ECC_WorldDynamic);
+	QueryBox->SetCollisionResponseToAllChannels(ECR_Ignore);
+	QueryBox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+	QueryBox->SetCollisionResponseToChannel(ElysiumCollision::PlayerChannel, ECR_Block);
+	QueryBox->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
+	QueryBox->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Block);
+	QueryBox->SetMaskFilterOnBodyInstance(ElysiumRetailMask::PropBodyMaskBits(
+		Def && FCString::Atoi(*Def->Keys.FindRef(TEXT("blocks_traces"))) != 0,
+		Def && FCString::Atoi(*Def->Keys.FindRef(TEXT("npc_transparent"))) != 0));
+	QueryBox->SetGenerateOverlapEvents(false);
+	QueryBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	QueryBox->RegisterComponent(); Outer->AddInstanceComponent(QueryBox);
+	GateQuery();
+	PublishBody();
+}
+
+void FElysiumTerminal::GateQuery()
+{
+	if (QueryBox) QueryBox->SetCollisionEnabled(!IsInert() && GetSolid() == 2 && (RetailSolidFlags & 4) == 0
+		? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+}
+
+bool FElysiumTerminal::ShouldIgnoreCollision(FElysiumEntity* Other)
+{ return World && World->CollisionPairs().ContainsEntities(Handle, Other ? Other->Handle : FElysiumEntityHandle::Invalid()); }
+
+void FElysiumTerminal::OnRuntimeCollisionChanged()
+{
+	if (!QueryBox) return;
+	const FVector Minimum(CollMins.X, -CollMaxs.Y, CollMins.Z), Maximum(CollMaxs.X, -CollMins.Y, CollMaxs.Z);
+	if (Minimum.ContainsNaN() || Maximum.ContainsNaN() || (Maximum - Minimum).GetMin() < 0.) return;
+	QueryBox->SetBoxExtent((Maximum - Minimum) * (.5 * ElysiumMove::U));
+	QueryBox->SetWorldLocationAndRotation(GetAbsOrigin() + (Maximum + Minimum) * (.5 * ElysiumMove::U), FQuat::Identity);
+	GateQuery();
+}
+
+void FElysiumTerminal::OnPostRestore(FElysiumEntityWorld&)
+{ bSpawnQueryPending = false; bSavedQueryBounds = true; BuildQuery(true); }
+
+void FElysiumTerminal::OnRuntimeModelAdmitted()
+{
+	DestroyBody(); BuildBody(bSavedQueryBounds); ResolveScreenAttachments(); ReportMissingAttachments();
 }
 
 void FElysiumTerminal::DestroyBody()
 {
+	RetireQuery();
 	// The anchor record, its `ELYSIUM_USE_CHANNEL` proxy and the projection bound to this body all
 	// go with it. Without this a `SetModel` appends a SECOND anchor record (the map actor
 	// de-duplicates on the proxy component, which is a fresh object every time) and leaves the glass
 	// bound to the component the rebuild is about to replace.
-	if (World)
-	{
-		World->UnregisterUseAnchor(Handle);
-	}
 	if (WorldBody)
 	{
 		WorldBody->DestroyComponent();
@@ -1134,6 +1238,7 @@ void FElysiumTerminal::ReportBodilessGlass() const
 void FElysiumTerminal::OnDormancyChanged()
 {
 	FElysiumEntity::OnDormancyChanged();
+	GateQuery();
 	if (WorldBody)
 	{
 		WorldBody->SetVisibility(!IsInert());
@@ -1154,11 +1259,12 @@ void FElysiumTerminal::OnDormancyChanged()
 	{
 		if (IsInert())
 		{
-			World->UnregisterUseAnchor(Handle);
+			if (bBodyPublished) World->UnregisterUseAnchor(Handle);
+			bBodyPublished = false;
 		}
 		else
 		{
-			World->RegisterUseAnchor(WorldBody, Handle);
+			PublishBody();
 		}
 	}
 }
@@ -1166,6 +1272,13 @@ void FElysiumTerminal::OnDormancyChanged()
 void FElysiumTerminal::OnRuntimeTransformChanged()
 {
 	FElysiumEntity::OnRuntimeTransformChanged();
+	if (QueryBox)
+	{
+		QueryBox->SetBoxExtent((CollMaxs - CollMins) * (.5 * ElysiumMove::U));
+		const FVector Center = FVector(CollMins.X + CollMaxs.X, -CollMaxs.Y - CollMins.Y, CollMins.Z + CollMaxs.Z) * (.5 * ElysiumMove::U);
+		QueryBox->SetWorldLocationAndRotation(GetAbsOrigin() + Center, FQuat::Identity);
+		GateQuery();
+	}
 	if (WorldBody)
 	{
 		WorldBody->SetWorldLocationAndRotation(Origin,
@@ -1182,7 +1295,9 @@ void FElysiumTerminal::OnRuntimeModelChanged()
 	// body (and with it the anchor record, the use proxy and the glass), stand the new one, and let
 	// the registration re-bind the projection to the component that now carries the `screen` slot.
 	DestroyBody();
-	BuildBody();
+	bSpawnQueryPending = false; //UtilSetModel writes bounds, not Spawn's solid/flags/movetype.
+	bSavedQueryBounds = World && World->IsApplyingSnapshot();
+	BuildBody(bSavedQueryBounds);
 	ResolveScreenAttachments();
 	ReportMissingAttachments();
 }

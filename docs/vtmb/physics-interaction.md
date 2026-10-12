@@ -1320,6 +1320,53 @@ Identity lifetime, complete ignored-pair mutations and their body/contact notifi
 Unreal containers/Chaos replace internal hash allocation and mechanical pair maintenance.
 An always-empty ignored-pair set would stub same-L0 state, not provide an upward hook.
 
+#### Reached switch Simple and restored pair-owner producer
+
+The actual player-use constructor `vampire.dll:10167470 -> 10341c30` supplies mask
+`0x0600408b`, pass=player, group0, no second entity, first80 and fallback160 Source units;
+visibility uses `0x02004089`. Thus its bilateral stage is reached. The map trace now retains
+separate pass/second/group fields and names the actual native component/actor/entity on line,
+sweep and overlap outputs. Candidate91 and each bilateral68 execute once per native candidate,
+with serial liveness re-resolved after callbacks. Retracing makes progress over distinct ignored
+owners; it has no eight-entity gameplay cap. A query repeating an already ignored identity
+reports query failure. Switch candidate68 `1008bfe0 -> 10158b90` queries the entity pair domain.
+Pass BCC68 `10340650` remains an explicit L1 hook/handoff for its targetability/player words;
+raw APawn use-channel filtering remains a higher seam. This does not close the whole player filter.
+
+Translated `10158b40/10158af0` obtains each native object's slot6 GameData, then mutates the
+unordered entity relation. Direct `10158c00/10158bc0` mutates distinct raw object keys. Both
+then call `10158ab0`, first object followed by second, skipping each static object; duplicate
+Add and absent Remove still perform that recheck. The native service Add `26011780` and
+Remove `26011920` are idempotent membership, not reference counts. The port uses world-owned
+entity serial handles and native incarnation keys, public BodyInstance filter updates and one
+owned Chaos ignore-manager contribution per projected native pair. Projection covers every
+live output with those GameData owners, including former current-field aliases; final Remove
+and Reset remove only that contribution. Query-only switch OBBs invent no object25 notification.
+
+LevelInitPreEntity `1002d930` creates the service; `1002dc50` disposes it after entities/native
+environment. Physics save `10043c70`, restore `100440c0` and environment PostRestore
+`100447f0` do not independently archive the pair table. Actual entity relations are republished
+by restored owners: constraint Activate `1002b420 -> 1002b4c0` on a nonnull native constraint
+reads its reference/attached native endpoints (slots5/6), spawnflag1 calls translated Add,
+then slot3 assigns constraint owner GameData. Engine `2008f2e0` restores the level and reverse
+OnRestore before `engine.dll:200f5170 -> vampire.dll:1011aaf0` forward ServerActivate, before
+startup queries. The existing PhysHinge Chaos producer now persists its actual owner/native
+presence, enabled/broken state and endpoint references, and republishes at that later barrier.
+Typed `m_pConstraint.endpoint1/2` Physics records preserve a native endpoint absent from mutable
+current fields and canonical sharing across constraints. Their actual GameData producer/world
+owns lifetime; the canonical record's constraint does not own or delete a shared endpoint.
+Saved-present constraints can reconstruct when an authored baseline native component is absent.
+This is a reached owner adapter, not completion of all fresh constraint algorithms.
+
+InputTurnOff `1002af90` deactivates the existing native constraint, clears native endpoint
+GameFlags bit2, and with spawnflag1 and both native endpoints removes the translated relation.
+InputTurnOn `1002af70 -> 1002b4c0` runs the existing-native publication/owner arm; no explicit
+native re-enable is inferred from its name. Native destructor `26016c10` retires the object and
+clears GameData but does not delete entity-pair membership. Therefore retiring a mutable current
+alias cannot purge its owner's relation; stale entity serial/native incarnation queries are inert.
+Motor/ragdoll/animlink raw-key reconstruction and the wider constraint/contact families retain
+their named producer frontier. No IVP hash/allocator or solver layout is a port prerequisite.
+
 `Elysium.Substrate.CollisionRulesProduction` covers each predicate rejection/neighbor and
 reversed arguments, 6 remapping, signed edge values, the existing wrapper, registered base/NPC/
 player construction and virtual slot 189. Its real registered NPC/player call with special
@@ -2508,6 +2555,29 @@ words remain byte-compared; the original frozen payload must remain unchanged. T
 oracle-derived postrestore state expectation, with no arbitrary flag masking or compatibility
 migration. The saved clean/dirty absolute cache contract and parent first-target controls remain.
 
+
+### Reached constraint Break input (2026-10-12; bounded correction)
+
+Bounded reached constraint Break correction (2026-10-12): vampire.dll
+CPhysConstraint::InputBreak1002a960 deactivates its native constraint twice, clears bit2
+on reference and attached native endpoint GameFlags (attached helper1002ad20), and for
+spawnflag1 with both actual endpoints removes the translated collision pair10158af0.
+Then a nonnull m_breakSound+45c emits a raw engine-relative sound on owner channel6,
+volume1, attenuation1.25, pitch100; this precedes OnBreak100cd660(this,this,0) and
+QueueRemove101cd940. Input activator is ignored for this output. The existing Unreal
+deactivation is idempotent; internal duplicate calls do not create duplicate observable
+sound/output/removal. The sound seam converts attenuation to trunc(20/1.25+50)=66dB.
+The datamap row is FIELD_SOUNDNAME17, count1, flags6 SAVE|KEY, external breaksound.
+Absent authored sound remains empty; no explicit constructor writer was recovered.
+Inherited Precache1002b170 calls engine PrecacheSound(name,0) only for a nonnull name.
+CPhysConstraint::Spawn1002b1b0 calls base Spawn then tail-dispatches104; actual
+CPhysHinge::Spawn1002b9f0 does not call that base Spawn. The port registers the inherited
+Precache slot without inventing a hinge Spawn dispatch. The native coupled test uses
+an authored breaksound key, changes it through KeyValue, persists the actual archive,
+then observes restored native endpoints/pair/flags, sound, self/self output and queued
+removal order. Raw sound request recording proves this call contract, not the unrelated
+constraint callback/motor/solver families. Primary retained in
+`E:/elysium-work/codex/l0-p1-rotating-reconcile-20261012/constraint-break-primary.txt`.
 
 ### Remaining core selected-model inputs (2026-10-12; bounded P1 dependency)
 

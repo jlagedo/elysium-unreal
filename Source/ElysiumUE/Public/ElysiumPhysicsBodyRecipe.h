@@ -58,6 +58,8 @@ struct FElysiumSavedPhysicsBody
 {
 	int32 EntityIndex = INDEX_NONE;
 	FString FieldName = TEXT("m_pPhysicsObject");
+	// Constraint CUSTOM-owned native endpoint rows preserve object6 independently of the field owner.
+	int32 GameDataEntityIndex = INDEX_NONE;
 	bool bHasObject = true; //positive native snapshot; null omitted custom field is false/false
 	bool bRebuildFromEntity = false; //nonnull field with false128: stored zero-count descriptor ->223
 	FElysiumPhysicsBodyRecipe Recipe;

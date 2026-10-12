@@ -51,6 +51,8 @@ namespace ElysiumModelPhysics
 	FNativeOutput CaptureIdentity(void* Actor);
 	TArray<FNativeOutput> ActiveOutputs(FElysiumEntityWorld& World);
 	bool IsCurrentOutput(const FNativeOutput& Output);
+	void RecheckCollisionFilter(const FNativeOutput& Object); //10158ab0/nonstatic object25
+	void SetNativePairIgnored(const FNativeOutput& First, const FNativeOutput& Second, bool bIgnore);
 	//1002e0a0 /26016d40 /26016d50: current semantic WORD, never a native collision profile.
 	bool GetGameFlags(const FNativeOutput& Object, uint16& OutFlags);
 	bool SetGameFlags(const FNativeOutput& Object, uint32 Flags);

@@ -149,6 +149,9 @@ enum class EElysiumField : uint8
 	// onto the owning descriptor: the walker 0x101a5a80 reaches it through its embedded descent, but
 	// `ReadKeyField` 0x100acab0 tests a row's own name only and never descends, so the read refuses it.
 	Embedded = 1 << 4,
+	// Retail GLOBAL 0x1: declared persistence metadata. Same-map SAVE walks this row;
+	// global entity merging during level transitions remains the P3 restore consumer.
+	Global = 1 << 5,
 };
 ENUM_CLASS_FLAGS(EElysiumField)
 
@@ -174,6 +177,7 @@ struct FElysiumFieldAccessor
 	bool bMapKey = false;
 	bool bOutput = false;
 	bool bEmbedded = false;
+	bool bGlobal = false;
 	uint8 RetailType = 0;
 	EElysiumPersistenceType PersistenceType = EElysiumPersistenceType::Value; // raw FLOAT by default
 	EElysiumTimePolicy TimePolicy = EElysiumTimePolicy::Ordinary; // 0x101cf250
@@ -187,6 +191,7 @@ struct FElysiumFieldAccessor
 		bMapKey  = EnumHasAnyFlags(Flags, EElysiumField::MapKey);
 		bOutput  = EnumHasAnyFlags(Flags, EElysiumField::Output);
 		bEmbedded = EnumHasAnyFlags(Flags, EElysiumField::Embedded);
+		bGlobal = EnumHasAnyFlags(Flags, EElysiumField::Global);
 	}
 
 	// The row's retail `fieldtype_t`: the stated code, else the one the marshalling category implies

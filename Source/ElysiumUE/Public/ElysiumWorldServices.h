@@ -754,8 +754,12 @@ struct FElysiumRetailTrace
 	// it into a channel and a set of entity kinds through `ElysiumRetailMask::Recipe`; 0 traces
 	// nothing and answers clear.
 	int32 RetailMask = 0;
-	// Entities the trace never meets: the filter's pass entity (the looker, the tester) and any
-	// second one (`CTraceFilterSimpleTwoEnt`). Applied to the world answer and the character list.
+	// Actual Simple constructor inputs (101d3190); Ignore carries additional exclusions only.
+	FElysiumEntityHandle PassEntity;
+	FElysiumEntityHandle SecondEntity;
+	int32 CollisionGroup = 0;
+	// Additional exclusions, applied to the world answer and character list. These do not
+	// supply either constructor identity for the bilateral Simple predicates.
 	TArray<FElysiumEntityHandle, TInlineAllocator<2>> Ignore;
 	// The filter the retail call site constructs. `Simple` is every caller's answer before 0019/6.
 	EElysiumRetailTraceFilter Filter = EElysiumRetailTraceFilter::Simple;
@@ -796,6 +800,8 @@ struct FElysiumRetailTraceResult
 	// The brush entity, mover or prop the world answer hit (`tr.m_pEnt`); Invalid for the static
 	// world or no hit.
 	FElysiumEntityHandle HitEntity;
+	TWeakObjectPtr<UPrimitiveComponent> HitComponent;
+	TWeakObjectPtr<AActor> HitActor;
 	// Debug only, for the witness verb: the hit body's contents signature and element; -1 = none.
 	int32 HitSignature = -1;
 	int32 ElementIndex = -1;
@@ -1545,6 +1551,9 @@ public:
 	// query returns geometry only and leaves class eligibility/session policy to EntityWorld.
 	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) = 0;
+	// Native collision and presentation may be separate components of the same entity.
+	virtual void RegisterPhysicalUseAnchor(UPrimitiveComponent* Physical, UPrimitiveComponent* Visual,
+		const FElysiumEntityHandle& Owner) { RegisterUseAnchor(Physical, Owner); }
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) = 0;
 	// Drop every anchor this owner registered, destroy the query proxies that were made for it and
 	// release whatever the registration stood on the side (a terminal's glass). The mirror of

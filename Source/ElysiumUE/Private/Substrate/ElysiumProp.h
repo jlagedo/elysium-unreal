@@ -28,8 +28,10 @@ bool ElysiumPropBodiesEnabled();
 class FElysiumProp : public FElysiumEntity
 {
 public:
+	bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
 	virtual ~FElysiumProp() override;
 	void ReleaseForRemoval() override;
+	void OnPostRestore(FElysiumEntityWorld& InWorld) override;
 	int32 Skin = 0;
 
 	// CDynamicProp's animation keyfields (datamap `0x1058d4f8`, 12 records at `0x1058d53c`). There is
@@ -48,6 +50,7 @@ public:
 	void InputSetAnimation(const FElysiumInputArgs& Args);
 
 protected:
+	virtual bool UsesStudioQueryObb() const { return false; }
 	virtual void Spawn() override;
 	virtual void Think() override;
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
@@ -56,7 +59,7 @@ protected:
 
 	double AnimationEndTime = 0.0;      // absolute seconds the current one-shot ends; 0 = none pending
 
-private:
+protected:
 	virtual bool PreloadAnimClip(const FString& ClipName) override;
 	virtual void PreloadForActivation() override;
 	virtual void Activate() override;
@@ -100,6 +103,7 @@ private:
 	void BuildStaticModelBody(UStaticMeshComponent* Mesh);
 	void BuildModelShadowBody(UStaticMeshComponent* Mesh);
 	void GateVisual();
+	void PublishNativeUseBody();
 
 	// Exactly one representation is live. Ordinary props retain the baked static mesh; a model in
 	// npc_index v4's animated_props section stands a skeletal glTF component instead.
@@ -159,6 +163,8 @@ private:
 	// The clip's authored length, kept for loops too (unlike AnimationEndTime) so a looping phase
 	// wraps in double at the source rather than narrowing an unbounded elapsed time to float.
 	double AnimLengthSeconds = 0.0;
+	float AnimationPlaybackRate = 1.f;
+	float FrozenAnimationPhase = 0.f;
 	// Drift telemetry for the inspector. `resyncs 0` beside a visibly wrong prop says the phase is
 	// right and the clip ORIGIN is wrong, which is a different bug.
 	int32  ResyncCount = 0;

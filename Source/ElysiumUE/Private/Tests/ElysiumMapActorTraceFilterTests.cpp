@@ -111,8 +111,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTraceFilterBoundTest,
 	"Elysium.Arm.Map.TraceFilter.PassBound", GElysiumMapActorTraceFilterFlags)
 bool FElysiumMapActorTraceFilterBoundTest::RunTest(const FString&)
 {
-	// A world whose every pass meets a fresh refused entity stops after the bound, answering the last.
-	int32 Passes = 0;
+	// A finite native scene can contain more than eight refused candidates before its admitted hit.
+	int32 Passes = 0, Callbacks = 0;
 	FElysiumRetailTrace Request;
 	Request.RetailMask = TraceFilterSightMask;
 	FElysiumRetailTraceResult Out;
@@ -125,8 +125,18 @@ bool FElysiumMapActorTraceFilterBoundTest::RunTest(const FString&)
 			O.HitEntity = FElysiumEntityHandle(100 + Passes, 1);
 			return true;
 		},
-		[](const FElysiumEntityHandle&) { return true; });
-	TestEqual(TEXT("one pass plus the bound"), Passes, 1 + ElysiumRetailMask::MaxRefusedEntityPasses);
+		[&Callbacks](const FElysiumEntityHandle& Hit) { ++Callbacks; return Hit.Index < 113; });
+	TestEqual(TEXT("all twelve refused candidates then admitted thirteenth"), Passes, 13);
+	TestEqual(TEXT("one callback per queried candidate"), Callbacks, 13);
+	TestEqual(TEXT("admitted hit retained"), Out.HitEntity.Index, 113);
+	Passes = Callbacks = 0;
+	const bool Progress = ElysiumRetailMask::TraceSkippingRefusedEntities(Request, Out,
+		[&Passes](const FElysiumRetailTrace&, FElysiumRetailTraceResult& O)
+		{ ++Passes; O = FElysiumRetailTraceResult(); O.HitEntity = FElysiumEntityHandle(100,1); return true; },
+		[&Callbacks](const FElysiumEntityHandle&) { ++Callbacks; return true; });
+	TestFalse(TEXT("broken query repeating ignored identity reports no progress"), Progress);
+	TestEqual(TEXT("repeated candidate never invokes virtual filter again"), Callbacks, 1);
+	TestEqual(TEXT("broken query stops at repeated result"), Passes, 2);
 	return true;
 }
 

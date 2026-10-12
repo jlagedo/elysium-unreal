@@ -5,6 +5,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumBrushComponent.h"
 #include "Substrate/ElysiumModelPhysics.h"
+#include "Substrate/ElysiumPhysProp.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
@@ -330,6 +331,14 @@ namespace ElysiumSaveRestore
 						State.bShadowMember = State.bHasObject && CaptureWorld->PhysicsShadows().Contains(Entity->Handle);
 						Snapshot.PhysicsBodies.Add(MoveTemp(State));
 					}
+					// Constraint CUSTOM owns references to its actual endpoints, including former outputs
+					// absent from current fields. Sharing is expressed by typed owner/field references.
+					for (const FElysiumEntityState& Row : Snapshot.Entities)
+					{
+						auto* Entity = CaptureWorld->Resolve(FElysiumEntityHandle(Row.Index, CaptureWorld->GetEpoch()));
+						if (Entity && Entity->Def && Entity->Def->Classname == TEXT("phys_hinge")
+							&& !static_cast<FElysiumPhysHinge*>(Entity)->CaptureConstraintPhysics(Snapshot.PhysicsBodies)) Snapshot.bPhysicsSaveFailed = true;
+					}
 				}
 				const int32 Count = Snapshot.PhysicsBodies.Num();
 				S.WriteInt(&Count, 1);
@@ -348,6 +357,7 @@ namespace ElysiumSaveRestore
 			void Restore(FRestore& R, int32, int32) override
 			{
 				if (!ReadRows(R) || !Context->World) return;
+				Context->World->RetireRestoredConstraintEndpoints();
 				// The host loads authored entities before applying a save. Their Spawn-created natives
 				// are baseline incarnations, not destination fields reconstructed by Physics. Retire all
 				// of them before any saved field is allocated (100440c0 -> 100443e0 requires null).
@@ -357,7 +367,7 @@ namespace ElysiumSaveRestore
 				{
 					FElysiumEntity* Baseline = Context->World->Resolve(FElysiumEntityHandle(State.EntityIndex, Context->World->GetEpoch()));
 					if (Baseline && Context->Decoded->Entities.ContainsByPredicate([&](const FElysiumEntityState& Row) { return Row.Index == State.EntityIndex; }))
-						Baseline->VPhysicsDestroyObject(); //CUSTOM MakeEmpty precedes all reconstruction
+						if (State.FieldName == TEXT("m_pPhysicsObject")) Baseline->VPhysicsDestroyObject(); //CUSTOM MakeEmpty precedes all reconstruction
 				}
 				TArray<FElysiumEntity*> Reconstructed;
 				for (const FElysiumSavedPhysicsBody& State : Context->Decoded->PhysicsBodies)
@@ -368,7 +378,7 @@ namespace ElysiumSaveRestore
 						continue; //100440c0 requires both restored owner and registered field
 					const bool bRegisteredField = State.bHasObject || State.bRebuildFromEntity;
 					if (!bRegisteredField) continue; //omitted custom field: MakeEmpty only, no10045ab0 registration
-					if (State.bRebuildFromEntity || !Entity->ShouldSavePhysics())
+					if (State.FieldName == TEXT("m_pPhysicsObject") && (State.bRebuildFromEntity || !Entity->ShouldSavePhysics()))
 					{
 						//10044305 CALL[EDX+37c] is223 (not225), after restored entity state/fixup.
 						if (Entity->Body)
@@ -383,9 +393,23 @@ namespace ElysiumSaveRestore
 						UE_LOG(LogElysiumWorld, Error, TEXT("Physics restore %d.%s: %s"), State.EntityIndex, *State.FieldName, *Error);
 						Context->bRowDecodeFailed = true;
 						for (FElysiumEntity* Created : Reconstructed) Created->VPhysicsDestroyObject();
+						Context->World->RetireRestoredConstraintEndpoints();
 						return;
 					}
 					Reconstructed.Add(Entity);
+				}
+				for (const FElysiumEntityState& Row : Context->Decoded->Entities)
+				{
+					auto* Entity = Context->World->Resolve(FElysiumEntityHandle(Row.Index, Context->World->GetEpoch()));
+					FString Error;
+					if (Entity && Entity->Def && Entity->Def->Classname == TEXT("phys_hinge")
+						&& !static_cast<FElysiumPhysHinge*>(Entity)->ValidateRestoredConstraintEndpoints(Error))
+					{
+						UE_LOG(LogElysiumWorld, Error, TEXT("Physics restore %d: %s"),Row.Index,*Error);
+						Context->bRowDecodeFailed = true;
+						for (FElysiumEntity* Created : Reconstructed) Created->VPhysicsDestroyObject();
+						Context->World->RetireRestoredConstraintEndpoints(); return;
+					}
 				}
 			}
 			bool ReadRows(FRestore& R)
@@ -396,7 +420,7 @@ namespace ElysiumSaveRestore
 				const int32 Count = R.ReadInt();
 				if (Count < 0 || Count > (R.Data->Size - R.Tell()) / 4)
 				{ Context->bRowDecodeFailed = true; return false; }
-				TSet<int32> Seen;
+				TSet<FString> Seen;
 				for (int32 Index = 0; Index < Count; ++Index)
 				{
 					const int32 Size = R.ReadInt();
@@ -406,9 +430,11 @@ namespace ElysiumSaveRestore
 					R.ReadData(Bytes.GetData(), Size);
 					FElysiumSavedPhysicsBody& State = Rows.AddDefaulted_GetRef();
 					if (!GameRowFromBytes(Bytes, Context->Decoded->SchemaVersion, Context->Decoded->SaveBase, State)
-						|| State.EntityIndex < 0 || State.FieldName != TEXT("m_pPhysicsObject") || Seen.Contains(State.EntityIndex))
+						|| State.EntityIndex < 0 || (State.FieldName != TEXT("m_pPhysicsObject")
+							&& State.FieldName != TEXT("m_pConstraint.endpoint1") && State.FieldName != TEXT("m_pConstraint.endpoint2"))
+						|| Seen.Contains(FString::Printf(TEXT("%d.%s"), State.EntityIndex, *State.FieldName)))
 					{ Context->bRowDecodeFailed = true; return false; }
-					Seen.Add(State.EntityIndex);
+					Seen.Add(FString::Printf(TEXT("%d.%s"), State.EntityIndex, *State.FieldName));
 				}
 				return true;
 			}

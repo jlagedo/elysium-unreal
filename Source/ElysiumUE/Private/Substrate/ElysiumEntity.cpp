@@ -1267,7 +1267,7 @@ void FElysiumEntity::SetAbsOrigin(FVector& NewOrigin)
 	if (bLocalChanged && (bParentLocalPose || bNativeLocalPose)) LocalOrigin = Local; // +0x41c, changed-only
 	bCoordinateFrameValid = true;
 	if (bNativeLocalPose)
-	{ if (World) World->NotifyVisualChanged(*this); }
+	{ if (World) World->NotifyVisualChanged(*this); OnRuntimeCollisionChanged(); }
 	else OnRuntimeTransformChanged();
 	if (bLocalChanged)
 	{
@@ -1328,7 +1328,7 @@ void FElysiumEntity::SetAbsAngles(FRotator& NewAngles)
 	if (bLocalChanged && (bParentLocalPose || bNativeLocalPose)) LocalAngles = Local; // +0x428, changed-only
 	bCoordinateFrameValid = true;
 	if (bNativeLocalPose)
-	{ if (World) World->NotifyVisualChanged(*this); }
+	{ if (World) World->NotifyVisualChanged(*this); OnRuntimeCollisionChanged(); }
 	else OnRuntimeTransformChanged();
 	if (bLocalChanged)
 	{

@@ -16,6 +16,12 @@
 #include "ElysiumBinds.h"
 #include "ElysiumContentsSignature.h"
 #include "ElysiumBrushComponent.h"
+#include "ElysiumCollisionChannels.h"
+#include "ElysiumEntityQueryBox.h"
+#include "ElysiumMapEntities.h"
+#include "ElysiumModelCatalogues.h"
+#include "Substrate/ElysiumPropLeaves.h"
+#include "Visual/ElysiumPreparedPropModels.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraRig.h"
@@ -1641,27 +1647,87 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		return false;
 	}
 
-	auto AddTarget = [Map](const TCHAR* Name, const FVector& Location,
-		const FVector& Extent, const FElysiumEntityHandle& Handle)
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr,
+		TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr,
+		TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> ModelIds = { TEXT("vtmb:model:scenery/structural/switches/switch") };
+	TSet<FSoftObjectPath> Paths;
+	FString PreparedError;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, ModelIds, Paths, PreparedError))
 	{
-		UBoxComponent* Source = NewObject<UBoxComponent>(Map, FName(Name));
-		Source->InitBoxExtent(Extent);
-		Source->SetupAttachment(Map->GetRootComponent());
-		Source->SetWorldLocation(Location);
-		Source->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Source->RegisterComponent();
-		Map->AddInstanceComponent(Source);
-		Map->RegisterUseAnchor(Source, Handle);
-		return Source;
+		AddError(PreparedError); return false;
+	}
+	TArray<UObject*> Assets;
+	for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+	const auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, ModelIds, Assets, PreparedError);
+	if (!TestTrue(TEXT("actual targeting switch prepared admission"), Prepared.IsValid())) return false;
+	FElysiumEntityDefs Core;
+	if (!TestTrue(TEXT("actual tutorial697 targeting producer"),
+		ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"), Core) != EElysiumEntityDefSource::None
+		&& Core.Defs.IsValidIndex(697) && Core.Defs[697].Classname == TEXT("prop_switch"))) return false;
+	FElysiumWorldServices NativeServices;
+	NativeServices.Embodiment = Map;
+	Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map, nullptr, NativeServices));
+	auto& Entities = *Map->GetEntityWorld();
+	FElysiumEntityDefs EmptyDefs; EmptyDefs.MapName = TEXT("__use_targeting_native__");
+	Entities.Load(MoveTemp(EmptyDefs));
+	const FElysiumEntityHandle Player = Entities.SpawnPlayer();
+	Entities.Activate(0.0);
+
+	// Retain the visual/proxy presentation contract independently of native acquisition.
+	FElysiumEntityDef PresentationDef; PresentationDef.Classname = TEXT("info_target");
+	const FElysiumEntityHandle PresentationHandle = Entities.SpawnRuntimeEntity(PresentationDef);
+	UBoxComponent* PresentationVisual = NewObject<UBoxComponent>(Map, TEXT("PresentationVisual"));
+	PresentationVisual->InitBoxExtent(FVector(3.0f));
+	PresentationVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	PresentationVisual->RegisterComponent(); Map->AddInstanceComponent(PresentationVisual);
+	Map->RegisterUseAnchor(PresentationVisual, PresentationHandle);
+	TestEqual(TEXT("presentation resolves the physical use visual rather than its query proxy"),
+		Map->FindUseVisual(PresentationHandle), static_cast<UPrimitiveComponent*>(PresentationVisual));
+	Map->UnregisterUseAnchor(PresentationHandle);
+	PresentationVisual->DestroyComponent();
+
+	auto AddTarget = [this, &Entities, &Core](const TCHAR* Name, const FVector& Location)
+	{
+		FElysiumEntityDef Definition = Core.Defs[697];
+		Definition.TargetName = Name; Definition.Origin = Location; Definition.Keys.Add(TEXT("angles"), TEXT("0 0 0"));
+		Definition.Outputs.Reset(); Definition.Keys.Add(TEXT("spawnflags"), TEXT("0"));
+		Definition.Keys.Remove(TEXT("parentname"));
+		const auto Handle = Entities.SpawnRuntimeEntity(MoveTemp(Definition));
+		auto* Entity = Entities.Resolve(Handle);
+		auto* Leaf = Entity ? Entity->AsPropSwitch() : nullptr;
+		if (!TestTrue(TEXT("target is a live registered tutorial switch with native studio OBB"),
+			Leaf && Leaf->QueryBody() && Leaf->QueryBody()->IsRegistered()
+			&& Leaf->QueryBody()->Entity == Handle && !Leaf->VPhysicsGetObject())) return FElysiumEntityHandle::Invalid();
+		Leaf->SetRuntimeTransform(Location, FVector::ZeroVector);
+		return Handle;
+	};
+	auto DisableTarget = [Map, &Entities](const FElysiumEntityHandle& Handle)
+	{
+		Map->SetUseAnchorEnabled(Handle, false);
+		// Anchor eligibility is separate from physical occlusion: move the real prior body away.
+		if (auto* Entity = Entities.Resolve(Handle))
+			Entity->SetRuntimeOrigin(FVector(10000.0f + Handle.Index * 100.0f, 10000.0f, 10000.0f));
+	};
+	auto TraceUse = [Map, Player, &BodyOrigin, Pawn](float SourceUnits)
+	{
+		FElysiumRetailTrace Request; Request.StartCm = BodyOrigin;
+		Request.EndCm = BodyOrigin + Pawn->GetViewRotation().Vector() * (SourceUnits * ElysiumMove::U);
+		Request.RetailMask = 0x0600408b; Request.PassEntity = Player; Request.CollisionGroup = 0;
+		FElysiumRetailTraceResult Hit; Map->TraceRetail(Request, Hit); return Hit;
 	};
 
 	const FVector Aim = Pawn->GetViewRotation().Vector().GetSafeNormal();
 	const FVector Side = FRotationMatrix(Pawn->GetViewRotation()).GetScaledAxis(EAxis::Y).GetSafeNormal();
-	const FElysiumEntityHandle ExactHandle(10, 1);
-	UBoxComponent* ExactSource = AddTarget(TEXT("ExactSource"), BodyOrigin + Aim * 150.0f,
-		FVector(3.0f), ExactHandle);
-	TestEqual(TEXT("presentation resolves the physical use visual rather than its query proxy"),
-		Map->FindUseVisual(ExactHandle), static_cast<UPrimitiveComponent*>(ExactSource));
+	const FElysiumEntityHandle ExactHandle = AddTarget(TEXT("ExactSource"), BodyOrigin + Aim * 150.0f);
+	auto* ExactEntity = Entities.Resolve(ExactHandle);
+	if (!ExactEntity || !ExactEntity->AsPropSwitch()) return false;
+	const auto ExactHit = TraceUse(80.0f);
+	TestTrue(TEXT("80u native ray resolves current serial/component/fraction before exact acquisition"),
+		ExactHit.Fraction > 0.f && ExactHit.Fraction < 1.f && ExactHit.HitEntity == ExactHandle
+		&& ExactHit.HitComponent == ExactEntity->AsPropSwitch()->QueryBody() && ExactHit.HitActor == Map);
 	FElysiumUseQueryResult Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("exact ray produces one target"), Query.Candidates.Num(), 1);
 	if (!Query.Candidates.IsEmpty())
@@ -1678,11 +1744,10 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		Map->FindUseVisual(ExactHandle));
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestTrue(TEXT("disabled anchor is removed from exact targeting"), Query.Candidates.IsEmpty());
+	DisableTarget(ExactHandle);
 
 	// 10 cm off-axis at 150 cm is ~3.8°, inside retail player_use_arc 30°.
-	const FElysiumEntityHandle ConeHandle(11, 1);
-	AddTarget(TEXT("ConeSource"), BodyOrigin + Aim * 150.0f + Side * 10.0f,
-		FVector(2.0f), ConeHandle);
+	const FElysiumEntityHandle ConeHandle = AddTarget(TEXT("ConeSource"), BodyOrigin + Aim * 150.0f + Side * 10.0f);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("an off-axis target inside the 30 degree FOV is selected"),
 		Query.Candidates.Num(), 1);
@@ -1693,19 +1758,14 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 			Query.Candidates[0].Selection, EElysiumUseSelection::Assisted);
 	}
 
-	Map->SetUseAnchorEnabled(ConeHandle, false);
-	const FElysiumEntityHandle WideHandle(12, 1);
-	AddTarget(TEXT("WideSource"), BodyOrigin + Aim * 150.0f + Side * 150.0f,
-		FVector(2.0f), WideHandle);
+	DisableTarget(ConeHandle);
+	const FElysiumEntityHandle WideHandle = AddTarget(TEXT("WideSource"), BodyOrigin + Aim * 150.0f + Side * 150.0f);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestTrue(TEXT("a 45 degree miss is outside the 30 degree FOV"), Query.Candidates.IsEmpty());
 
-	Map->SetUseAnchorEnabled(WideHandle, false);
-	const FElysiumEntityHandle LeftHandle(20, 1);
-	const FElysiumEntityHandle RightHandle(21, 1);
-	AddTarget(TEXT("LeftButtonSource"), BodyOrigin + Aim * 160.0f - Side * 7.0f,
-		FVector(3.0f), LeftHandle);
-	AddTarget(TEXT("RightButtonSource"), BodyOrigin + Aim * 160.0f, FVector(3.0f), RightHandle);
+	DisableTarget(WideHandle);
+	const FElysiumEntityHandle LeftHandle = AddTarget(TEXT("LeftButtonSource"), BodyOrigin + Aim * 160.0f - Side * 7.0f);
+	const FElysiumEntityHandle RightHandle = AddTarget(TEXT("RightButtonSource"), BodyOrigin + Aim * 160.0f);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("look-ray among adjacent buttons returns one control"), Query.Candidates.Num(), 1);
 	if (!Query.Candidates.IsEmpty())
@@ -1714,10 +1774,17 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 			Query.Candidates[0].Owner, RightHandle);
 	}
 
-	Map->SetUseAnchorEnabled(LeftHandle, false);
-	Map->SetUseAnchorEnabled(RightHandle, false);
-	const FElysiumEntityHandle MidFarHandle(29, 1);
-	AddTarget(TEXT("MidFarSource"), BodyOrigin + Aim * 240.0f, FVector(2.0f), MidFarHandle);
+	DisableTarget(LeftHandle);
+	DisableTarget(RightHandle);
+	const FElysiumEntityHandle MidFarHandle = AddTarget(TEXT("MidFarSource"), BodyOrigin + Aim * 240.0f);
+	const auto ShortHit = TraceUse(80.0f);
+	TestTrue(TEXT("240cm target is outside the real 80u ray"), ShortHit.Fraction == 1.f && !ShortHit.HitEntity.IsSet());
+	const auto FallbackHit = TraceUse(160.0f);
+	auto* MidFarEntity = Entities.Resolve(MidFarHandle);
+	TestTrue(TEXT("160u native fallback hits current target serial/component/fraction"),
+		MidFarEntity && MidFarEntity->AsPropSwitch() && FallbackHit.Fraction > .5f && FallbackHit.Fraction < 1.f
+		&& FallbackHit.HitEntity == MidFarHandle && FallbackHit.HitComponent == MidFarEntity->AsPropSwitch()->QueryBody()
+		&& FallbackHit.HitActor == Map);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("the 160 unit fallback ray still reaches past 80 units"),
 		Query.Candidates.Num(), 1);
@@ -1726,16 +1793,14 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		TestEqual(TEXT("fallback names the mid-far target"), Query.Candidates[0].Owner, MidFarHandle);
 	}
 
-	Map->SetUseAnchorEnabled(MidFarHandle, false);
-	const FElysiumEntityHandle FarHandle(30, 1);
-	AddTarget(TEXT("FarSource"), BodyOrigin + Aim * 450.0f, FVector(2.0f), FarHandle);
+	DisableTarget(MidFarHandle);
+	const FElysiumEntityHandle FarHandle = AddTarget(TEXT("FarSource"), BodyOrigin + Aim * 450.0f);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestTrue(TEXT("beyond the 160 unit fallback is rejected"), Query.Candidates.IsEmpty());
 
-	Map->SetUseAnchorEnabled(FarHandle, false);
-	const FElysiumEntityHandle OccludedHandle(31, 1);
+	DisableTarget(FarHandle);
 	const FVector OccludedPoint = BodyOrigin + Aim * 150.0f;
-	AddTarget(TEXT("OccludedSource"), OccludedPoint, FVector(3.0f), OccludedHandle);
+	const FElysiumEntityHandle OccludedHandle = AddTarget(TEXT("OccludedSource"), OccludedPoint);
 	AActor* WallOwner = World->SpawnActor<AActor>();
 	UBoxComponent* Wall = NewObject<UBoxComponent>(WallOwner, TEXT("UseWall"));
 	WallOwner->SetRootComponent(Wall);
@@ -1745,15 +1810,18 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	Wall->SetCollisionObjectType(ECC_WorldStatic);
 	Wall->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Wall->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Block);
+	Wall->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
 	Wall->RegisterComponent();
 	WallOwner->AddInstanceComponent(Wall);
+	const auto WallHit = TraceUse(80.0f);
+	TestTrue(TEXT("actual native world wall occludes before target without an invented entity"),
+		WallHit.Fraction > 0.f && WallHit.Fraction < 1.f && WallHit.HitComponent == Wall
+		&& WallHit.HitActor == WallOwner && !WallHit.HitEntity.IsSet());
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestTrue(TEXT("wall occlusion rejects the target"), Query.Candidates.IsEmpty());
 	TestEqual(TEXT("wall occlusion is reported"), Query.MissOutcome, EElysiumUseOutcome::Occluded);
 	Wall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	const FElysiumEntityHandle SlabHandle(40, 1);
-	const FElysiumEntityHandle KnobHandle(41, 1);
 	FElysiumConvexHull SlabHull;
 	for (const float X : { -4.f, 4.f })
 	{
@@ -1765,15 +1833,21 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 			}
 		}
 	}
-	UElysiumBrushComponent* Slab = NewObject<UElysiumBrushComponent>(Map, TEXT("DoorSlab"));
-	Slab->InitBrush(SlabHandle, { SlabHull }, EElysiumBrushSolidity::Solid,
-		ElysiumTestBrushSignature());
-	Slab->SetupAttachment(Map->GetRootComponent());
-	Slab->SetWorldLocation(BodyOrigin + Aim * 75.0f);
-	Slab->RegisterComponent();
-	Map->AddInstanceComponent(Slab);
+	FElysiumEntityDef SlabDef; SlabDef.Classname = TEXT("func_brush"); SlabDef.TargetName = TEXT("DoorSlab");
+	SlabDef.Model = 1; SlabDef.Keys.Add(TEXT("model"), TEXT("*1"));
+	SlabDef.Contents = 0x1; SlabDef.bBlocksPlayer = true; // same SOLID PNS signature as original slab
+	SlabDef.Origin = BodyOrigin + Aim * 75.0f; SlabDef.Hulls.Add(SlabHull);
+	const FElysiumEntityHandle SlabHandle = Entities.SpawnRuntimeEntity(MoveTemp(SlabDef));
+	auto* SlabEntity = Entities.Resolve(SlabHandle);
+	UElysiumBrushComponent* Slab = SlabEntity ? SlabEntity->Body : nullptr;
+	if (!TestTrue(TEXT("door-front geometry has a real registered native brush owner"),
+		Slab && Slab->IsRegistered() && Slab->GetOwningEntity() == SlabHandle)) return false;
 	Map->RegisterUseAnchor(Slab, SlabHandle);
-	AddTarget(TEXT("KnobBehindSlab"), BodyOrigin + Aim * 150.0f, FVector(3.0f), KnobHandle);
+	const FElysiumEntityHandle KnobHandle = AddTarget(TEXT("KnobBehindSlab"), BodyOrigin + Aim * 150.0f);
+	const auto SlabHit = TraceUse(80.0f);
+	TestTrue(TEXT("native door-front ray hits real brush component/serial/fraction under SOLID Sight signature"),
+		Slab->GetContentsSignature() == ElysiumTestBrushSignature() && SlabHit.Fraction > 0.f && SlabHit.Fraction < 1.f
+		&& SlabHit.HitEntity == SlabHandle && SlabHit.HitComponent == Slab && SlabHit.HitActor == Map);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("the look-ray selects the door slab in front of its knob"),
 		Query.Candidates.Num(), 1);
@@ -1781,9 +1855,11 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("the slab is the use target"), Query.Candidates[0].Owner, SlabHandle);
 	}
-	Map->SetUseAnchorEnabled(KnobHandle, false);
-	Slab->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	DisableTarget(KnobHandle);
 	Map->SetUseAnchorEnabled(SlabHandle, false);
+	SlabEntity->QueueRemove();
+	Entities.PurgeEntityRemovals();
+	TestNull(TEXT("prior physical slab is retired before camera/rotation observations"), Entities.Resolve(SlabHandle));
 	Map->SetUseAnchorEnabled(OccludedHandle, true);
 
 	// The rendered boom is not the search origin. Offset the camera; look and eye stay on the pawn.
@@ -1804,19 +1880,17 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		TestEqual(TEXT("eye-forward still names the on-axis target"),
 			Query.Candidates[0].Owner, OccludedHandle);
 	}
-	Map->SetUseAnchorEnabled(OccludedHandle, false);
+	DisableTarget(OccludedHandle);
 
-	// A source component rotated in world space must keep its use proxy aligned to its local bounds.
-	const FElysiumEntityHandle RotatedHandle(50, 1);
-	UBoxComponent* RotatedSource = NewObject<UBoxComponent>(Map, TEXT("RotatedTargetSource"));
-	RotatedSource->InitBoxExtent(FVector(10.0f, 2.0f, 2.0f));
-	RotatedSource->SetupAttachment(Map->GetRootComponent());
-	RotatedSource->SetWorldLocationAndRotation(
-		BodyOrigin + Aim * 150.0f, FRotator(0.0f, 90.0f, 0.0f));
-	RotatedSource->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	RotatedSource->RegisterComponent();
-	Map->AddInstanceComponent(RotatedSource);
-	Map->RegisterUseAnchor(RotatedSource, RotatedHandle);
+	// A rotated source keeps its native studio OBB aligned to the stored local bounds.
+	const FElysiumEntityHandle RotatedHandle = AddTarget(TEXT("RotatedTargetSource"), BodyOrigin + Aim * 150.0f);
+	auto* RotatedEntity = Entities.Resolve(RotatedHandle);
+	if (!RotatedEntity || !RotatedEntity->AsPropSwitch()) return false;
+	RotatedEntity->SetRuntimeAngles(FVector(0.0f, 90.0f, 0.0f));
+	const auto RotatedHit = TraceUse(80.0f);
+	TestTrue(TEXT("rotated physical query preserves current owner and component"),
+		RotatedHit.Fraction < 1.f && RotatedHit.HitEntity == RotatedHandle
+		&& RotatedHit.HitComponent == RotatedEntity->AsPropSwitch()->QueryBody());
 
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("rotated use anchor is selectable along player aim"),
@@ -1826,7 +1900,7 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		TestEqual(TEXT("rotated use anchor names the expected entity"),
 			Query.Candidates[0].Owner, RotatedHandle);
 	}
-	Map->SetUseAnchorEnabled(RotatedHandle, false);
+	DisableTarget(RotatedHandle);
 
 	Map->ClearUseAnchors();
 	Map->Destroy();

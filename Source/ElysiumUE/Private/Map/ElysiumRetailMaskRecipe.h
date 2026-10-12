@@ -104,10 +104,6 @@ namespace ElysiumRetailMask
 		return RenderMode != 0 && (RetailMask & Window) == 0;       // 101d3112
 	}
 
-	// How many entities one trace may pass over before the answer stands. Retail's filter has no
-	// bound; the port re-traces once per refused entity, and this caps a pathological stack.
-	inline constexpr int32 MaxRefusedEntityPasses = 8;
-
 	// The per-hit loop. `DoTrace(Request, Out)` is one world trace honouring `Request.Ignore` by
 	// handle; `Rejects(Out.HitEntity)` is the arms over the hit entity's words. A refused entity is
 	// appended to a copy of the request's ignore list and the trace is asked again; the result is the
@@ -125,16 +121,23 @@ namespace ElysiumRetailMask
 			return true;
 		}
 		TRequest Next = Request;
-		for (int32 Pass = 0; Pass < MaxRefusedEntityPasses && Out.HitEntity.IsSet()
-			&& Rejects(Out.HitEntity); ++Pass)
+		while (true)
 		{
+			if (Next.Ignore.Contains(Out.HitEntity))
+			{
+				// A query returning an already refused identity made no progress.
+				Out = TResult(); Out.StartPosCm = Request.StartCm; Out.EndPosCm = Request.EndCm;
+				return false;
+			}
 			Next.Ignore.Add(Out.HitEntity);
 			if (!DoTrace(Next, Out))
 			{
 				return false;
 			}
+			if (Out.HitEntity.IsSet() && Next.Ignore.Contains(Out.HitEntity))
+			{ Out = TResult(); Out.StartPosCm = Request.StartCm; Out.EndPosCm = Request.EndCm; return false; }
+			if (!Out.HitEntity.IsSet() || !Rejects(Out.HitEntity)) return true;
 		}
-		return true;
 	}
 
 	// The query's `IgnoreMask` for one recipe and filter. Characters never (the kernel folds them);

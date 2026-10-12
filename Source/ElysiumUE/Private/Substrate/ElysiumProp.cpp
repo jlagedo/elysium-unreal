@@ -12,11 +12,13 @@
 #include "ElysiumPhysicsPropComponent.h"
 #include "ElysiumModelPhysicsInputs.h"
 #include "Substrate/ElysiumModelPhysics.h"
+#include "Substrate/ElysiumCollisionPairs.h"
 #include "Visual/ElysiumPreparedPropModels.h"
 #include "ElysiumMoveSolve.h"
 #include "PhysicsEngine/BodyInstance.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimSingleNodeInstance.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
@@ -24,6 +26,9 @@
 #include "HAL/IConsoleManager.h"
 #include "Math/BoxSphereBounds.h"
 #include "Misc/Paths.h"
+
+bool FElysiumProp::ShouldIgnoreCollision(FElysiumEntity* Other)
+{ return World && World->CollisionPairs().ContainsEntities(Handle,Other ? Other->Handle : FElysiumEntityHandle::Invalid()); } //1008bfe0 ->10158b90
 
 namespace ElysiumPropTraceBody
 {
@@ -71,8 +76,10 @@ bool ElysiumPropBodiesEnabled()
 
 void FElysiumProp::Spawn()
 {
+	if (UsesStudioQueryObb() && Model.IsEmpty()) { QueueRemove(); return; } //1018df70
 	BuildBody(/*bFromSetModel=*/false);
 	StandRestPose();
+	if (UsesStudioQueryObb()) { NextThink = 0.f; return; } // CBaseProp rest, no dynamic think
 	// CDynamicProp::Spawn (FUN_101905e0) arms the animate think only for a random animator.
 	// Every other prop spawns thinking never; SetAnimation is what arms it later.
 	if (bRandomAnimator && World)
@@ -202,6 +209,11 @@ void FElysiumProp::Serialize(FElysiumSaveArchive& Ar)
 	// restarts the clip, which is what re-derives it. `bRestPoseHeld` has to be, though — the
 	// replay would otherwise start a resting prop's clip *running* instead of holding frame 0.
 	Ar << CurrentAnimation << bAnimationLoop << bRestPoseHeld << NextRandAnim;
+	float SavedPhase = FrozenAnimationPhase, SavedRate = AnimationPlaybackRate;
+	if (AsPropSwitch() != nullptr)
+	{
+		Ar << SavedPhase << SavedRate;
+	}
 	if (Ar.IsLoading() && AnimatedVisual && !CurrentAnimation.IsEmpty())
 	{
 		const bool bWasHeld = bRestPoseHeld;
@@ -215,7 +227,19 @@ void FElysiumProp::Serialize(FElysiumSaveArchive& Ar)
 				bRestPoseHeld = true;
 			}
 		}
+		if (AsPropSwitch() != nullptr && World && World->Embodiment())
+		{
+			World->Embodiment()->SeekCinematicClip(AnimatedVisual, SavedPhase);
+			World->Embodiment()->SetBodySequencePlaybackRate(AnimatedVisual, SavedRate);
+			AnimationPlaybackRate = SavedRate;
+			FrozenAnimationPhase = SavedPhase;
+			AnimStartTime = SavedRate != 0.f ? World->NowSeconds() - SavedPhase / SavedRate : World->NowSeconds();
+			AnimationEndTime = !bAnimationLoop && SavedRate > 0.f
+				? World->NowSeconds() + (AnimLengthSeconds - SavedPhase) / SavedRate : 0.;
+		}
 	}
+	if (Ar.IsLoading() && AsPropSwitch() != nullptr)
+	{ FrozenAnimationPhase = SavedPhase; AnimationPlaybackRate = SavedRate; }
 }
 
 void FElysiumProp::OnDormancyChanged()
@@ -223,6 +247,22 @@ void FElysiumProp::OnDormancyChanged()
 	FElysiumEntity::OnDormancyChanged();
 	if (IsDead()) { DestroyBody(); return; } // retire owned carrier even after reference-only clear.
 	GateVisual();
+	PublishNativeUseBody();
+}
+
+void FElysiumProp::OnPostRestore(FElysiumEntityWorld&) { PublishNativeUseBody(); }
+
+void FElysiumProp::PublishNativeUseBody()
+{
+	if (!World || !IsUsable() || UsesStudioQueryObb() || IsInert() || !Def || Def->bSky) return;
+	// Publish a real admitted output, independently of the mutable current physics field.
+	for (UPrimitiveComponent* Carrier : { static_cast<UPrimitiveComponent*>(BoxCollisionProxy),
+		static_cast<UPrimitiveComponent*>(StaticModelPhysics), static_cast<UPrimitiveComponent*>(ModelShadowPhysics) })
+	{
+		void* Native = ElysiumModelPhysics::ActorIdentity(Carrier);
+		if (Native && ElysiumModelPhysics::ComponentFor(Native) == Carrier && ElysiumModelPhysics::GameDataForObject(Native) == this)
+		{ World->RegisterPhysicalUseAnchor(Carrier, GetAttachBody(), Handle); return; }
+	}
 }
 
 FElysiumProp::~FElysiumProp()
@@ -311,6 +351,7 @@ void FElysiumProp::OnRuntimeModelChanged()
 	DestroyBody();
 	BuildBody(/*bFromSetModel=*/true);
 	StandRestPose();
+	if (UsesStudioQueryObb()) return;
 	// A SetModel arrives long after the Activate phase, so there is no stagger to wait out —
 	// if the authored loop resolves on the new model it starts now.
 	bLoopSequenceResolved = MeaningfulSequence(LoopSequence) && StartLoopSequence();
@@ -323,6 +364,7 @@ void FElysiumProp::OnRuntimeModelAdmitted()
 	DestroyBody();
 	BuildBody(bLastBuildFromSetModel);
 	StandRestPose();
+	if (UsesStudioQueryObb()) return;
 	bLoopSequenceResolved = MeaningfulSequence(LoopSequence) && StartLoopSequence();
 }
 
@@ -541,6 +583,8 @@ bool FElysiumProp::PlayAnimation(const FString& Clip, bool bLoop)
 	// The length is kept for loops as well, so the phase wraps at the source; AnimationEndTime
 	// deliberately stays 0 for a loop, since a looping clip never reports finished.
 	AnimStartTime = World->NowSeconds();
+	AnimationPlaybackRate = 1.f;
+	FrozenAnimationPhase = 0.f;
 	AnimLengthSeconds = Seconds > 0.0f ? static_cast<double>(Seconds) : 0.0;
 	AnimationEndTime = (!bLoop && Seconds > 0.0f) ? AnimStartTime + Seconds : 0.0;
 	return true;
@@ -571,7 +615,8 @@ void FElysiumProp::ResyncAnimation(double Now)
 	}
 
 	const bool bWraps = bAnimationLoop && AnimLengthSeconds > 0.0;
-	double Phase = Now - AnimStartTime;
+	double Phase = UsesStudioQueryObb() ? (AnimationPlaybackRate == 0.f ? FrozenAnimationPhase
+		: (Now - AnimStartTime) * AnimationPlaybackRate) : Now - AnimStartTime;
 	if (bWraps)
 	{
 		Phase = FMath::Fmod(Phase, AnimLengthSeconds);
@@ -628,6 +673,7 @@ bool FElysiumProp::StandRestPose()
 	AnimatedVisual->RefreshBoneTransforms();
 	AnimatedVisual->SetComponentTickEnabled(false);
 	AnimationEndTime = 0.0;   // a held pose never finishes, so it must not fire OnAnimationDone
+	AnimationPlaybackRate = 0.f;
 	bRestPoseHeld = true;
 	return true;
 }
@@ -662,7 +708,7 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 	// a runtime input, so there is nothing for a live field to back. "" -> Atoi -> 0 matches
 	// SOLID_NONE's already-correct no-collision default when the key is absent
 	// (docs/vtmb/phy_vphysics.md).
-	const int32 Solid = FCString::Atoi(*Def->Keys.FindRef(TEXT("solid")));
+	const int32 Solid = UsesStudioQueryObb() ? 0 : FCString::Atoi(*Def->Keys.FindRef(TEXT("solid")));
 	const bool bDisableShadows = FCString::Atoi(*Def->Keys.FindRef(TEXT("disableshadows"))) != 0;
 	SolidValue = Solid;
 
@@ -738,14 +784,14 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 		}
 		if (Visual)
 		{
-			World->RegisterPropBody(Visual, IsUsable() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
+			World->RegisterPropBody(Visual, IsUsable() && !UsesStudioQueryObb() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
 			Visual->SetCastShadow(!bDisableShadows);
 			if (Solid == 2) BuildBoxCollisionProxy(Visual);
 		}
 		if (AnimatedVisual)
 		{
 			World->RegisterNpcBody(AnimatedVisual);
-			if (IsUsable() && Def && !Def->bSky)
+			if (IsUsable() && !UsesStudioQueryObb() && Def && !Def->bSky)
 			{
 				World->RegisterUseAnchor(AnimatedVisual, Handle);
 			}
@@ -765,7 +811,7 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 		if (AnimatedVisual)
 		{
 			World->RegisterNpcBody(AnimatedVisual);
-			if (IsUsable() && Def && !Def->bSky)
+			if (IsUsable() && !UsesStudioQueryObb() && Def && !Def->bSky)
 			{
 				World->RegisterUseAnchor(AnimatedVisual, Handle);
 			}
@@ -777,7 +823,7 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 		if (Visual)
 		{
 			World->RegisterPropBody(Visual,
-				IsUsable() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
+				IsUsable() && !UsesStudioQueryObb() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
 			Visual->SetCastShadow(!bDisableShadows);
 			// Set explicitly rather than trusting BuildPropVisual's own NoCollision default: solid
 			// is this leaf's rule, not the builder's, and a self-determined result is what the
@@ -805,6 +851,7 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 		if (World->Resolve(MoveParent)) BuildModelShadowBody(Visual ? Visual : CollisionProxy);
 		else BuildStaticModelBody(Visual ? Visual : CollisionProxy);
 	}
+	PublishNativeUseBody();
 
 	if (Visual || AnimatedVisual)
 	{
