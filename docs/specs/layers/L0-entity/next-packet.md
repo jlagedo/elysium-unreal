@@ -1,47 +1,43 @@
-# Next bounded packet — P2 physical contact event producer
+# Next bounded packet — P2 reached recheck cleanup timing
 
 Read goal.md/checkpoint.md/vision.md and active delivery/service/handoff maps.
-Main Sol Medium owns selection/review/gates/commit/checkpoint. One fresh Sol High worker,
-fork_turns=none, one run at a time; workers never commit. Never push.
+Main Sol Medium owns review/gates/commit/checkpoint. One fresh Sol High worker,
+fork_turns=none, one run at a time; no nested agents or worker commits. Never push.
+Runtime foundation348959fe is unchanged. Reuse accepted model/static/bbox/shadow/identity/
+velocity/save/query/pair/material evidence. Full P1 disposition and full L0 gate remain open.
 
-Accepted runtime HEAD348959fe206f600a3d55e9e7ecb3d08bf742aef6 remains the body foundation.
-Reuse normal/core PhysProp, static/bbox/shadow, GameData/incarnation, velocity, native save,
-query/pair and material receipts. P1 full disposition remains open; no geometry rewalk/import.
-P1-to-P2 reconciliation: E:/elysium-work/codex/l0-p2-collision-recheck-main-20261012/p1-selection-review.md.
+Reuse physics-interaction.md §Current-body recheck callback frontier and §Recheck pairs and
+the installed physical touch listener. Installed default pair listener260cab98 is distinct
+from physical contact listener260c9888. Actual birth2604cc80→26039b20→2600eff0→Start315c0;
+destruction2603d270→2603cf30→26039b60→2600f180→End316f0. Callback flags4, extra8 for static,
+GameData/endpoints/data-copy/immediate-queued/frame phase/stampFFFFFFFF are confirmed.
+Do not replay these routes. Worker captures/freeze:
+E:/elysium-work/codex/l0-p2-touch-bridge-20261012/.
+Main review/acceptance/consumer findings:
+E:/elysium-work/codex/l0-p2-touch-bridge-main-20261012/.
 
-Previous packet stopped at bounded recovery, with no runtime/audit changes. Accepted oracle:
-physics-interaction.md §Current-body recheck callback frontier. Worker packet/freeze/captures:
-E:/elysium-work/codex/l0-p2-collision-recheck-20261012/. Main review/checkpoint receipt:
-E:/elysium-work/codex/l0-p2-collision-recheck-main-20261012/.
+One exact first unmet: can recheck deletion's transitive cleanup synchronously destroy an
+actual contact for reached core PhysProp bodies? Identify actual installed receivers of
+2604a1e0→2603f950 optional hull callbacks and surface-manager slot8(+20), and which geometry
+wrapper deleting arms26066d00/2606a200 core model/bbox/brush bodies reach. Prove presence or
+absence of2603cf30 route, including setter state/frame phase. Do not infer no callback merely
+because direct call sites handle pairs; do not extrapolate ordinary pair proof to wrappers.
+Recover only what decides this observable timing question; no IVP mechanisms/topology clone.
+Use exact module-qualified code/assembly/caller/constructor evidence, existing shape recipe
+and retail producer walks. No import/general recovery/ledger regeneration/retail writes.
 
-First unmet: distinguish filter-recheck backend pair maintenance from game-visible physical
-StartTouch/EndTouch delivery. Resolve the concrete listener bridge from insertion26048fb3 /
-deletion26048f6d to the installed vampire.dll collision handler. This single question determines
-whether recheck requires synchronous game events or only changes future contact eligibility.
-Do not clone listener lists, pair topology, traversal or broadphase. Preserve only proved
-observable event order, through Chaos services. A backend pair change alone is not a touch event.
+Observer: actual core PhysProp physical contact leave/reentry on ScriptHide/Unhide or changed
+filter; callback mutation/removal; native restore. Write packet before edits. Recovery paths:
+oracle doc plus fresh scratch only; once timing question answered, stop with precise supported
+arms, remaining hooks and frozen evidence so main can select actual coding run. No engine
+gates for doc-only recovery; no runtime/audit closure from a listener address.
 
-Already confirmed:100315c0/100316f0 require both GameData endpoints; immediate when handler+13c
-clear, queued when set.1002ea40 sets gate before environment26 and clears after226/229 before
-10030910; drain10030d50 uses insertion order/live count.1003e4e0 writes event-driven stamps
-FFFFFFFF first then second. Native44 snapshots and226 trigger overlap discovery are different
-producers. Reuse these walks. Concrete consumer witness: real core PhysProp bodies, physical
-contact enter/leave, filter-driven removal/reentry, callback mutation/deletion and native restore.
-
-Before coding the selected adapter, account for the actual reached native predicate1002f1e0:
-same GameData/pair, GameFlags, object10 flag40/helper1002f820,224, owner/root, solid/move/flags,
-rules77, bilateral contents and68. Decompilation has damaged-looking stack aliases; resolve
-only required ambiguous operands with assembly. Build real L0 producers; register genuine
-higher overrides as hooks. Do not equate accepted Simple/SP query rules with this predicate.
-
-P2 explicitly owns the minimum physical touch event producer it requires from M1, including
-phase/endpoints/sentinel/lifetime. Full movement/trigger M1 closure remains later; no graph cycle
-or whole-M1 prerequisite. Implement in bounded coherent runs after resolving the bridge.
-Retain setter order/static-helper skip, no-op/pair notifications, creation GameData and no-wake
-mechanics. SetCollisionGroup/Solid/flags/MoveType/object25 remain open until actual contact proof.
-
-For next run: one required unknown, observer, permitted paths, real witness and stop boundary
-in packet before edits. Verify public UE API/thread/lifetime. Focused development checks,
-freeze, independent main review/gates, exact-path commit/checkpoint before another run.
-No genuine owner decision or gameplay tolerance proposed. E2/P3/material results/native travel
-and remaining mapped obligations stay open; full L0 remains spec.md's full closing gate.
+Required later coding: complete reached1002f1e0 L0 inputs, real Chaos contact lifecycle and
+current-incarnation/GameData snapshot, event-driven link sentinel and explicit EndTouch;
+no-wake setter/pair mechanics/order. Existing RefreshContactOutputs is friction44 only;
+TouchLinkBegin ordinary stamp/void, TouchLinkEnd unlink-only, ExpireStaleTouchLinks ordinary
+pair expiry cannot silently satisfy this event contract. Repair real producers with consumer.
+P2 owns this minimum M1 producer; full movement/trigger integration remains later, no cycle.
+Focused native witnesses then freeze/main gates/exact-path commit/checkpoint. E2/P3/query/
+material/travel and all other mapped obligations remain open. No owner decision or proposed
+observable divergence; full Goal ACTIVE.

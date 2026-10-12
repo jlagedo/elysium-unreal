@@ -1331,18 +1331,93 @@ it does **not** recover their complete producers or declare them implemented. Th
 stateless SP group formula remains reusable at the reached rules77 branch. Projecting that
 formula alone would omit the other same-L0 inputs.
 
-Still unrecovered by this bounded question: which concrete listener installed in the
-environment+162/+164 list receives recheck insertion26048fb3, and how pair deletion26048f6d
-reaches the above game touch handlers (or only backend pair maintenance). The PE confirms
-reverse obsolete deletion before reverse candidate/listener insertion, but that ordering
-must not be relabeled as direct StartTouch/EndTouch delivery without the missing link.
-This is the stop boundary for the current-body packet, not an IVP reconstruction requirement.
-Before implementing object25 closure, join the real native candidate/pair-to-event adapter
+The installed pair and contact listeners are distinguished below. Reverse obsolete deletion
+before reverse candidate/listener insertion is backend pair maintenance, not by itself proof
+of game EndTouch-before-StartTouch delivery. Before implementing object25 closure, join the
+real contact lifecycle event adapter
 and the complete reached L0 filter inputs; retain higher gameplay overrides as explicit hooks.
 
 No runtime code or audit verdict changed in this bounded recovery. Evidence is retained in
 `E:/elysium-work/codex/l0-p2-collision-recheck-20261012/`: packet, vampire.dll decompilation,
 raw recheck26048b00 PE, and freeze receipt. No native build/test claim follows from it.
+
+#### Recheck pairs and the installed physical touch listener (2026-10-12)
+
+**Recheck pair insertion/deletion is not directly StartTouch/EndTouch delivery.** Its installed
+listener handles a backend candidate pair; actual contact-record creation/destruction uses a
+separate listener. The observer is core PhysProp contact enter/leave and filter hide/unhide,
+including callbacks that mutate or remove either endpoint. All260 addresses below are
+`vphysics.dll`; all100/104/106 addresses are `vampire.dll`, not the client twin.
+
+The installed types are identified by their constructors and exact tables; the unnamed
+backend tables are not assigned guessed SDK class names:
+
+- Environment constructor2600f920 uses zeroed twelve-word parameters from2603ae60.
+  Its custom object at public environment+54 has tables260c9978 and260c9958 at+4;
+  it is passed as parameter words4/7 (assembly2600f9cf/2600f9e6). It is **not** the
+  recheck insertion listener. Parameter word9 remains zero. Backend environment
+  constructor26038240 therefore installs its default listener26057d70, table260cab98,
+  in backend environment+162/+164. Recheck26048fb3 calls this table's slot5,
+  26057be0. It constructs the ordinary pair26047ac0/table260ca9ec (or its geometry
+  wrapper26066c40/table260cae08), then26047da0 registers/schedules the pair. Missing
+  shape access takes2606a100/table260cae78 and also schedules candidate processing.
+- Recheck26048f6d calls the pair's deleting slot4. The ordinary pair26047b10 ->
+  26047b30 removes its scheduled/hull memberships and calls its default listener's
+  slot0,26057ba0 ->26053090, to remove it from both endpoint pair rosters. These
+  are pair-lifetime callbacks, not the contact-record destruction callback below.
+- The actual physical contact listener is the distinct public environment+50 object
+  constructed at2600ed50, table260c9888, registered in backend environment+f6/+f8
+  by26039cb0. `CPhysicsHook::LevelInitPreEntity1002d930` installs the borrowed
+  `CCollisionEvent` singleton106b86d8 through public environment slot32; installed
+  entry26011330 writes this pointer to that listener's+28. Constructor1002eef0
+  gives the singleton `CCollisionEvent` table104491d8 / `IPhysicsCollisionEvent`,
+  whose slots3/4 are StartTouch100315c0 / EndTouch100316f0 (via their jump thunks).
+
+The real event chains are:
+
+| Producer | Installed route to the game |
+|---|---|
+| First actual contact record |2604cc80 calls26050c20; only its newly created record arm calls26039b20. The broadcast calls listener table260c9888 slot3/2600eff0, which calls installed game handler slot3/StartTouch. Existing records do not repeat the start. |
+| Actual contact record destruction |2603d270 calls2603cf30, which broadcasts26039b60 before unlinking the contact from its endpoints. This calls listener table260c9888 slot4/2600f180, then installed game handler slot4/EndTouch. |
+
+Both listener entries resolve native wrappers from contact endpoints+40/+44, require both
+nonnull, require bit4 in the OR of their callback words+3c, and, if either wrapper slot1
+reports static, also require bit8 in that OR. The wrapper order is preserved as first/second
+at the game callback. These are additional admission inputs for the physical event producer;
+neither a broadphase pair nor a native44 readback substitutes for them. The callback object
+uses temporary collision data table260c98cc, so contact point/normal must be copied during
+StartTouch, as the accepted game handler already does.
+
+For the supported solid-body branch, pair insertion schedules geometry/contact work
+(26048940 ->260492f0 or26048a50 ->2604a0e0); pair removal retires that candidate state.
+Neither recheck call site directly calls the contact birth2604cc80 or destruction2603cf30
+route. That fact alone does **not** settle the full synchronous negative: ordinary deletion
+also reaches optional hull listeners through2604a1e0 ->2603f950 and virtual surface-manager
+slot8(+20), whose installed supported-body receivers have not been joined here. The geometry
+wrapper deletions26066ce0 ->26066d00 and2606a1e0 ->2606a200 also remain outside the proved
+ordinary cleanup chain. No claim that those transitive calls cannot destroy an actual contact
+is made. This is the exact first unmet condition for deciding whether the complete reached
+recheck emits a synchronous physical end event or only changes future eligibility.
+
+Actual contact birth/removal invokes the game handler synchronously at that contact callback,
+after which the already recovered handler+13c gate decides immediate game dispatch versus
+insertion-ordered frame drain. A blanket delay for clear-gate contact callbacks is therefore
+unsupported. Existing setter partition/untouch tails and body-removal contact events retain
+their own contracts.
+
+Implementation consequence: Chaos owns candidate/contact generation and solving; the port
+must consume real contact lifecycle events with current native incarnation/GameData owners,
+the proved callback admission and endpoint order, then preserve the game immediate/queued
+gate and event-driven link/EndTouch lifetime. A recheck backend pair-roster diff alone cannot
+justify emitting StartTouch/EndTouch. The remaining transitive cleanup question must be
+resolved for the reached core bodies before choosing synchronous filter-removal behavior.
+Complete1002f1e0 inputs and production contact/removal/restore witnesses remain open;
+no runtime or audit closure is claimed.
+
+Recovery stops at this installed-listener distinction and precise remaining ambiguity.
+No IVP listener/container/topology algorithm is a port
+requirement. Exact corpus/PE captures and SHA256 freeze are retained in
+`E:/elysium-work/codex/l0-p2-touch-bridge-20261012/`; no engine build/test was run.
 
 `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` executes StandardFilterRules `0x101d3080`,
 pass rules `0x101d2fc0`, **candidate slot 91**, candidate BCC targetable/script-hidden gate,
