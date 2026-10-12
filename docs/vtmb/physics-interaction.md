@@ -1391,13 +1391,9 @@ StartTouch, as the accepted game handler already does.
 For the supported solid-body branch, pair insertion schedules geometry/contact work
 (26048940 ->260492f0 or26048a50 ->2604a0e0); pair removal retires that candidate state.
 Neither recheck call site directly calls the contact birth2604cc80 or destruction2603cf30
-route. That fact alone does **not** settle the full synchronous negative: ordinary deletion
-also reaches optional hull listeners through2604a1e0 ->2603f950 and virtual surface-manager
-slot8(+20), whose installed supported-body receivers have not been joined here. The geometry
-wrapper deletions26066ce0 ->26066d00 and2606a1e0 ->2606a200 also remain outside the proved
-ordinary cleanup chain. No claim that those transitive calls cannot destroy an actual contact
-is made. This is the exact first unmet condition for deciding whether the complete reached
-recheck emits a synchronous physical end event or only changes future eligibility.
+route. The concrete transitive cleanup for the reached solid-body creators is now joined
+below; the negative depends on those installed receivers and child constructors, not on
+the absence of a direct call at the recheck sites.
 
 Actual contact birth/removal invokes the game handler synchronously at that contact callback,
 after which the already recovered handler+13c gate decides immediate game dispatch versus
@@ -1409,15 +1405,86 @@ Implementation consequence: Chaos owns candidate/contact generation and solving;
 must consume real contact lifecycle events with current native incarnation/GameData owners,
 the proved callback admission and endpoint order, then preserve the game immediate/queued
 gate and event-driven link/EndTouch lifetime. A recheck backend pair-roster diff alone cannot
-justify emitting StartTouch/EndTouch. The remaining transitive cleanup question must be
-resolved for the reached core bodies before choosing synchronous filter-removal behavior.
+justify emitting StartTouch/EndTouch. The bounded cleanup proof below rules out manufacturing
+a physical EndTouch merely because recheck deleted a reached solid-body candidate pair.
 Complete1002f1e0 inputs and production contact/removal/restore witnesses remain open;
 no runtime or audit closure is claimed.
 
-Recovery stops at this installed-listener distinction and precise remaining ambiguity.
+This first recovery stopped at the installed-listener distinction; its cleanup frontier is
+resolved by the following bounded walk.
 No IVP listener/container/topology algorithm is a port
 requirement. Exact corpus/PE captures and SHA256 freeze are retained in
 `E:/elysium-work/codex/l0-p2-touch-bridge-20261012/`; no engine build/test was run.
+
+#### Reached recheck transitive cleanup timing (2026-10-12)
+
+**For the reached normal solid model/static/bbox/brush bodies, deleting a recheck candidate
+pair does not synchronously destroy a physical contact record through2603cf30.** This is a
+statement about the installed cleanup below, not a promise that no setter tail or gameplay
+callback can run synchronously, and not a prediction of the frame when the solver later
+destroys a contact. The shipped observer remains the tutorial's StartHidden PhysProp rows
+1799–1806,1811–1812 and the physical touch lifetime when ScriptHide100a8710/Unhide100a8990
+or a changed filter alters their eligibility. Those rows prove authored StartHidden; no
+ScriptHide/Unhide output wire on plus_food is invented. All260 addresses below are vphysics.dll;
+100/104 addresses are vampire.dll.
+
+The accepted normal model, static model, bbox and brush recipes converge on public object
+construction260189f0. It passes actual geometry to26009a00, then constructs the backend body
+through260397c0 ->2605ad10 ->2602dcf0 and wrapper260168e0 ->26016930. Static is an argument
+of the same constructor.2602dcf0 stores the supplied manager at body+8c and initializes
+body+1c (the optional hull owner) to null. Normal creation260189f0 subsequently sets GameData,
+motion/gravity/collision hints and GameFlags; it does not call the trigger-conversion slot60.
+GameFlags and the wrapper callback word+3c remain distinct fields.
+
+| Cleanup branch | Concrete producer/receiver and result |
+|---|---|
+| Surface-manager slot8(+20), called for both ordinary endpoints by26047b30 |26009a90/26009a70 classify the geometry header+2c `MOPP` tag;26009a00 installs table260c96ac for that tag or table260c9680 for compact geometry. Their slot8 targets are respectively260ad820 and26031e30. Direct PE reads show each is exactly `ret 4`; neither unlinks or broadcasts a physical contact. |
+| Ordinary candidate pair |Default insertion26057be0 calls each installed manager's slot0 (260ad7e0/26031df0). Both returned shape descriptors with byte8&3==0 choose26047ac0/table260ca9ec. This includes the previously recovered one-leaf bbox descriptor.26047b30 retires scheduling/memberships, runs the concrete surface returns above and default pair listener26057ba0 ->26053090; it does not destroy a physical contact. |
+| Geometry wrapper |When both descriptors exist but either descriptor's byte8&3 is nonzero,26057be0 chooses26066c40/table260cae08. Thus compound model/brush geometry is not assumed to take ordinary cleanup. Deleting slot4/26066ce0 calls26066d00, which first calls26066bc0: child pairs are deleted in reverse, then its installed secondary table260cadf8 slot2/26067080 adjusts the child count. It frees its child storage and delegates26047b30. Child producer26066e20 ->26047f60 constructs only26047ac0 or26066c40, selected by those same descriptor bits; no contact-record destructor is a child type. The recursive cleanup therefore ends in the ordinary concrete receivers above. |
+| Missing descriptor fallback |If either manager slot0 returns null,26057be0 constructs2606a100/table260cae78. Deleting slot4/2606a1e0 calls2606a200, deletes its children in reverse and invokes the same default pair listener. Its child producer26069f10 ->26047f60 again admits only ordinary pairs or geometry wrappers. This fallback is covered as a negative accessor arm, not asserted as a successful authored core shape or used to broaden asset admission. |
+
+The wrapper's remaining virtual cleanup targets are also concrete. Child ordinary deletion
+calls the owning wrapper listener slot0:260cadf8 ->26066db0 or260cae68 ->2606a2c0. Both only
+remove the child from that parent's vector and clear/update child indices; their full PE bodies
+have no outgoing call. Wrapper child-count slot2/26067080 updates its count and forwards slot2
+to its own parent listener, recursively; at the installed default table260cab98 this reaches
+26057d30, exactly `ret 4`. The fallback secondary table260cae68 also uses26057d30 at slot2.
+Thus neither parent-child removal nor the count notification hides a physical destruction
+broadcast. No unresolved virtual target remains in this reached cleanup.
+
+The optional hull route has its own concrete installation proof. Public object table260c9db0
+slot60 is26018930; its PE calls2602f040 at2601897e, which installs2603fb00 at body+1c.
+Unlike normal creation, this conversion first disables motion/gravity and then registers
+public environment+50 listener **subobject+8** through26011530 ->2603f320. Its installed
+table is260c9874, supplied by constructor2600ed50. This is distinct from the physical
+contact table260c9888 at the listener's base. The installed hull deletion slot1 is2600f220,
+exactly `ret 8`. The auxiliary vector constructors2603acb0/2603ac40/2603abd0 initialize
+their listener counts to zero; the recovered trigger conversion does not install extra
+receivers in those vectors.2603f950's main listener slot1 therefore does not destroy a
+physical contact. Its core-leave route2603f760 dispatches that same subobject's slot3,
+2600f280: it invokes game ObjectLeaveTrigger100318d0 (slot9) or, when hull+48 supplies a
+fluid controller and callback bit0x100 is present, FluidEndTouch10030050 (slot6).
+Neither is the physical EndTouch slot4 broadcast26039b60. Trigger/fluid gameplay reactions,
+including a reaction that explicitly removes a body, retain their separate owning contracts;
+this walk does not declare such reactions inert or reproduce their higher gameplay.
+
+The timing consequence is precise. Changed solid/flags/move/group setters have published
+their new words before current-object25 recheck; recheck retires candidate state with those
+new inputs. For the normal solid bodies above, that pair cleanup alone supplies no physical
+end event and no physical start event on reinsertion. Actual contact creation/destruction
+still uses the installed routes in the preceding section, and handler+13c still decides
+immediate dispatch versus insertion-ordered PhysFrame drain at the actual callback. This
+does not authorize a blanket next-frame delay, a synthetic pair-diff end/start, or treating
+friction44 snapshots as the lifecycle producer. Existing setter untouch/partition tails and
+explicit body-removal behavior remain separate. Native restore must reconnect these real
+owners/flags and must not synthesize a touch merely from restoring a candidate pair.
+
+Recovery stops here: no missing concrete call remains in the reached solid-body pair-cleanup
+chain. Complete reached1002f1e0 predicate inputs and the real Chaos contact/event-driven link
+producer remain the next coding work; trigger/fluid consumer closure and later contact-solver
+timing are not claimed by this bounded negative. No runtime/audit edits or engine gates were
+performed. Exact module-labelled corpus captures, constructor/table PE reads, read-only PE
+xrefs and SHA256 freeze are in `E:/elysium-work/codex/l0-p2-cleanup-timing-20261012/`.
 
 `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` executes StandardFilterRules `0x101d3080`,
 pass rules `0x101d2fc0`, **candidate slot 91**, candidate BCC targetable/script-hidden gate,

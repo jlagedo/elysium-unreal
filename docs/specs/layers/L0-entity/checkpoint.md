@@ -78,26 +78,25 @@ owned auditdone or owneraccepted named divergence, observable engine contracts, 
 and complete mapped disposition. Never mark complete for a packet/subsystem. No IVP clone or
 retail-save import prerequisites. See next-packet.md for serial selection.
 
-## P2 installed contact listener checkpoint — 2026-10-12
+## P2 solid-body recheck timing checkpoint — 2026-10-12
 
-This local documentation commit accepts installed-listener/event-chain evidence only.
-Exact HEAD/tree/paths: E:/elysium-work/codex/l0-p2-touch-bridge-main-20261012/acceptance-checkpoint.json.
-Runtime foundation348959fe and its accepted gates above remain unchanged. Previous turn
-progress: oracle/plan checkpoint165d06cc. Sole fresh worker l0_physical_touch_bridge terminal;
-no runtime/audit edits or live jobs. Worker evidence/freeze:
-E:/elysium-work/codex/l0-p2-touch-bridge-20261012/. Main consumer-review/frozen-review and prior
-checkpoint/packet: E:/elysium-work/codex/l0-p2-touch-bridge-main-20261012/.
-Main checked74/74 frozen hashes and actual vampire registration/vphysics contact broadcasts,
-callback admission and ordinary destructor. Review rejected unconditional no-sync-event claim:
-optional hull/surface receivers and reached wrapper deletion remain unproved. Oracle qualified.
-Documentation-only checks: repo doctor/diffcheck; no engine tests or runtime closure.
+This local documentation commit accepts scoped cleanup timing recovery only. Exact HEAD/tree/
+paths: E:/elysium-work/codex/l0-p2-cleanup-timing-main-20261012/acceptance-checkpoint.json.
+Runtime foundation348959fe and its gates above unchanged. Previous turn progress: listener
+checkpointf52004e9. Sole fresh worker l0_recheck_cleanup_timing terminal; no runtime/audit edits
+or live jobs. Worker freeze: E:/elysium-work/codex/l0-p2-cleanup-timing-20261012/.
+Main review/consumer/prior checkpoint/packet: E:/elysium-work/codex/l0-p2-cleanup-timing-main-20261012/.
+Main checked100/100 new doc/evidence hashes and75/75 reused/retail hashes, actual surface return
+targets, core constructor/hull conversion, recursive wrapper children/count/removal targets.
+Doc-only repo/diff checks; no engine tests or runtime/audit closure. No push/content refresh.
 
-Confirmed default backend pair listener differs from registered physical contact listener.
-Actual contact birth/destruction routes to game StartTouch/EndTouch, callback flags4/8,
-endpoint order/data-copy and previously accepted immediate/queued gate/stamp contracts reused.
-First unmet: concrete reached core cleanup can or cannot synchronously destroy contact through
-2603cf30; resolve optional hull/surface receiver and geometry-wrapper deletion reachability.
-No backend pair diff→game event inference. Main found required sentinel/EndTouch producer repair
-in existing ordinary touch path; friction44 snapshots/trigger queries are not equivalent.
-P2 owns this minimum M1 producer; full movement remains later. Next packet targets one exact
-cleanup timing question, then actual Chaos adapter coding. No owner decision; Goal ACTIVE.
+Confirmed normal solid model/static/bbox/brush candidate-pair cleanup does not synchronously
+route physical destruction2603cf30. Trigger/fluid callbacks differ; no blanket setter no-event
+or later solver-frame timing claim. Reuse installed actual contact Start/End, flags4/8,
+GameData/order/copy/phase/stamp contracts. No backend pair-diff synthetic game touch events.
+First unmet now implementation: complete reached1002f1e0 native admission and real Chaos contact
+producer. Existing filter only ignoredpairs/worldmask; Simple/SP formula insufficient.
+Next packet codes native predicate with real lower inputs and actual Chaos positive/negative/
+mutation/alias/save witnesses; one ambiguity recovery if needed. Physical event-driven touch
+consumer repair follows; GameFlags !=callbackflags. Full P1/E2/P3/material/query/travel/all
+mapped closing requirements remain open. No owner decision or divergence; Goal ACTIVE.
