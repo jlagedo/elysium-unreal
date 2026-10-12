@@ -1,56 +1,52 @@
 # L0 restart checkpoint
 
-Updated2026-10-12 UTC by main. Full Goal ACTIVE; L0 closing gate open.
-Read goal.md at every continuation. Main Sol Medium owns review/gates/local commit/checkpoint;
-one fresh Sol High worker/run,fork none,no nested agents,never push. No owner decision.
+Updated2026-10-12 UTC. Full Goal ACTIVE; full L0 gate open. Read goal.md each continuation.
+Main Sol Medium reviews/gates/commits/checkpoints; one fresh Sol High worker/run,fork none,
+no nested agents,never push. No owner decision. No live engine jobs or coding worker.
 
 ## Accepted state
 
-Latest accepted commit is recorded in
-E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/acceptance-checkpoint.json.
-Previous accepted HEAD3c2857dfc639d19d07ffc24bae5ea2c86453b94d (body flags/archive),
-parent af5d211f hidden-body dispatch. Reuse their receipts and all accepted body/material/
-shadow/velocity/plan/sound evidence; no recovery replay.
+Latest accepted commit/tree is in
+E:/elysium-work/codex/l0-p1-remaining-inputs-20261012/acceptance-checkpoint.json.
+Parent6d9af6c53c02c670e9deee512376748293e2676d. Reuse creator/native failure/QueueRemove/
+brush-hide/cache/schema53 receipts there and prior accepted flags/body/material/shadow/
+velocity/sound/plan evidence; no recovery replay.
 
-## Contract closed — selected creator/native lifecycle and restore-cache packet
+## Contract closed
 
-100a6150 selected brush success/type1 actual native failure preserves developer diagnostics,
-rotated fallback bounds and exact Oceanhouse literal substring exception. Selected failure
-queues pending-before180,ordered cleanup,name clear and physics-barrier/live-count release.
-Full semantic EFlags/local/absolute/frame cache uses disposable schema53/floor53. Strict
-Expected full archive compares exact100aa140/100dda20 restore writes,without broad masks.
-Native Brush Hide/Unhide now gates actual shape participation retaining incarnation/controller/
-mechanics. Door witness proves authored query responses,Use/Pick rays,movement sweeps,real
-native crossing,logical parent/local/absolute pose,shadow target and solved pose. Crossing
-uses actual solver interval with unchanged tolerance. Distinct born-hidden func_brush fallback
-and native func_door fixtures avoid inferring a missing producer. Chaos owns engine services.
+Selected36 remaining core prepared model inputs:28 positive cooks (27 static,1 parented
+shadow) and8 genuine sourcebodyfalse/null controls. Exact36 public refresh only after actual
+native typed admission failures.3425 unselected rows/packages/recipes,36GLBs/2maps preserved.
+Incidental SM_Missing force rewrite explicit; actual native properties/canonical recipe proved.
+Native tests and host record verify authored parent/art/geometry/mechanics/hidden/identity,
+normal typed save/load/independent aliases/retirement and ordinary postrestore input dispatch.
+Original rotations tested natively; four host fixture tilts zeroed for face schema. Isolated
+transition-mode test is not full host travel. No runtime/schema/importer changes.
 
-Renewed28-source freeze654138623a8921e1493b49226d389d27c49d2d22207406c5416556c8cd54897f
-independently verified with retained receipts. Main build023253 passed; default023300208/208
-(115clean93warned); joined native/save02334725/25(16clean9warned); arena02363015/15,
-two actual boots (arena and sm_hub_1 transition),all first_unmet null. Generator023953 and
-repository policy024010 passed.3461packages/18GLBs/manifest unchanged,no imports.
-Existing warnings/experimental Python errors retained. First failed default and diagnostic
-receipts remain evidence; superseded first freeze is retained. Exact report paths and final
-commit/tree are in acceptance-checkpoint.json. No live jobs; worker mutation stopped.
+Main build032804 pass; default211/211; affected native/save27/27 plus Substrate.SaveSchema1/1;
+arena03335711/11,two actual boots (arena and sm_hub_1),all first_unmet null. Generator033420
+and doctor033436 pass. Wrong Arm.SaveSchema prefix receipt retained. Existing warnings,
+higher-layer stubs and experimental Python errors retained. Six frozen sources and3461native
+packages/3463staged products/36GLBs/2maps/23catalogue products unchanged after gates.
+Detailed hashes/reports/review in acceptance-checkpoint.json and main-final-source-content-test-review.json.
 
 ## Remaining milestone requirements → next witness
 
-P1 active: other native writers including CPhysBox1004e500,36 remaining coremetadata,
-actual prepared path/admission and producer requirements. Native func_brush223 producer is
-unrecovered/open P1/P3. next-packet.md selects compact precode reconciliation; reuse existing
-creator evidence,do not repeat type1/debug/Oceanhouse recovery. Break remains unclosed.
+P1 active: reconcile required native body callers/writers and first unresolved core producer,
+especially func_brush223 (1013e070). next-packet.md specifies bounded precode reconciliation.
+CPhysBox17-map slice has no core-map placements; retain explicit map-specific D08/I1 work,
+not global unreachability. Other flag writers/constraint/ragdoll observers remain required in
+their mapped scopes. No IVP topology/layout/allocator/solver reconstruction.
 
-E2 generic Kill100acf90 still immediate; selected QueueRemove is not Kill input parity.
-CNotify target40/constraint pair and Aim10000 membership/delete remain L0 E2/D09 inputs.
-PhysicsAnimlink1014ec70 actual endpoint producer/ownership unresolved. Base180 partial;
-L2/L4 shared act-store and Nav hooks registered pending recipients,Goal exact callback
-unrecovered. See handoffs.md and listener-primary.md. Light Kill source comment describes
-retail deferred base behavior; current immediate base divergence remains explicitly open.
-Full native landmark/travel/restore,P2 query/filter/material and P3 integrated motion/timing/
-parent/bounds remain required.10151c00 impact reader remains logging/open I2. Four scope
-briefs require disposition; higher gameplay hooks remain owned by their layers.
+E2 generic Kill100acf90 remains immediate; selected QueueRemove does not close it. CNotify
+target40/constraint pair, Aim10000 membership/delete, PhysicsAnimlink1014ec70 actual endpoint
+producer/ownership and exact higher recipients remain open. Base180 partial; L2/L4 act-store
+and Nav hooks registered pending recipients. See handoffs.md/listener-primary.md.
+Full native landmark/travel/restore,P2 queries/filter/material,P3 motion/timing/parent/bounds,
+Break and I2 impact10151c00 (currently logging) remain required. Four D09 scope briefs need
+explicit core/later disposition; higher gameplay stays with its owners.
 
-Full closing gate requires all active L0/integration records,required repeated boot orders,
-default+fullarm zero failures/baseline preservation,all justified owned audit rows,observable
-engine service contracts,registered hooks and full mapped disposition. No fullP1/D02/L0 claim.
+Full gate requires all active L0/integration records,required repeated boot orders,default+
+fullarm zero failures/baseline preservation,all owned audit rows done or owner-approved named
+divergence,observable Unreal service contracts,registered hooks and full mapped disposition.
+No full P1/D02/L0 closure claim. Commit/checkpoint this run before another worker.

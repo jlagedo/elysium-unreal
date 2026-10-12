@@ -2007,7 +2007,8 @@ bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out)
 		TEXT("nav.target"), TEXT("memory.enemy"), TEXT("damage.attacker"),
 		TEXT("place.identity"), TEXT("senses.sighted"), TEXT("dialog.partner"),
 		TEXT("coordinator.normal.members"), TEXT("coordinator.player.members"), TEXT("coordinator.boss.members"),
-		TEXT("physics.kind"), TEXT("physics.surface")
+		TEXT("physics.kind"), TEXT("physics.surface"),
+		TEXT("parent.name"), TEXT("parent.class"), TEXT("art.kind"), TEXT("art.asset")
 	})
 		if (Field == Name) { Out = FElysiumArenaValue::EType::String; return true; }
 	for (const TCHAR* Prefix : { TEXT("origin"), TEXT("physics.pose"), TEXT("nav.goal"), TEXT("memory.position"), TEXT("damage.position"), TEXT("place.destination"), TEXT("place.bounds_min"), TEXT("place.bounds_max") })

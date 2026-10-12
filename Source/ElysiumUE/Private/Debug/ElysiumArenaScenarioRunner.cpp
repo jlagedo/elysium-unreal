@@ -45,6 +45,9 @@
 
 #include "CollisionQueryParams.h"            // `corpse_on_floor`: the floor under the pelvis
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/SkeletalMesh.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Engine/Engine.h"
@@ -3980,7 +3983,23 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 	{
 		FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(*World, Who);
 		FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
-		if (Field.StartsWith(TEXT("physics.")) && Entity)
+		if ((Field == TEXT("parent.name") || Field == TEXT("parent.class")) && Entity)
+		{
+			auto* Parent = World->Resolve(Entity->MoveParent);
+			if (!Parent || !Parent->Class) { OutError = Who + TEXT(" has no resolved registered parent"); return false; }
+			Out.String = Field == TEXT("parent.name") ? Parent->TargetName : Parent->Class->ClassName.ToString();
+		}
+		else if ((Field == TEXT("art.kind") || Field == TEXT("art.asset")) && Entity)
+		{
+			UPrimitiveComponent* Art = Entity->GetAttachBody();
+			const auto* StaticArt = Cast<UStaticMeshComponent>(Art);
+			const auto* SkeletalArt = Cast<USkeletalMeshComponent>(Art);
+			UObject* Asset = StaticArt ? static_cast<UObject*>(StaticArt->GetStaticMesh())
+				: SkeletalArt ? static_cast<UObject*>(SkeletalArt->GetSkeletalMeshAsset()) : nullptr;
+			if (!Asset) { OutError = Who + TEXT(" has no actual static/skeletal attach-body asset"); return false; }
+			Out.String = Field == TEXT("art.kind") ? (SkeletalArt ? TEXT("skeletal") : TEXT("static")) : Asset->GetPathName();
+		}
+		else if (Field.StartsWith(TEXT("physics.")) && Entity)
 		{
 			void* Object = Entity->VPhysicsGetObject();
 			if (Field == TEXT("physics.present")) Out.bBool = Object != nullptr;

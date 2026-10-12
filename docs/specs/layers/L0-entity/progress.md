@@ -1948,3 +1948,26 @@ P1 still open: other writers/CPhysBox,36coremetadata,unrecovered func_brush nati
 Generic Kill/CNotify/Aim/PhysicsAnimlink remain E2/D09; exact L2/L4 recipient handoffs pending.
 Full native travel/restore,P2/P3,I2 impact,Break and full L0 closing gate remain open.
 No owner decision,accepted divergence or push. Next packet reconciles actual remaining P1 inputs.
+
+### Remaining core model inputs checkpoint — 2026-10-12 UTC
+
+Selected36 prepared model inputs now have real typed/native consumer witnesses:28 positive
+first-.phy cooks (27 static,1 parented studio shadow) and8 genuine no-body controls. The
+public refresh touched only36 actual-failed units.3425 unselected rows/packages/recipes,
+36 source GLBs,2 maps and actual catalogues preserved; incidental SM_Missing force rewrite
+is explicit and native authoring properties/canonical recipe verified. Current whole frozen
+content and six source paths independently rechecked after gates. No runtime/schema change.
+
+Main build032804 passed; default211/211; affected ModelPhysics+SavePayload27/27 and correctly
+registered Substrate.SaveSchema1/1. Wrong Arm.SaveSchema prefix wrapper failure is retained,
+with all matched tests passing. Main arena03335711/11 in two actual boots,all first_unmet
+null; selected host4311events and ordered native save/load fences/restore comparison/input
+dispatch. Generator033420 and doctor033436 passed (21 policy warnings). Full original
+rotations have native witnesses; four host fixture tilts explicitly zeroed for face schema.
+
+Exact commit/tree and detailed receipts:
+E:/elysium-work/codex/l0-p1-remaining-inputs-20261012/acceptance-checkpoint.json.
+P1 remains open for required caller/writer coverage and native func_brush223. CPhysBox17-map
+slice has no core witness-map placements: retain explicit map-specific D08/I1 disposition,
+never declare globally unreachable. E2/P2/P3/I2/Break/full travel and four D09 scope briefs
+remain open. No owner decision, accepted gameplay divergence or push.

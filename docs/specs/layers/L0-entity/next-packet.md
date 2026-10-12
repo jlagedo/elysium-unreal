@@ -1,25 +1,27 @@
-# Next bounded packet — remaining P1 producer and metadata reconciliation
+# Next bounded packet — P1 native brush producer reconciliation
 
-Read goal.md/checkpoint.md and active delivery/service maps. Reuse accepted creator, body,
-material, shadow, velocity, flags, native archive and removal walks. Creator receipt:
-E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/acceptance-checkpoint.json.
-Do not repeat selected type1 failure/Oceanhouse/debug/null-body or Brush Hide recovery.
+Read goal.md/checkpoint.md,vision.md and active delivery/service maps. Reuse accepted
+selected36 input receipt E:/elysium-work/codex/l0-p1-remaining-inputs-20261012/acceptance-checkpoint.json
+and creator/flags/body/material/shadow/velocity walks. No import or recovery replay.
 
-P1 remains active. Identify the first missing production contract among other body-flag
-writers, CPhysBox1004e500 and36 remaining core metadata rows. Verify actual callers, prepared
-path/admission and native producer requirements before coding; no corpus-wide refresh.
-Native func_brush223 producer remains unrecovered: retain explicit P1/P3 disposition and
-recover only if needed by the selected contract. Break remains unclosed.10151c00 impact
-reader is later I2, currently logging; flag/archive tests do not prove impact gameplay.
+P1 remains active. Establish the observable contract of func_brush native223 (1013e070):
+look up address first, compare existing Spawn/BuildBody and actual core witness-map callers,
+identify required lower/same-layer producers and their true preparation route. Retain normal
+brush rendering/geometry as Unreal services; internal IVP representation differences are not
+dependencies. Name shipped keyfields/inputs/query/movement/lifecycle/save observers.
+Prior born-hidden fallback and native func_door tests do not prove this missing native branch.
 
-Selected QueueRemove/base180/drain/cache proof does not close E2: generic Kill100acf90
-remains immediate, CNotify/Aim/PhysicsAnimlink wiring unresolved, higher recipients pending.
-Full landmark/travel/restore and P2/P3 integration remain required. No IVP layout, topology,
-allocator or solver reconstruction. Unreal services preserve observed rules and sequencing.
+Return a compact precode packet: mapped rows,real callers/producers,accepted walk sections,
+exact unknowns,units/frames/clocks/formulas/order/failure/save/lifetime,allowed files,
+positive/negative/restore/lifecycle witnesses and stop boundary. Main reviews before coding.
+If core evidence disproves this dependency, record exact core/later disposition and select
+the first actually missing P1 producer; do not declare P1 complete from narrow witnesses.
 
-Return a compact precode packet with mapped rows, real observers/producers/callers,
-units/frames/clocks/formulas/order/failure/save/lifetime, exact unknowns, allowed files,
-actual positive/negative/lifecycle witnesses and stop boundary. Verify installed public APIs
-and fixture production before assertions. One fresh Sol High worker/run, fork none,
-no nested agents/commit/push. Main review before implementation; freeze, independent gates,
-exact-path local commit/checkpoint before next run. No owner decision pending.
+CPhysBox17-map slice has no core witness placements; explicit map-specific D08/I1 work,
+not a global unreachable verdict. Other writers/constraint/ragdoll observers remain in mapped
+scope. Generic Kill/CNotify/Aim/PhysicsAnimlink,E2/P2/P3,full travel,I2 impact and Break remain
+open. Four retained D09 scope-review briefs require disposition before full L0 closure.
+
+One fresh Sol High worker,fork none,one worker/run,no nested agents/commit/push. Bound recovery
+to this required contract; verify installed public APIs and actual production fixture branch.
+Freeze,main independent review/gates,exact-path commit/checkpoint before next run. No owner decision.

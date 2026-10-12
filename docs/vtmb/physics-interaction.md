@@ -2505,3 +2505,67 @@ the complete payload strictly. All other cached pose/frame, leaf, queue, members
 words remain byte-compared; the original frozen payload must remain unchanged. This is an
 oracle-derived postrestore state expectation, with no arbitrary flag masking or compatibility
 migration. The saved clean/dirty absolute cache contract and parent first-target controls remain.
+
+
+### Remaining core selected-model inputs (2026-10-12; bounded P1 dependency)
+
+The two core source maps contain62 model IDs read by the reached Solid6 creators. Retained
+metadata scan finds26 existing typed inputs; accepted18 native/creator evidence is reused.
+The remaining36 are33 unparented IDs and three parented
+ornament IDs. Source binary first-solid metadata distinguishes28 supported native cooks from
+eight genuine no-source-body inputs. This is a production input dependency of CDynamicProp
+223 `101907e0` ->InitStatic `100a5bb0`, not evidence that every P1 flag writer is required first.
+Unparented selected models use static `1002e580`; actual resolved parent handles select
+InitShadow `100a6150` ->studio `1002e3a0`. Authored Solid6 without a source body returns null:
+knife and mac10 do not take the distinct Solid2 bbox branch `100a5d80`.
+
+The exact source rows, native admission set and full before/after provenance are retained at
+`E:/elysium-work/codex/l0-p1-remaining-inputs-20261012/`. Initial actual resident Gather/Create,
+Find/sourceBody/SelectedBody checks failed for all36; the approved public models units force
+refresh selected only those failures. Post-refresh Find and actual selected native actor/locked
+shape reads admit all36:28 first-solid cooks and eight typed body absences. The full3461 package,
+manifest-row and staged-recipe baseline proves3425 unselected models unchanged;36 source GLBs,
+both source map GLBs and actual DA/catalogue products remain unchanged. Public force also
+reauthored SM_Missing, whose different package hashes are explicitly retained. Its actual native
+100cm box, material/slot, bounds, trace flag, precision and canonical recipe stamp are checked;
+this incidental byte change is not an exemption for catalogue products or other model packages.
+
+CoreRemainingConsumers uses actual baked source definitions and four registered NPC endpoint
+rows, including Jack/redshirt5/redshirt2/Prophet. Parent resolution is checked against the real
+handles/classes, with both actual tutorial mac10 placements.27 statics and one Prophet-parented
+sign use selected native cooks distinct from visual cooks, including static and skeletal art
+representations. Mass/damping/rotational-damping/surface/inertia expectations come from retained
+ordered firstSolid pairs and parser defaults. Static creation forces inertia1 after parsing.
+Installed studio shadow `2601a7e0` overrides current material with MATERIAL_INDEX_SHADOW:
+friction0.8/restitution0, mass1000000, no movement/rotation, saved original mechanics and
+25400cm/s cap; it does not retain the parsed current default material. The eight no-source
+inputs remain null through hiding, archive and reconstruction.
+
+The native family checks GT production creation, lock-guarded native shapes/settings/identity,
+a real query against a visible monitor and hidden three-hull sink before/after Unhide, then typed
+archive reconstruction after old-incarnation retirement and clearing decoded PhysicsBodies.
+The archive baseline is the actual state immediately before Freeze, after the native tick, not
+an assumed pre-tick pose. Reload and isolated transition-mode ApplySnapshot both reconstruct independent
+current fields; borrowed225 retires the saved alias without retiring its independently rebuilt
+producer. Existing accepted creator/material/shadow/hidden/velocity/flag/cache evidence is reused.
+
+The host record l0_physics_core_model_inputs supplies the normal save/load transaction and
+actual attached art/resolved-parent observations in the live map epoch. Closed read-only fields
+parent.name/class resolve MoveParent; art.kind/asset read the actual attached static/skeletal
+mesh. Missing parents or assets fail the witness.42 fixture rows preserve41 actual source rows
+plus one explicit alias. Unique names and separated centimetre placements are controls; face
+retains negative Source yaw and sets pitch/roll zero in the arena authored-row interface. The
+four tilted source rows (palmtree,barbedwire,roofa,floorblock) keep their exact full original
+rotations in the native baked-definition test, not in the host fixture. Captured/applied literal
+probes and589 native/parent/art restore comparisons precede ordinary queued unhide dispatch;
+end probes run only after the actual sink/knife inputs are observed.
+
+This closes only the selected36 metadata/admission/consumer question, not full P1/D02/L0.
+CPhysBox241 `1004e500` (17map/mid) remains a map-specific construction obligation D08/I1;
+absence from the two core maps is not global unreachability. Fixed-constraint bit2 writers
+`1002c190`/`1002ad20`/`1002af90` and ragdoll bit8 `1019c0b0` retain their separate observer/
+producer disposition; their full endpoint/filter/force ownership is not recovered here.
+Native func_brush223 remains unrecovered/open P1/P3 unless an actual selected caller requires
+it. True host travel, integrated parent motion/cadence, other remaining P1 work, P2/P3/I2/Break and generic E2
+listener/lifecycle stores remain open. Chaos owns native geometry, broadphase, contacts, solving
+and mechanics; the substrate supplies observed authored rules, sequencing and semantic state.

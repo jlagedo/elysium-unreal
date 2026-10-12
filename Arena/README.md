@@ -859,3 +859,21 @@ order. Malformed classifier3 only tests classification; genuine no-binary remain
 model-shadow path. The sequential expectation list follows event chronology. This is integrated
 bounded P1 evidence, not full P1:36 metadata admissions, P2/P3/I2/Break and generic E2/D09 listener
 stores remain open. Native saved state uses disposable schema53/floor53.
+
+
+`l0_physics_core_model_inputs` covers the selected36 core Solid6 model-input dependency:
+27 production statics, a real Prophet-resolved sign shadow, eight genuine source-body absences
+and both actual mac10 parent controls.41 tutorial/hub source rows plus an explicit alias use
+separated cm fixture placements/unique prop names. `face` retains Source yaw with zero pitch/roll;
+four tilted originals retain their full rotations only in CoreRemainingConsumers. The normal
+host save/load checks589 native, parent and art fields, with captured/applied literals before
+first think.731 literal probes include end shape/null/lifetime checks, which wait for actual
+queued sink/knife Unhide dispatch.
+Closed string witnesses `parent.name` / `parent.class` resolve the entity's actual MoveParent;
+`art.kind` / `art.asset` require an actual attached static/skeletal mesh and read its kind/path.
+Absent endpoints or mesh assets fail. These fields are read-only, with no generic setters.
+CoreRemainingPreparedAdmission and CoreRemainingConsumers cover exact Find/SelectedBody,
+selected native cooks, source parameter literals, queries, typed archive reset and isolated
+transition-mode ApplySnapshot. Normal host travel remains open.
+CoreRemainingPlaceholder checks the public force refresh's incidental SM_Missing rewrite.
+The selected36 input gap is bounded evidence; full P1/D02/L0 and other retained obligations remain open.

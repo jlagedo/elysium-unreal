@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMapEntities.h"
+#include "ElysiumContentPaths.h"
 #include "Substrate/ElysiumRetailConVars.h"
 #include "HAL/IConsoleManager.h"
 #include "ElysiumClassRegistry.h"
@@ -21,6 +22,8 @@
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Visual/ElysiumPreparedPropModels.h"
 #include "Engine/StaticMesh.h"
+#include "UObject/MetaData.h"
+#include "UObject/Package.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsProxy/SingleParticlePhysicsProxy.h"
 #include "ElysiumSaveArchive.h"
@@ -3348,4 +3351,408 @@ bool FElysiumRemovalResourceLifetimeTest::RunTest(const FString&)
 	TestTrue(TEXT("teardown dispatches immediate-Kill cleanup once and does not redispatch queued release"),ElysiumRemovalTest::DestructorCleanupCalls.FindRef(TEXT("immediate_npc"))==1&&ElysiumRemovalTest::DestructorCleanupCalls.FindRef(TEXT("queued_npc"))==1);
 	return true;
 }
+
+
+// Exact remaining core2 prepared addresses. Retail/source/provenance receipt:
+// l0-p1-remaining-inputs-20261012/current-core-inputs.json;8 true no-body controls.
+namespace ElysiumCoreRemainingInputsTest
+{
+ struct FWitness { const TCHAR* Id; const TCHAR* Path; int32 Hulls; };
+ const FWitness Witnesses[] = {
+		{ TEXT("vtmb:model:character/monster/wolf_form/wolf_form"), TEXT("/ElysiumBaked/Models/character/monster/wolf_form/SM_wolf_form.SM_wolf_form"), 0 },
+		{ TEXT("vtmb:model:scenery/furniture/coffemaker/coffemaker"), TEXT("/ElysiumBaked/Models/scenery/furniture/coffemaker/SM_coffemaker.SM_coffemaker"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/coffemaker/coffepotmetal"), TEXT("/ElysiumBaked/Models/scenery/furniture/coffemaker/SM_coffepotmetal.SM_coffepotmetal"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/autoramp/autoramp"), TEXT("/ElysiumBaked/Models/scenery/furniture/autoramp/SM_autoramp.SM_autoramp"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/computer/computer_monitor"), TEXT("/ElysiumBaked/Models/scenery/furniture/computer/SM_computer_monitor.SM_computer_monitor"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/grandfather_clock/grandfather_clock"), TEXT("/ElysiumBaked/Models/scenery/furniture/grandfather_clock/SM_grandfather_clock.SM_grandfather_clock"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/microwave/microwave"), TEXT("/ElysiumBaked/Models/scenery/furniture/microwave/SM_microwave.SM_microwave"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/phone_stylish/phone2"), TEXT("/ElysiumBaked/Models/scenery/furniture/phone_stylish/SM_phone2.SM_phone2"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/refrigerator/refrigeratorold"), TEXT("/ElysiumBaked/Models/scenery/furniture/refrigerator/SM_refrigeratorold.SM_refrigeratorold"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/sinka/sinka"), TEXT("/ElysiumBaked/Models/scenery/furniture/sinka/SM_sinka.SM_sinka"), 3 },
+		{ TEXT("vtmb:model:scenery/furniture/soc_bed/soc_bed"), TEXT("/ElysiumBaked/Models/scenery/furniture/soc_bed/SM_soc_bed.SM_soc_bed"), 3 },
+		{ TEXT("vtmb:model:scenery/furniture/table/foldingtable"), TEXT("/ElysiumBaked/Models/scenery/furniture/table/SM_foldingtable.SM_foldingtable"), 1 },
+		{ TEXT("vtmb:model:scenery/furniture/trash_can_prep/trash_can_prep"), TEXT("/ElysiumBaked/Models/scenery/furniture/trash_can_prep/SM_trash_can_prep.SM_trash_can_prep"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/laser_emitter/laser_emitter"), TEXT("/ElysiumBaked/Models/scenery/misc/laser_emitter/SM_laser_emitter.SM_laser_emitter"), 0 },
+		{ TEXT("vtmb:model:scenery/misc/militarycomputer/box"), TEXT("/ElysiumBaked/Models/scenery/misc/militarycomputer/SM_box.SM_box"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/prophetsign/sign"), TEXT("/ElysiumBaked/Models/scenery/misc/prophetsign/SM_sign.SM_sign"), 3 },
+		{ TEXT("vtmb:model:scenery/misc/tools/tool2"), TEXT("/ElysiumBaked/Models/scenery/misc/tools/SM_tool2.SM_tool2"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/tools/tool3b"), TEXT("/ElysiumBaked/Models/scenery/misc/tools/SM_tool3b.SM_tool3b"), 1 },
+		{ TEXT("vtmb:model:scenery/misc/tools/tool4a"), TEXT("/ElysiumBaked/Models/scenery/misc/tools/SM_tool4a.SM_tool4a"), 1 },
+		{ TEXT("vtmb:model:scenery/plants/palmtree/palmtree"), TEXT("/ElysiumBaked/Models/scenery/plants/palmtree/SM_palmtree.SM_palmtree"), 1 },
+		{ TEXT("vtmb:model:scenery/street/barbedwire/barbedwire"), TEXT("/ElysiumBaked/Models/scenery/street/barbedwire/SM_barbedwire.SM_barbedwire"), 1 },
+		{ TEXT("vtmb:model:scenery/street/mailbox/mailbox"), TEXT("/ElysiumBaked/Models/scenery/street/mailbox/SM_mailbox.SM_mailbox"), 1 },
+		{ TEXT("vtmb:model:scenery/structural/bradbury/boardsb"), TEXT("/ElysiumBaked/Models/scenery/structural/bradbury/SM_boardsb.SM_boardsb"), 0 },
+		{ TEXT("vtmb:model:scenery/structural/santamonica/gallerynoir"), TEXT("/ElysiumBaked/Models/scenery/structural/santamonica/SM_gallerynoir.SM_gallerynoir"), 2 },
+		{ TEXT("vtmb:model:scenery/structural/santamonica/gassign"), TEXT("/ElysiumBaked/Models/scenery/structural/santamonica/SM_gassign.SM_gassign"), 2 },
+		{ TEXT("vtmb:model:scenery/structural/society/nightstand"), TEXT("/ElysiumBaked/Models/scenery/structural/society/SM_nightstand.SM_nightstand"), 0 },
+		{ TEXT("vtmb:model:scenery/structural/society/pedestal_scrolls"), TEXT("/ElysiumBaked/Models/scenery/structural/society/SM_pedestal_scrolls.SM_pedestal_scrolls"), 0 },
+		{ TEXT("vtmb:model:scenery/structural/tseng/roofa"), TEXT("/ElysiumBaked/Models/scenery/structural/tseng/SM_roofa.SM_roofa"), 0 },
+		{ TEXT("vtmb:model:scenery/structural/warehouse/break_crate_small"), TEXT("/ElysiumBaked/Models/scenery/structural/warehouse/SM_break_crate_small.SM_break_crate_small"), 1 },
+		{ TEXT("vtmb:model:scenery/structural/warrens/floorblock"), TEXT("/ElysiumBaked/Models/scenery/structural/warrens/SM_floorblock.SM_floorblock"), 1 },
+		{ TEXT("vtmb:model:scenery/trash/blocks/blockwall2"), TEXT("/ElysiumBaked/Models/scenery/trash/blocks/SM_blockwall2.SM_blockwall2"), 1 },
+		{ TEXT("vtmb:model:scenery/vehicles/1970chevymalibu/1970chevymalibu"), TEXT("/ElysiumBaked/Models/scenery/vehicles/1970chevymalibu/SM_1970chevymalibu.SM_1970chevymalibu"), 1 },
+		{ TEXT("vtmb:model:scenery/vehicles/lightningbird/lightningbird"), TEXT("/ElysiumBaked/Models/scenery/vehicles/lightningbird/SM_lightningbird.SM_lightningbird"), 1 },
+		{ TEXT("vtmb:model:scenery/vehicles/limo/sedan"), TEXT("/ElysiumBaked/Models/scenery/vehicles/limo/SM_sedan.SM_sedan"), 3 },
+		{ TEXT("vtmb:model:weapons/knife/wield/w_m_knife"), TEXT("/ElysiumBaked/Models/weapons/knife/wield/SM_w_m_knife.SM_w_m_knife"), 0 },
+		{ TEXT("vtmb:model:weapons/submachine_mac10/wield/w_m_submachine_mac10"), TEXT("/ElysiumBaked/Models/weapons/submachine_mac10/wield/SM_w_m_submachine_mac10.SM_w_m_submachine_mac10"), 0 },
+ };
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsCoreRemainingPreparedAdmissionTest,
+ "Elysium.Substrate.ModelPhysics.CoreRemainingPreparedAdmission",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelPhysicsCoreRemainingPreparedAdmissionTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture;
+ if (!Fixture.CreateWorld(*this)) return false;
+ auto* Map = Fixture.SpawnMapActorDeferred();
+ auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+ auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+ TArray<FString> Ids;
+ for (const auto& Witness : ElysiumCoreRemainingInputsTest::Witnesses) Ids.Add(Witness.Id);
+ TSet<FSoftObjectPath> Paths; FString Error;
+ if (!TestTrue(TEXT("actual36 catalogue path gathering"), FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)))
+ { AddError(Error); return false; }
+ TArray<UObject*> Assets;
+ for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+ auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+ if (!TestTrue(TEXT("actual36 resident prepared admission"), Prepared.IsValid())) { AddError(Error); return false; }
+ ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+ FElysiumWorldServices Services; Services.Embodiment = Map;
+ FElysiumEntityWorld EntityWorld(Map, nullptr, Services); EntityWorld.Load(FElysiumEntityDefs());
+ for (const auto& Witness : ElysiumCoreRemainingInputsTest::Witnesses)
+ {
+  auto* Mesh = Prepared->StaticMesh(Witness.Id, Error);
+  const FString Label = FString(Witness.Id) + TEXT(" ") + Witness.Path;
+  const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh);
+  AddInfo(FString::Printf(TEXT("CORE36_ADMISSION id=%s path=%s typed=%d source=%d selected=%d hulls=%d expected=%d"),
+   Witness.Id, *GetPathNameSafe(Mesh), Inputs != nullptr, Inputs && Inputs->bSourceBody, Inputs && Inputs->SelectedBody != nullptr,
+   Inputs && Inputs->SelectedBody ? Inputs->SelectedBody->AggGeom.ConvexElems.Num() : 0, Witness.Hulls));
+  if (!TestNotNull(*(Label + TEXT(" prepared static mesh")), Mesh)) continue;
+  TestEqual(*(Label + TEXT(" exact prepared address")), Mesh->GetPathName(), FString(Witness.Path));
+  if (!TestNotNull(*(Label + TEXT(" actual typed body inputs")), Inputs)) continue;
+  TestEqual(*(Label + TEXT(" real source body presence")), Inputs->bSourceBody, Witness.Hulls > 0);
+  if (Witness.Hulls == 0)
+  {
+   TestNull(*(Label + TEXT(" no selected cook for genuine source absence")), Inputs->SelectedBody.Get());
+   continue;
+  }
+  if (!TestNotNull(*(Label + TEXT(" actual selected cook")), Inputs->SelectedBody.Get())) continue;
+  TestEqual(*(Label + TEXT(" first solid hull count")), Inputs->SelectedBody->AggGeom.ConvexElems.Num(), Witness.Hulls);
+  auto* Component = NewObject<UElysiumPhysicsPropComponent>(Map);
+  Component->SetVisibility(false); Component->SetStaticMesh(Mesh); Component->RegisterComponent(); Map->AddInstanceComponent(Component);
+  if (TestTrue(*(Label + TEXT(" selected native static actor admission")), ElysiumModelPhysics::CreateStaticModel(Component, EntityWorld.PhysicsSurfaces(), Error)))
+  {
+   const auto* Body = ElysiumModelPhysics::Identity(Component);
+   TestTrue(*(Label + TEXT(" body uses selected setup")), Body && Body->GetBodySetup() == Inputs->SelectedBody.Get());
+   int32 ShapeCount = 0;
+   if (Body) FPhysicsCommand::ExecuteRead(Body->GetPhysicsActorHandle(), [&](const FPhysicsActorHandle& Actor)
+   { TArray<FPhysicsShapeHandle> Shapes; FPhysicsInterface::GetAllShapes_AssumedLocked(Actor, Shapes); ShapeCount = Shapes.Num(); });
+   TestEqual(*(Label + TEXT(" actual native shape count")), ShapeCount, Witness.Hulls);
+  }
+  else AddError(Label + TEXT(" ") + Error);
+  ElysiumModelPhysics::Destroy(Component); Component->DestroyComponent();
+ }
+ return true;
+}
+
+
+namespace ElysiumCoreRemainingInputsTest
+{
+ struct FPlacement { int32 Model; const TCHAR* Map; int32 Row; float Mass, Inertia, Damping, RotDamping; const TCHAR* Surface; };
+ // Literal first-solid parameters and source row identities retained from the two core GLBs.
+ static const FPlacement Placements[] = {
+  { 0, TEXT("sp_tutorial_1"), 1155, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+  { 1, TEXT("sp_tutorial_1"), 1809, 2.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 2, TEXT("sp_tutorial_1"), 1808, 1.f, 1.f, 0.f, 0.f, TEXT("can_pop") },
+  { 3, TEXT("sp_tutorial_1"), 1251, 99.999992f, 1.f, 0.f, 0.f, TEXT("metal") },
+  { 4, TEXT("sm_hub_1"), 276, 10.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 5, TEXT("sm_hub_1"), 2580, 35.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 6, TEXT("sp_tutorial_1"), 1807, 20.f, 1.f, 0.f, 0.f, TEXT("metalvent") },
+  { 7, TEXT("sp_tutorial_1"), 1826, 5.f, 1.f, 0.f, 0.f, TEXT("plastic") },
+  { 8, TEXT("sp_tutorial_1"), 1813, 75.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 9, TEXT("sp_tutorial_1"), 1828, 100.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 10, TEXT("sp_tutorial_1"), 1787, 75.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 11, TEXT("sp_tutorial_1"), 1810, 10.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 12, TEXT("sp_tutorial_1"), 1827, 499.999969f, 1.f, 0.f, 0.f, TEXT("") },
+  { 13, TEXT("sp_tutorial_1"), 1741, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+  { 14, TEXT("sp_tutorial_1"), 1853, 100.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 15, TEXT("sm_hub_1"), 2523, 1.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 16, TEXT("sp_tutorial_1"), 1252, 1.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 17, TEXT("sp_tutorial_1"), 1253, 1.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 18, TEXT("sp_tutorial_1"), 1254, 1.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 19, TEXT("sp_tutorial_1"), 1593, 499.999969f, 1.f, 0.f, 0.f, TEXT("wood") },
+  { 20, TEXT("sm_hub_1"), 2573, 500.000031f, 1.f, 0.f, 0.f, TEXT("") },
+  { 21, TEXT("sm_hub_1"), 2584, 500.000031f, 1.f, 0.f, 0.f, TEXT("") },
+  { 22, TEXT("sp_tutorial_1"), 1708, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+  { 23, TEXT("sm_hub_1"), 1377, 500.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 24, TEXT("sm_hub_1"), 1675, 500.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 25, TEXT("sp_tutorial_1"), 1825, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+  { 26, TEXT("sp_tutorial_1"), 1758, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+  { 27, TEXT("sm_hub_1"), 2574, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+  { 28, TEXT("sp_tutorial_1"), 1756, 100.f, 1.f, 0.f, 0.f, TEXT("wood") },
+  { 29, TEXT("sm_hub_1"), 2583, 500.f, 1.f, 0.f, 0.f, TEXT("floorblock") },
+  { 30, TEXT("sm_hub_1"), 2575, 20.f, 10.f, 1.f, 1.f, TEXT("") },
+  { 31, TEXT("sm_hub_1"), 2585, 1000.00006f, 1.f, 0.1f, 5.f, TEXT("") },
+  { 32, TEXT("sm_hub_1"), 2582, 29.999998f, 1.f, 0.f, 0.f, TEXT("") },
+  { 33, TEXT("sm_hub_1"), 2448, 1.f, 1.f, 0.f, 0.f, TEXT("") },
+  { 34, TEXT("sp_tutorial_1"), 1036, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+  { 35, TEXT("sp_tutorial_1"), 1051, 85.f, 1.f, 0.1f, 0.1f, TEXT("") },
+ };
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsCoreRemainingConsumersTest,
+ "Elysium.Substrate.ModelPhysics.CoreRemainingConsumers",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelPhysicsCoreRemainingConsumersTest::RunTest(const FString&)
+{
+ FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+ auto* Map = Fixture.SpawnMapActorDeferred(); FString Error;
+ auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+ auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+ TArray<FString> Ids; for (const auto& Witness : ElysiumCoreRemainingInputsTest::Witnesses) Ids.Add(Witness.Id);
+ TSet<FSoftObjectPath> Paths;
+ if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)) { AddError(Error); return false; }
+ TArray<UObject*> Assets; for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+ auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+ if (!TestTrue(TEXT("all36 resident production preparation"), Prepared.IsValid())) { AddError(Error); return false; }
+ ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+ TMap<FString, FElysiumEntityDefs> CoreDefs;
+ for (const TCHAR* MapName : { TEXT("sp_tutorial_1"), TEXT("sm_hub_1") })
+ {
+  auto* Table = LoadObject<UElysiumMapEntities>(nullptr, *FElysiumContentPaths::BakedMapEntities(MapName));
+  if (!TestNotNull(TEXT("actual baked core map entity table"), Table)) return false;
+  FElysiumEntityDefs Actual; Table->Deserialize(Actual); CoreDefs.Add(MapName, MoveTemp(Actual));
+ }
+ FElysiumEntityDefs Defs; Defs.MapName = TEXT("core_remaining_native");
+ // Real registered endpoint rows, with their complete authored keys and model choices.
+ struct FEndpoint { const TCHAR* Map; int32 Row; const TCHAR* Name; const TCHAR* Class; };
+ const FEndpoint Endpoints[] = {
+  {TEXT("sp_tutorial_1"),1363,TEXT("Jack"),TEXT("npc_VVampire")},
+  {TEXT("sp_tutorial_1"),1040,TEXT("sabbat_redshirt_5"),TEXT("npc_VVampire")},
+  {TEXT("sp_tutorial_1"),532,TEXT("sabbat_redshirt_2"),TEXT("npc_VVampire")},
+  {TEXT("sm_hub_1"),2206,TEXT("Prophet"),TEXT("npc_VDialogPedestrian")}
+ };
+ for (const auto& Endpoint : Endpoints)
+ {
+  const auto& Actual = CoreDefs.FindChecked(Endpoint.Map);
+  if (!TestTrue(TEXT("real source endpoint index"), Actual.Defs.IsValidIndex(Endpoint.Row))) return false;
+  const auto& Definition = Actual.Defs[Endpoint.Row];
+  TestEqual(TEXT("real source endpoint name"), Definition.TargetName, FString(Endpoint.Name));
+  TestEqual(TEXT("real source endpoint registered class"), Definition.Classname, FString(Endpoint.Class));
+  Defs.Defs.Add(Definition);
+ }
+ TArray<int32> FieldIndices;
+ for (const auto& Placement : ElysiumCoreRemainingInputsTest::Placements)
+ {
+  const auto& Actual = CoreDefs.FindChecked(Placement.Map);
+  if (!TestTrue(TEXT("actual placement source index"), Actual.Defs.IsValidIndex(Placement.Row))) return false;
+  const auto& Definition = Actual.Defs[Placement.Row];
+  TestEqual(TEXT("actual source model identity"), ElysiumPreparedProps::ModelId(Definition.Keys.FindRef(TEXT("model"))), Ids[Placement.Model]);
+  TestEqual(TEXT("selected contract authored Solid6"), Definition.Keys.FindRef(TEXT("solid")), FString(TEXT("6")));
+  FieldIndices.Add(Defs.Defs.Num()); Defs.Defs.Add(Definition);
+ }
+ // The second actual mac10 placement resolves the fourth endpoint, not an invented parent.
+ const int32 SecondMacIndex = Defs.Defs.Num(); Defs.Defs.Add(CoreDefs.FindChecked(TEXT("sp_tutorial_1")).Defs[1222]);
+ FElysiumEntityDef AliasDef; AliasDef.Classname=TEXT("info_target"); AliasDef.TargetName=TEXT("core_native_alias");
+ const int32 AliasIndex=Defs.Defs.Num(); Defs.Defs.Add(AliasDef);
+ FElysiumWorldServices Services; Services.Embodiment = Map;
+ FElysiumEntityWorld Source(Map, nullptr, Services); Source.Load(FElysiumEntityDefs(Defs));
+ auto ResolveIndex = [](FElysiumEntityWorld& EntityWorld, int32 Index) { return EntityWorld.Resolve(FElysiumEntityHandle(Index, EntityWorld.GetEpoch())); };
+ for (const auto& Endpoint : Endpoints)
+ {
+  auto* Parent=Source.FindByName(Endpoint.Name);
+  if (!TestTrue(TEXT("real endpoint constructs registered NPC before parent resolution"), Parent && Parent->AsNpc())) return false;
+ }
+ TArray<FElysiumSavedPhysicsBody> BeforeStates; BeforeStates.SetNum(36);
+ TArray<ElysiumModelPhysics::FNativeOutput> BeforeTokens;
+ auto CheckProduction = [&](FElysiumEntityWorld& EntityWorld, bool bRestored)
+ {
+  int32 StaticCount=0, ShadowCount=0, NullCount=0;
+  for (int32 ModelIndex=0; ModelIndex<Ids.Num(); ++ModelIndex)
+  {
+   const auto& Witness=ElysiumCoreRemainingInputsTest::Witnesses[ModelIndex];
+   const auto& Placement=ElysiumCoreRemainingInputsTest::Placements[ModelIndex];
+   auto* Entity=ResolveIndex(EntityWorld,FieldIndices[ModelIndex]);
+   if (!TestNotNull(Witness.Id,Entity)) return false;
+   const FString ParentName=Defs.Defs[FieldIndices[ModelIndex]].Keys.FindRef(TEXT("parentname"));
+   auto* Parent=EntityWorld.Resolve(Entity->MoveParent);
+   if (!ParentName.IsEmpty()) TestTrue(TEXT("authored parentname resolves actual endpoint handle"),Parent && Parent==EntityWorld.FindByName(ParentName));
+   else TestNull(TEXT("authored unparented row remains unparented"),Parent);
+   auto* Mesh=Prepared->StaticMesh(Witness.Id,Error); const auto* Inputs=UElysiumModelPhysicsInputs::Find(Mesh);
+   if (!Inputs) return false;
+   void* Object=Entity->VPhysicsGetObject(); void* Listed=nullptr;
+   if (Witness.Hulls==0)
+   {
+    ++NullCount; TestNull(TEXT("genuine no-source Solid6 has no fallback body"),Object);
+    TestEqual(TEXT("null source current list count"),Entity->VPhysicsGetObjectList(&Listed,1),0);
+    TestFalse(TEXT("null source never registers shadow"),EntityWorld.PhysicsShadows().Contains(Entity->Handle));
+    const bool bWasHidden=Entity->IsHidden(); Entity->ScriptHide(); Entity->ScriptUnhide();
+    if(bWasHidden) Entity->ScriptHide();
+    AddInfo(FString::Printf(TEXT("CORE36_CONSUMER map=%s row=%d id=%s parent=%s representation=source-absent static=0 shapes=0 query=0 sim=0 restored=%d"),Placement.Map,Placement.Row,Witness.Id,*ParentName,bRestored));
+    TestNull(TEXT("negative hide/unhide cannot synthesize bbox"),Entity->VPhysicsGetObject());
+    continue;
+   }
+   if (!TestNotNull(TEXT("reached production selected native body"),Object)) return false;
+   auto* Component=ElysiumModelPhysics::ComponentFor(Object); auto* Native=ElysiumModelPhysics::Identity(Component);
+   const auto* Recipe=ElysiumModelPhysics::RecipeFor(Object); const auto* Shadow=ElysiumModelPhysics::ShadowFor(Object);
+   if (!Native || !Recipe) return false;
+   TestTrue(TEXT("production body uses actual selected cook"),Native->GetBodySetup()==Inputs->SelectedBody.Get());
+   TestTrue(TEXT("selected cook distinct from art cook"),Native->GetBodySetup()!=Mesh->GetBodySetup());
+   TestTrue(TEXT("successful creator owns current game data"),ElysiumModelPhysics::GameDataForObject(Object)==Entity);
+   TestEqual(TEXT("production current body list count"),Entity->VPhysicsGetObjectList(&Listed,1),1);
+   TestTrue(TEXT("production current list identity"),Listed==Object);
+   TestTrue(TEXT("actual creator uses model recipe"),Recipe->Kind==EElysiumPhysicsRecipeKind::Model);
+   TestEqual(TEXT("literal first solid authored mass kg"),Inputs->MassKg,Placement.Mass);
+   TestEqual(TEXT("literal first solid authored inertia"),Inputs->InertiaScale,Placement.Inertia);
+   TestEqual(TEXT("literal first solid authored linear damping"),Inputs->LinearDamping,Placement.Damping);
+   TestEqual(TEXT("literal first solid authored angular damping"),Inputs->AngularDamping,Placement.RotDamping);
+   TestEqual(TEXT("literal raw first solid surface"),Inputs->SurfaceProperty,FString(Placement.Surface));
+   TestEqual(TEXT("native recipe retains authored mass without prop bias"),Recipe->MassKg,Inputs->MassKg);
+   TestEqual(TEXT("native authored damping"),Native->LinearDamping,Parent?0.f:Inputs->LinearDamping);
+   TestEqual(TEXT("native authored rotational damping"),Native->AngularDamping,Parent?0.f:Inputs->AngularDamping);
+   int32 Shapes=0,QueryShapes=0,SimShapes=0;
+   FPhysicsCommand::ExecuteRead(Native->GetPhysicsActor(),[&](const FPhysicsActorHandle&)
+   {
+    TArray<FPhysicsShapeHandle> Handles; Shapes=Native->GetAllShapes_AssumesLocked(Handles);
+    for(const auto& Shape:Handles) {QueryShapes+=FPhysicsInterface::IsQueryShape(Shape);SimShapes+=FPhysicsInterface::IsSimulationShape(Shape);}
+   });
+   TestEqual(TEXT("actual selected native convex count"),Shapes,Witness.Hulls);
+   TestEqual(TEXT("current hidden state gates query shapes"),QueryShapes,Entity->IsHidden()?0:Witness.Hulls);
+   TestEqual(TEXT("current hidden state gates simulation shapes"),SimShapes,Entity->IsHidden()?0:Witness.Hulls);
+   const auto* Material=Cast<UElysiumPhysicalMaterial>(Native->GetSimplePhysicalMaterial());
+   // Accepted2601a7e0 installs special shadow material before disabling gravity/damping.
+   int32 SurfaceIndex=EntityWorld.PhysicsSurfaces().GetSurfaceIndex(Parent?TEXT("$MATERIAL_INDEX_SHADOW"):Inputs->SurfaceProperty);
+   if (SurfaceIndex<0) SurfaceIndex=EntityWorld.PhysicsSurfaces().GetSurfaceIndex(TEXT("default"));
+   const auto* Surface=EntityWorld.PhysicsSurfaces().GetSurfaceData(SurfaceIndex);
+   if (!Material || !Surface) return false;
+   TestEqual(TEXT("actual native surface/default lookup"),Material->SourceName,EntityWorld.PhysicsSurfaces().GetSurfaceName(SurfaceIndex));
+   TestEqual(TEXT("actual native friction"),Material->Friction,Surface->Friction());
+   TestEqual(TEXT("actual native restitution"),Material->Restitution,Surface->Elasticity());
+   if (Parent)
+   {
+    ++ShadowCount; TestFalse(TEXT("actual resolved ornament recipe dynamic"),Recipe->bStatic);
+    TestEqual(TEXT("studio parser retains inertia"),Recipe->InertiaScale,Inputs->InertiaScale);
+    TestTrue(TEXT("actual resolved ornament owns shadow"),Shadow && Shadow->bInstalled && EntityWorld.PhysicsShadows().Contains(Entity->Handle));
+    if (!Shadow) return false;
+    TestEqual(TEXT("studio shadow saved authored mass"),Shadow->SavedMassKg,Inputs->MassKg);
+    TestEqual(TEXT("shadow saves original authored damping"),Shadow->SavedLinearDamping,Inputs->LinearDamping);
+    TestEqual(TEXT("shadow saves original authored rotational damping"),Shadow->SavedAngularDamping,Inputs->AngularDamping);
+    TestFalse(TEXT("no move permission"),Shadow->bAllowMovement); TestFalse(TEXT("no rotation permission"),Shadow->bAllowRotation);
+    TestEqual(TEXT("native speed cap cm per second"),Shadow->LinearDesiredLimitCm,25400.f);
+    TestTrue(TEXT("shadow body independent of art"),Component!=Entity->GetAttachBody() && !Component->IsVisible());
+   }
+   else
+   {
+    ++StaticCount; TestTrue(TEXT("actual unparented static branch"),Recipe->bStatic && !Shadow);
+    TestEqual(TEXT("static postparse inertia overwrite"),Recipe->InertiaScale,1.f);
+    TestTrue(TEXT("native static state"),ElysiumModelPhysics::ActorIdentity(Component)->GetGameThreadAPI().ObjectState()==Chaos::EObjectStateType::Static);
+   }
+   auto* Art=Entity->GetAttachBody();
+   if (!TestNotNull(TEXT("actual production art representation"),Art)) return false;
+   const auto* StaticArt=Cast<UStaticMeshComponent>(Art); const auto* SkeletalArt=Cast<USkeletalMeshComponent>(Art);
+   TestTrue(TEXT("actual representation selects prepared static or skeletal art"),
+    (StaticArt && StaticArt->GetStaticMesh()==Mesh) || (SkeletalArt && SkeletalArt->GetSkeletalMeshAsset()==Prepared->SkeletalMesh(Witness.Id,Error)));
+   FElysiumSavedPhysicsBody Actual; if (!ElysiumModelPhysics::Capture(Object,Actual)) return false;
+   if (!bRestored)
+   {
+    const FTransform Expected(ElysiumModelPhysics::SourceRotation(Entity->GetAbsAngles()),Entity->GetAbsOrigin(),Component->GetComponentScale());
+    TestTrue(TEXT("actual initial absolute native pose"),Actual.Pose.Equals(Expected,.001));
+    BeforeStates[ModelIndex]=Actual; BeforeTokens.Add(ElysiumModelPhysics::CaptureIdentity(Object));
+   }
+   else
+   {
+    const auto& Before=BeforeStates[ModelIndex];
+    TestTrue(TEXT("Physics archive reconnect retains native pose and semantic shapes"),Actual.Pose.Equals(Before.Pose,.001) && Actual.ModelShapeFlags==Before.ModelShapeFlags);
+    TestTrue(TEXT("Physics archive reconnect retains native mass frame/inertia"),Actual.CurrentMassKg==Before.CurrentMassKg && Actual.CurrentInertia==Before.CurrentInertia && Actual.CurrentInverseInertia==Before.CurrentInverseInertia && Actual.CurrentMassFrame.Equals(Before.CurrentMassFrame,1.e-6));
+    TestEqual(TEXT("Physics archive reconnect retains current WORD"),Actual.CurrentGameFlags,Before.CurrentGameFlags);
+   }
+   AddInfo(FString::Printf(TEXT("CORE36_CONSUMER map=%s row=%d id=%s parent=%s representation=%s static=%d shapes=%d query=%d sim=%d mass=%g inertia=%g restored=%d"),
+    Placement.Map,Placement.Row,Witness.Id,*ParentName,SkeletalArt?TEXT("skeletal"):TEXT("static"),Recipe->bStatic,Shapes,QueryShapes,SimShapes,Recipe->MassKg,Recipe->InertiaScale,bRestored));
+  }
+  TestEqual(TEXT("actual unparented positive static count"),StaticCount,27);
+  TestEqual(TEXT("actual resolved positive studio count"),ShadowCount,1);
+  TestEqual(TEXT("all8 source absence controls"),NullCount,8);
+  auto* SecondMac=ResolveIndex(EntityWorld,SecondMacIndex);
+  TestTrue(TEXT("second real mac10 resolves redshirt2 endpoint"),SecondMac && EntityWorld.Resolve(SecondMac->MoveParent)==EntityWorld.FindByName(TEXT("sabbat_redshirt_2")));
+  if (SecondMac) TestNull(TEXT("second real mac10 remains native null"),SecondMac->VPhysicsGetObject());
+  return true;
+ };
+ if (!CheckProduction(Source,false)) return false;
+ auto* Monitor=ResolveIndex(Source,FieldIndices[4]); auto* Sink=ResolveIndex(Source,FieldIndices[9]);
+ void* SinkActor=Sink->VPhysicsGetObject(); auto* SinkComponent=ElysiumModelPhysics::ComponentFor(SinkActor);
+ auto TraceSelected=[&](FElysiumEntity* Entity)
+ {
+  auto* Native=ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(Entity->VPhysicsGetObject()));
+  const FVector Center=Native->GetUnrealWorldTransform().TransformPosition(Native->GetBodySetup()->AggGeom.ConvexElems[0].ElemBox.GetCenter());
+  FCollisionQueryParams Params(FName(TEXT("CoreRemainingSelected")),false);
+  FHitResult Hit; Fixture.World->LineTraceSingleByChannel(Hit,Center-FVector(1000,0,0),Center+FVector(1000,0,0),ElysiumCollision::SightChannel,Params);
+  return Hit.GetComponent()==ElysiumModelPhysics::ComponentFor(Entity->VPhysicsGetObject());
+ };
+ if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+ TestTrue(TEXT("actual visible computer monitor native query"),TraceSelected(Monitor));
+ TestTrue(TEXT("authored hidden multi-hull sink identity retained"),Sink->IsHidden() && SinkActor);
+ TestFalse(TEXT("actual native query passes through authored hidden multi-hull sink"),TraceSelected(Sink));
+ Sink->ScriptUnhide(); TestTrue(TEXT("actual unhide preserves multi-hull incarnation"),Sink->VPhysicsGetObject()==SinkActor);
+ TestTrue(TEXT("actual unhide restores selected hull query"),TraceSelected(Sink));
+ Sink->ScriptHide(); TestTrue(TEXT("actual hide preserves selected carrier"),ElysiumModelPhysics::ComponentFor(SinkActor)==SinkComponent);
+ auto* Alias=ResolveIndex(Source,AliasIndex); Alias->VPhysicsSetObject(Monitor->VPhysicsGetObject());
+ // Archive comparisons use actual current state after the native query frame and hide operations.
+ for(int32 ModelIndex=0;ModelIndex<Ids.Num();++ModelIndex)
+  if(auto* Entity=ResolveIndex(Source,FieldIndices[ModelIndex]);Entity && Entity->VPhysicsGetObject())
+   if(!ElysiumModelPhysics::Capture(Entity->VPhysicsGetObject(),BeforeStates[ModelIndex])) return false;
+ FElysiumMapSnapshot Snapshot; Source.Freeze(Snapshot);
+ if (!TestFalse(TEXT("actual joined production Physics save admission"),Snapshot.bPhysicsSaveFailed)) return false;
+ TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive SaveAr(Writer,FElysiumSaveVersion::Latest); SaveAr<<Snapshot;
+ FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive LoadAr(Reader,FElysiumSaveVersion::Latest); LoadAr<<Persisted;
+ if (!TestFalse(TEXT("actual typed Physics block decodes"),Reader.IsError())) return false;
+ Source.Teardown(); for(const auto& Token:BeforeTokens) TestFalse(TEXT("source retirement fences actual selected incarnation"),ElysiumModelPhysics::IsCurrentOutput(Token));
+ Persisted.PhysicsBodies.Reset(); // no decoded-array shortcut: ApplySnapshot consumes persisted Physics bytes.
+ FElysiumEntityWorld Reload(Map,nullptr,Services); Reload.Load(FElysiumEntityDefs(Defs));
+ if (!TestTrue(TEXT("actual production native reconnect before first think"),Reload.ApplySnapshot(Persisted)>=0) || !CheckProduction(Reload,true)) return false;
+ auto* RestoredMonitor=ResolveIndex(Reload,FieldIndices[4]); auto* RestoredAlias=ResolveIndex(Reload,AliasIndex);
+ TestTrue(TEXT("saved alias reconstructs independent native field"),RestoredMonitor->VPhysicsGetObject() && RestoredAlias->VPhysicsGetObject() && RestoredMonitor->VPhysicsGetObject()!=RestoredAlias->VPhysicsGetObject());
+ const auto RestoredToken=ElysiumModelPhysics::CaptureIdentity(RestoredMonitor->VPhysicsGetObject()); RestoredMonitor->VPhysicsDestroyObject();
+ TestFalse(TEXT("explicit225 fences selected restored monitor"),ElysiumModelPhysics::IsCurrentOutput(RestoredToken));
+ TestNotNull(TEXT("independent restored alias lifetime"),RestoredAlias->VPhysicsGetObject());
+ Reload.Teardown();
+ FElysiumEntityWorld Transition(Map,nullptr,Services); Transition.Load(FElysiumEntityDefs(Defs));
+ if(!TestTrue(TEXT("native transition reconnect consumes same typed Physics bytes"),Transition.ApplySnapshot(Persisted,0.,true)>=0) || !CheckProduction(Transition,true)) return false;
+ Transition.Teardown();
+ return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsCorePlaceholderTest,
+ "Elysium.Substrate.ModelPhysics.CoreRemainingPlaceholder",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelPhysicsCorePlaceholderTest::RunTest(const FString&)
+{
+ // Public import models --force reauthors this canonical incidental placeholder.
+ // import_models.py1051-1090: same frozen authoring recipe; both package hashes retained.
+ auto* Mesh=LoadObject<UStaticMesh>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/SM_Missing.SM_Missing"));
+ if(!TestNotNull(TEXT("canonical missing-model placeholder"),Mesh)) return false;
+ const auto* Body=Mesh->GetBodySetup(); if(!TestNotNull(TEXT("placeholder actual bbox cook"),Body)) return false;
+ TestEqual(TEXT("placeholder simple/complex trace flag"),Body->CollisionTraceFlag,CTF_UseSimpleAndComplex);
+ TestEqual(TEXT("placeholder one centered box"),Body->AggGeom.BoxElems.Num(),1);
+ TestEqual(TEXT("placeholder no generic convex"),Body->AggGeom.ConvexElems.Num(),0);
+ if(Body->AggGeom.BoxElems.Num()!=1) return false;
+ const auto& Box=Body->AggGeom.BoxElems[0];
+ TestEqual(TEXT("placeholder 100cm X"),Box.X,100.f); TestEqual(TEXT("placeholder 100cm Y"),Box.Y,100.f); TestEqual(TEXT("placeholder 100cm Z"),Box.Z,100.f);
+ TestEqual(TEXT("placeholder centered"),Box.Center,FVector::ZeroVector);
+ TestTrue(TEXT("placeholder render bounds [-50,+50]cm"),Mesh->GetBoundingBox().Min.Equals(FVector(-50),.001) && Mesh->GetBoundingBox().Max.Equals(FVector(50),.001));
+ TestEqual(TEXT("placeholder one material slot"),Mesh->GetStaticMaterials().Num(),1);
+ if(Mesh->GetStaticMaterials().Num()!=1) return false;
+ const auto& Slot=Mesh->GetStaticMaterials()[0]; TestEqual(TEXT("placeholder missing slot"),Slot.MaterialSlotName,FName(TEXT("missing")));
+ TestEqual(TEXT("placeholder actual sentinel material"),GetPathNameSafe(Slot.MaterialInterface),FString(TEXT("/Game/ElysiumGenerated/Materials/V2/MI_V2_Missing.MI_V2_Missing")));
+#if WITH_EDITOR
+ TestEqual(TEXT("placeholder one source LOD"),Mesh->GetNumSourceModels(),1);
+ TestTrue(TEXT("placeholder full UV precision"),Mesh->GetSourceModel(0).BuildSettings.bUseFullPrecisionUVs);
+ TestTrue(TEXT("placeholder high tangent precision"),Mesh->GetSourceModel(0).BuildSettings.bUseHighPrecisionTangentBasis);
+ auto& Metadata=Mesh->GetOutermost()->GetMetaData();
+ TestEqual(TEXT("placeholder unchanged canonical recipe fingerprint"),Metadata.GetValue(Mesh,TEXT("ElysiumRecipe")),FString(TEXT("479813a21ffac44b0ae65b5a3dcf09099f2cf4ca5ba9808040f24685921d58d0")));
+ TestEqual(TEXT("placeholder actual models producer"),Metadata.GetValue(Mesh,TEXT("ElysiumProducer")),FString(TEXT("models")));
+#endif
+ AddInfo(TEXT("CORE36_PLACEHOLDER canonical 100cm centered bbox/simple-complex/missing slot/material/precision/recipe verified; incidental public force rewrite retained separately from 3425 unselected models"));
+ return true;
+}
+
 #endif
