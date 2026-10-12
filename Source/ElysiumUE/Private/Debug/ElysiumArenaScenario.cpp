@@ -1990,7 +1990,7 @@ bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out)
 		TEXT("los.last_clear"), TEXT("coordinator.normal.count"), TEXT("coordinator.player.count"),
 		TEXT("coordinator.boss.count"), TEXT("coordinator.normal.cap"), TEXT("coordinator.player.cap"),
 		TEXT("coordinator.boss.cap"), TEXT("physics.list_count"), TEXT("physics.native_owned"),
-		TEXT("physics.query_shapes"), TEXT("physics.sim_shapes"), TEXT("physics.mass")
+		TEXT("physics.query_shapes"), TEXT("physics.sim_shapes"), TEXT("physics.mass"), TEXT("physics.game_flags")
 	})
 		if (Field == Name) { Out = FElysiumArenaValue::EType::Number; return true; }
 	for (const TCHAR* Name : {

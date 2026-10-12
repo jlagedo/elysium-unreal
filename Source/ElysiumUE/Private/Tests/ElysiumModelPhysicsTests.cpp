@@ -2816,4 +2816,192 @@ bool FElysiumModelPhysicsHiddenPropBodyTest::RunTest(const FString&)
  Travel.Teardown(); AddInfo(FString::Printf(TEXT("hidden-prop joined: archive_bytes=%d plate5_sleeping=1 chairoffice_shapes=2 own/base/PhysProp_fields=3 native_motion=1 reload=1 transition=1"),Bytes.Num()));
  return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsBodyGameFlagsTest, "Elysium.Substrate.ModelPhysics.BodyGameFlags",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumModelPhysicsBodyGameFlagsTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	const TArray<FString> Ids = { ElysiumModelPhysicsTest::BodyId, ElysiumModelPhysicsTest::AbsentId };
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!FElysiumPreparedPropModels::GatherPaths(Placed, Skins, Ids, Paths, Error)) { AddError(Error); return false; }
+	TArray<UObject*> Assets; for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+	auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins, Ids, Assets, Error);
+	if (!Prepared) { AddError(Error); return false; }
+	ON_SCOPE_EXIT { ElysiumPreparedProps::Release(Map); };
+	FElysiumWorldServices Services; Services.Embodiment = Map;
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("body_game_flags");
+	const TCHAR* ModelPath = TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl");
+	const TCHAR* NoBodyPath = TEXT("models/scenery/structural/society/chair.mdl");
+	auto AddProp = [&](const TCHAR* Name, const TCHAR* Value)
+	{
+		auto Row = ElysiumModelPhysicsTest::Def(ModelPath, Name);
+		Row.Origin = FVector(5000 + Defs.Defs.Num() * 1000, 5000, 3000);
+		if (Value) Row.Keys.Add(TEXT("dAmAgEtYpE"), Value); // real case-insensitive map-key producer
+		Defs.Defs.Add(Row);
+	};
+	AddProp(TEXT("one"), TEXT("1")); AddProp(TEXT("default"), nullptr);
+	AddProp(TEXT("zero"), TEXT("0")); AddProp(TEXT("two"), TEXT("2")); AddProp(TEXT("negative"), TEXT("-1"));
+	AddProp(TEXT("prop_alias"), nullptr); AddProp(TEXT("removed"), TEXT("1"));
+	auto AbsentDef = ElysiumModelPhysicsTest::Def(NoBodyPath, TEXT("absent"));
+	AbsentDef.Keys.Add(TEXT("Damagetype"), TEXT("1")); Defs.Defs.Add(AbsentDef);
+	FElysiumEntityDef Point; Point.Classname = TEXT("info_target"); Point.TargetName = TEXT("base_alias"); Defs.Defs.Add(Point);
+	auto StaticDef = ElysiumModelPhysicsTest::Def(ModelPath, TEXT("static")); StaticDef.Classname = TEXT("prop_dynamic");
+	StaticDef.Keys.Add(TEXT("solid"), TEXT("6")); StaticDef.Origin = FVector(18000, 5000, 3000); Defs.Defs.Add(StaticDef);
+	FElysiumEntityDef BrushDef; BrushDef.Classname = TEXT("func_door"); BrushDef.TargetName = TEXT("brush");
+	BrushDef.Model = 1; BrushDef.Keys.Add(TEXT("model"), TEXT("*1")); BrushDef.Origin = FVector(20000, 5000, 3000);
+	FElysiumConvexHull Hull; for (float X : {-20.f,20.f}) for (float Y : {-20.f,20.f}) for (float Z : {-20.f,20.f}) Hull.Vertices.Add(FVector(X,Y,Z));
+	BrushDef.Hulls.Add(Hull); Defs.Defs.Add(BrushDef);
+	FElysiumEntityWorld World(Map, nullptr, Services); World.Load(FElysiumEntityDefs(Defs));
+	auto* One = static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("one")));
+	auto* PropAlias = World.FindByName(TEXT("prop_alias")); auto* BaseAlias = World.FindByName(TEXT("base_alias"));
+	auto* Removed = World.FindByName(TEXT("removed")); auto* Absent = World.FindByName(TEXT("absent"));
+	if (!One || !PropAlias || !BaseAlias || !Removed || !Absent) return false;
+	auto CheckFlags = [&](void* Object, uint16 Expected)
+	{
+		uint16 Actual = 0x1234;
+		return TestTrue(TEXT("actual admitted native flag reader succeeds"), ElysiumModelPhysics::GetGameFlags(Object, Actual))
+			&& TestEqual(TEXT("actual native semantic word"), Actual, Expected);
+	};
+	if (!TestEqual(TEXT("registered mixed-case authored key produces exact integer1"), One->DamageType, 1)
+		|| !CheckFlags(One->VPhysicsGetObject(), 1)) return false;
+	TestEqual(TEXT("Damagetype key is independent of base GetDamageType slot189"), One->GetDamageType(), 0);
+	for (const TCHAR* Name : {TEXT("default"),TEXT("zero"),TEXT("two"),TEXT("negative"),TEXT("static"),TEXT("brush")})
+	{
+		auto* Entity = World.FindByName(Name);
+		if (!TestTrue(*FString::Printf(TEXT("zero-control %s has actual current native identity and admitted recipe"),Name),
+			Entity && ElysiumModelPhysics::IsCurrentOutput(ElysiumModelPhysics::CaptureIdentity(Entity->VPhysicsGetObject())) && ElysiumModelPhysics::RecipeFor(Entity->VPhysicsGetObject()))) return false;
+		if (!CheckFlags(Entity->VPhysicsGetObject(), 0)) return false;
+	}
+	TestNull(TEXT("genuine source-no-binary type1 creates no flags/body"), Absent->VPhysicsGetObject());
+	const auto* Field = FElysiumClassRegistry::Get().FindField(*One->Class, TEXT("Damagetype"));
+	if (!TestTrue(TEXT("real registered integer row is keyed and saved"), Field && Field->bMapKey && Field->bSave && Field->Type == EElysiumVariantType::Int)) return false;
+	uint16 Sentinel = 0x4567; int32 ForeignStorage = 0;
+	for (void* Object : { static_cast<void*>(nullptr), static_cast<void*>(&ForeignStorage) })
+	{
+		TestFalse(TEXT("null/foreign flag read fails"), ElysiumModelPhysics::GetGameFlags(Object, Sentinel));
+		TestFalse(TEXT("null/foreign setter fails without creating state"), ElysiumModelPhysics::SetGameFlags(Object, 1));
+		TestFalse(TEXT("null/foreign OR fails without creating state"), ElysiumModelPhysics::AddGameFlags(Object, 1));
+	}
+	TestEqual(TEXT("failed reads leave caller output untouched"), Sentinel, static_cast<uint16>(0x4567));
+	void* OneObject = One->VPhysicsGetObject(); const auto OneToken = ElysiumModelPhysics::CaptureIdentity(OneObject);
+	auto WrongIncarnation = OneToken; ++WrongIncarnation.Incarnation;
+	TestFalse(TEXT("same live actor address with wrong incarnation cannot read"),ElysiumModelPhysics::GetGameFlags(WrongIncarnation,Sentinel));
+	TestFalse(TEXT("same live actor address with wrong incarnation cannot write"),ElysiumModelPhysics::SetGameFlags(WrongIncarnation,0xffff));
+	TestFalse(TEXT("same live actor address with wrong incarnation cannot OR"),ElysiumModelPhysics::AddGameFlags(WrongIncarnation,0xffff));
+	CheckFlags(OneObject,1);
+	FElysiumSavedPhysicsBody Before, After;
+	if (!ElysiumModelPhysics::Capture(OneObject, Before)) return false;
+	for (const TPair<uint32,uint16>& Case : {TPair<uint32,uint16>(0,0), {1,1}, {0x8000,0x8000}, {0xffff,0xffff}, {0x10000,0}})
+	{
+		TestTrue(TEXT("actual object#7 setter"), ElysiumModelPhysics::SetGameFlags(OneToken, Case.Key)); CheckFlags(OneObject, Case.Value);
+	}
+	ElysiumModelPhysics::SetGameFlags(OneToken, 0x8000);
+	ElysiumModelPhysics::AddGameFlags(OneToken, 1); ElysiumModelPhysics::AddGameFlags(OneToken, 0x10000); ElysiumModelPhysics::AddGameFlags(OneToken, 0);
+	CheckFlags(OneObject, 0x8001);
+	if (!ElysiumModelPhysics::Capture(OneObject, After)) return false;
+	TestTrue(TEXT("flag writes preserve actual identity and all native mechanics/filter outputs"), ElysiumModelPhysics::IsCurrentOutput(OneToken)
+		&& Before.Pose.Equals(After.Pose,1.e-6) && Before.LinearVelocity == After.LinearVelocity && Before.AngularVelocityRadians == After.AngularVelocityRadians
+		&& Before.CurrentMassKg == After.CurrentMassKg && Before.CurrentInertia == After.CurrentInertia && Before.CurrentInverseInertia == After.CurrentInverseInertia
+		&& Before.CurrentMassFrame.Equals(After.CurrentMassFrame,1.e-6) && Before.bAsleep == After.bAsleep && Before.bGravity == After.bGravity
+		&& Before.CurrentLinearDamping == After.CurrentLinearDamping && Before.CurrentAngularDamping == After.CurrentAngularDamping && Before.CurrentSurface == After.CurrentSurface
+		&& Before.CollisionProfile == After.CollisionProfile && Before.CollisionMask == After.CollisionMask && Before.CollisionResponses == After.CollisionResponses && Before.ModelShapeFlags == After.ModelShapeFlags);
+	BaseAlias->VPhysicsSetObject(OneObject);
+	const auto DetachedToken = ElysiumModelPhysics::CaptureIdentity(PropAlias->VPhysicsGetObject());
+	ElysiumModelPhysics::SetGameFlags(DetachedToken, 0x4000);
+	PropAlias->VPhysicsSetObject(nullptr); PropAlias->VPhysicsSetObject(OneObject);
+	ElysiumModelPhysics::AddGameFlags(BaseAlias->VPhysicsGetObject(), 2); CheckFlags(PropAlias->VPhysicsGetObject(), 0x8003);
+	CheckFlags(DetachedToken.Actor, 0x4000);
+	BaseAlias->VPhysicsSwapObject(DetachedToken.Actor); CheckFlags(BaseAlias->VPhysicsGetObject(),0x4000); CheckFlags(OneObject,0x8003);
+	AddExpectedError(TEXT("Overwriting physics object for info_target"),EAutomationExpectedErrorFlags::Contains,1);
+	BaseAlias->VPhysicsSetObject(OneObject); CheckFlags(DetachedToken.Actor,0x4000); CheckFlags(OneObject,0x8003);
+	Field->Set(*One, FElysiumVariant::Int(0));
+	TestEqual(TEXT("real runtime registered field writer changes authored DamageType"),One->DamageType,0); CheckFlags(OneObject,0x8003);
+	One->ScriptHide(); BaseAlias->ScriptHide(); PropAlias->ScriptHide(); CheckFlags(OneObject,0x8003);
+	One->ScriptUnhide(); CheckFlags(OneObject,0x8003); One->ScriptHide();
+	World.Activate(0.); World.BeginNativePhysicsFrame(.02,.02);
+	if (!Fixture.TestWorld.TickTestWorld(.02f)) return false; World.FinishNativePhysicsFrame();
+	if (!Fixture.TestWorld.TickTestWorld(.02f)) return false;
+	TestTrue(TEXT("actual hidden first native frame retains incarnation"),ElysiumModelPhysics::IsCurrentOutput(OneToken)); CheckFlags(OneObject,0x8003);
+	ElysiumModelPhysics::SetGameFlags(OneObject,0x8001); // deliberate current state differs from key0
+	const auto RemovedToken = ElysiumModelPhysics::CaptureIdentity(Removed->VPhysicsGetObject());
+	Removed->VPhysicsDestroyObject(); TestFalse(TEXT("225 retires flag word"),ElysiumModelPhysics::GetGameFlags(RemovedToken,Sentinel));
+	FElysiumMapSnapshot Snapshot; World.Freeze(Snapshot);
+	if (!TestFalse(TEXT("real Physics block admits current word and aliases"),Snapshot.bPhysicsSaveFailed)) return false;
+	const int32 OneIndex=One->Handle.Index, BaseIndex=BaseAlias->Handle.Index, PropIndex=PropAlias->Handle.Index, RemovedIndex=Removed->Handle.Index, AbsentIndex=Absent->Handle.Index;
+	for (int32 Index : {OneIndex,BaseIndex,PropIndex})
+	{
+		const auto* Row=Snapshot.PhysicsBodies.FindByPredicate([Index](const FElysiumSavedPhysicsBody& State){return State.EntityIndex==Index;});
+		TestTrue(TEXT("Freeze reads same live native word for every current alias"),Row && Row->bHasObject && Row->CurrentGameFlags==0x8001);
+	}
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive SaveAr(Writer,FElysiumSaveVersion::Latest); SaveAr << Snapshot;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive LoadAr(Reader,FElysiumSaveVersion::Latest); LoadAr << Persisted;
+	if (!TestFalse(TEXT("real typed map archive decodes flag state"),Reader.IsError())) return false;
+	FElysiumSavePayload Payload; TArray<uint8> PayloadBytes;
+	if (!TestTrue(TEXT("real current payload serialization"),ElysiumSave::Write(Payload,PayloadBytes,Error))) return false;
+	const int32 OldVersion=51; FMemory::Memcpy(PayloadBytes.GetData()+sizeof(uint32),&OldVersion,sizeof(OldVersion));
+	FElysiumSavePayload Refused;
+	TestFalse(TEXT("real schema51 payload refused before archive decode"),ElysiumSave::Read(PayloadBytes,Refused,Error)); TestTrue(TEXT("schema51 refusal names floor"),Error.Contains(TEXT("floor")));
+	FElysiumSavedPhysicsBody NativeRow; ElysiumModelPhysics::Capture(OneObject,NativeRow);
+	TArray<uint8> RowBytes; FMemoryWriter RowWriter(RowBytes,true); RowWriter << NativeRow; RowBytes.Pop();
+	FElysiumSavedPhysicsBody Truncated; FMemoryReader RowReader(RowBytes,true); RowReader << Truncated;
+	TestTrue(TEXT("truncated actual native row refused"),RowReader.IsError());
+	World.Teardown();
+	TestFalse(TEXT("source teardown retires current and detached words"),ElysiumModelPhysics::GetGameFlags(OneToken,Sentinel)||ElysiumModelPhysics::GetGameFlags(DetachedToken,Sentinel));
+	Persisted.PhysicsBodies.Reset(); // restore must consume the persisted Physics block
+	auto CheckRestored = [&](FElysiumEntityWorld& Destination)
+	{
+		auto Resolve=[&](int32 Index){return Destination.Resolve(FElysiumEntityHandle(Index,Destination.GetEpoch()));};
+		auto* Owner=static_cast<FElysiumPhysProp*>(Resolve(OneIndex)); auto* Base=Resolve(BaseIndex); auto* Prop=Resolve(PropIndex);
+		if (!Owner||!Base||!Prop) return false;
+		TestEqual(TEXT("saved key0 persists independently of current native word"),Owner->DamageType,0);
+		for (auto* Entity : {static_cast<FElysiumEntity*>(Owner),Base,Prop})
+		{ if (!CheckFlags(Entity->VPhysicsGetObject(),0x8001)) return false; TestTrue(TEXT("final hidden reconnect retains flags before first think/native frame"),Entity->IsHidden()); }
+		TestTrue(TEXT("type1 independently reconstructs formerly shared fields"),Owner->VPhysicsGetObject()!=Base->VPhysicsGetObject()&&Owner->VPhysicsGetObject()!=Prop->VPhysicsGetObject()&&Base->VPhysicsGetObject()!=Prop->VPhysicsGetObject());
+		ElysiumModelPhysics::AddGameFlags(Base->VPhysicsGetObject(),2); CheckFlags(Base->VPhysicsGetObject(),0x8003); CheckFlags(Owner->VPhysicsGetObject(),0x8001); CheckFlags(Prop->VPhysicsGetObject(),0x8001);
+		TestNull(TEXT("count0 retired field stays absent after reload"),Resolve(RemovedIndex)->VPhysicsGetObject()); TestNull(TEXT("count0 source-no-binary stays absent"),Resolve(AbsentIndex)->VPhysicsGetObject());
+		const auto OldToken=ElysiumModelPhysics::CaptureIdentity(Owner->VPhysicsGetObject());
+		Owner->SetRuntimeModel(ModelPath); CheckFlags(Owner->VPhysicsGetObject(),0);
+		TestFalse(TEXT("SetModel fresh incarnation fences old token even if address is reused"),ElysiumModelPhysics::SetGameFlags(OldToken,0xffff));
+		TestFalse(TEXT("retired incarnation reader fails"),ElysiumModelPhysics::GetGameFlags(OldToken,Sentinel));
+		Field->Set(*Owner,FElysiumVariant::Int(1)); CheckFlags(Owner->VPhysicsGetObject(),0);
+		Owner->SetRuntimeModel(NoBodyPath); TestNull(TEXT("real failed replacement has no flag state"),Owner->VPhysicsGetObject());
+		Owner->SetRuntimeModel(ModelPath); CheckFlags(Owner->VPhysicsGetObject(),1);
+		const auto CurrentToken=ElysiumModelPhysics::CaptureIdentity(Owner->VPhysicsGetObject());
+		Base->VPhysicsSetObject(nullptr); Base->VPhysicsSetObject(CurrentToken.Actor);
+		int32 Observed=0; Destination.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+		{
+			if (Event.Kind!=TEXT("physics_retire")) return; ++Observed;
+			TestTrue(TEXT("real retirement callback sees word retired before native release"),!Owner->VPhysicsGetObject()&&!Base->VPhysicsGetObject()&&!ElysiumModelPhysics::GetGameFlags(CurrentToken,Sentinel));
+		});
+		Base->VPhysicsDestroyObject(); Destination.SetAiTraceSink({}); TestEqual(TEXT("borrowed225 observes both real references"),Observed,2);
+		const auto KillToken=ElysiumModelPhysics::CaptureIdentity(Prop->VPhysicsGetObject()); Prop->Kill();
+		TestFalse(TEXT("Kill retires independently reconstructed word"),ElysiumModelPhysics::AddGameFlags(KillToken,1));
+		auto* ComponentOwner=Destination.FindByName(TEXT("two"));
+		if (!ComponentOwner) return false;
+		const auto ComponentToken=ElysiumModelPhysics::CaptureIdentity(ComponentOwner->VPhysicsGetObject());
+		ElysiumModelPhysics::ComponentFor(ComponentToken.Actor)->DestroyComponent();
+		TestFalse(TEXT("component destruction retires native word"),ElysiumModelPhysics::SetGameFlags(ComponentToken,1));
+		auto* FailedRestore=Destination.FindByName(TEXT("negative"));
+		const auto FailedToken=ElysiumModelPhysics::CaptureIdentity(FailedRestore->VPhysicsGetObject());
+		FElysiumSavedPhysicsBody FailedState;
+		if (!ElysiumModelPhysics::Capture(FailedToken.Actor,FailedState)) return false;
+		const auto* NoBodyVisual=static_cast<FElysiumPhysProp*>(Resolve(AbsentIndex))->Visual;
+		FailedState.Recipe.ModelAsset=NoBodyVisual->GetStaticMesh()->GetPathName(); //actual admitted no-source-body asset
+		TestFalse(TEXT("real failed selected-model restore rejects reconstruction"),ElysiumModelPhysics::Restore(ElysiumModelPhysics::ComponentFor(FailedToken.Actor),Destination.PhysicsSurfaces(),FailedState,Error));
+		TestTrue(TEXT("failed restore leaves no field or old semantic word"),!FailedRestore->VPhysicsGetObject()&&!ElysiumModelPhysics::GetGameFlags(FailedToken,Sentinel));
+		return true;
+	};
+	FElysiumEntityWorld Reload(Map,nullptr,Services); Reload.Load(FElysiumEntityDefs(Defs));
+	if (!TestTrue(TEXT("ordinary reload uses persisted native Physics bytes"),Reload.ApplySnapshot(Persisted)>=0)||!CheckRestored(Reload)) return false;
+	Reload.Teardown();
+	FElysiumEntityWorld Travel(Map,nullptr,Services); Travel.Load(FElysiumEntityDefs(Defs));
+	if (!TestTrue(TEXT("actual transition applies current flag bytes before activation"),Travel.ApplySnapshot(Persisted,0.,true)>=0)||!CheckRestored(Travel)) return false;
+	Travel.Teardown();
+	AddInfo(FString::Printf(TEXT("body-game-flags: registered_key1=1 key0_current8001=1 native_width16=1 aliases=1 archive_bytes=%d reload=1 transition=1 retirement=1 impact_I2_open=1"),Bytes.Num()));
+	return true;
+}
 #endif

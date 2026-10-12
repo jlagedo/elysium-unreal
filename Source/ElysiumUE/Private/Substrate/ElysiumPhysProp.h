@@ -25,6 +25,7 @@ public:
 	bool bNpcKickable = false; // CPhysicsProp +0x788, npc_kickable; TaskFail consumes this authored permission.
 	float MassBias = 0.f; // +0x77c, SAVE|KEY massbias; positive multiplier precedes override.
 	float MassOverride = 0.f; // +0x780, SAVE|KEY override_mass; nonpositive leaves model mass.
+	int32 DamageType = 0; //+0x784, SAVE|KEY Damagetype;10191510 tests exactly1 on fresh native creation
 	int32 Skin = 0;
 	float SkinFadeTime = 0.0f;                // m_flSkinCrossfadeTime — stored, unread (skins snap)
 	bool  bSimulating = false;                // elysium.PhysicsProps decided sim on at spawn

@@ -950,3 +950,20 @@ E:/elysium-work/codex/l0-p1-remaining-bodies-20261011/acceptance-checkpoint.json
 Existing startup errors/warnings retained. P1 remains open for generic type1/flags/callers and
 36 core metadata rows; P2/P3/full closing gate open. Break unchanged/unclosed. Maker-child
 StartHidden stale comment/omission queued to L4 handoff. No owner decision/divergence/push.
+
+### Current body game flags/native archive checkpoint — 2026-10-12 UTC
+
+D02/P1 bounded semantic16bit actual-incarnation word accepted:1002e0a0 read/OR/write,
+width/unknown bits, current aliases/detached producers and pre-release retirement. Registered
+Damagetype exact1 supplies10191510 before publication; native archive stores current word
+independently of key/recipe. Real typed reload/transition before think, independently restored
+fields, hidden frames/replacement/count0/failed restore/Kill/teardown join mechanics invariance.
+Schema52/floor52; disposable saves, no migration. Chaos remains engine service owner.
+
+Main build passed, default202/202, affected arm2/2, joined affected arena9/9 in one boot;
+worker focused19/19; generator/policy passed. Frozen15 sources/43 records plus3461 package
+identities/18GLBs independently verified unchanged, no imports. Exact receipt:
+E:/elysium-work/codex/l0-p1-observed-flags-20261011/acceptance-checkpoint.json.
+I2 real10151c00 angular impact reader still logging; no gameplay parity claim. Other writers/
+generic type1/callers/36metadata and P2/P3/full L0 closing gate open. No owner decision,
+accepted divergence or push. Next packet reconciles actual missing P1 creator/caller contract.

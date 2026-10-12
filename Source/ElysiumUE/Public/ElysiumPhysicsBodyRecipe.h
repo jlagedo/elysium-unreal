@@ -67,6 +67,7 @@ struct FElysiumSavedPhysicsBody
 	bool bGravity = true;
 	float CurrentMassKg = 1.f;
 	FString CurrentSurface; //resolved current semantic material, independent of recipe/controller
+	uint16 CurrentGameFlags = 0; //26018f20 template[17]; current object word, independent of authored keys
 	FVector CurrentInertia = FVector::ZeroVector;
 	FVector CurrentInverseInertia = FVector::ZeroVector;
 	FTransform CurrentMassFrame = FTransform::Identity;

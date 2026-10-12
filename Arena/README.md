@@ -828,6 +828,14 @@ adds full current settings, identity, per-hull saved flags, real hidden awake so
 callbacks and true-transition proof. This is bounded P1 evidence; remaining core metadata,
 generic type1 failure/debug/remove, P2/P3 and fullP1/D02/L0 stay open.
 
+`l0_physics_body_game_flags` uses the real registered `Damagetype` exact1 producer with
+default/2/-1 and genuine no-binary controls. `physics.game_flags` reads the captured current
+native16-bit word; aliases share it until the normal save/load transaction independently
+reconstructs hidden fields before first think. Borrowed225 then retires the current producer.
+The ModelPhysics family adds full-word writes, key/current-state independence, identity fencing
+and true transition. The real10151c00 angular impact reader is still open I2 in L0, so this
+bounded P1 producer/persistence evidence makes no gameplay impact parity or full-layer claim.
+
 `l0_physics_model_shadow_body` advances the reached resolved-parent studio model creator
 100a5bb0 ->100a6150 ->1002e3a0. It uses the real office knob, animated TrunkLid and fan
 selected cooks, three genuine studio3 no-binary inputs, independently saved hidden base/prop

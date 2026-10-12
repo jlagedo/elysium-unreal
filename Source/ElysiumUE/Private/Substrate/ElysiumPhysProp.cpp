@@ -51,6 +51,10 @@ bool FElysiumPhysProp::CreateModelBody(FString& OutError)
 	RetireModelBody();
 	if (!ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
 		MassBias, MassOverride, (SpawnFlags & 1) != 0, OutError)) return false;
+	//10191510: exact authored equality; this is independent of GetDamageType slot189.
+	//Mass is configured inside Create before publication; its callbacks only record activity.
+	if (DamageType == 1 && !ElysiumModelPhysics::AddGameFlags(ElysiumModelPhysics::ActorIdentity(Visual), 1))
+	{ OutError = TEXT("created physics prop has no current game flag association"); RetireModelBody(); return false; }
 	// 0x100a5ea0 / 0x100a6490: publish only the successfully created actual body.
 	ElysiumModelPhysics::SetGameData(ElysiumModelPhysics::ActorIdentity(Visual), *this);
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Visual));

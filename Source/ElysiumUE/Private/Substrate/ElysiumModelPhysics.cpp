@@ -45,6 +45,7 @@ namespace
 		uint64 Incarnation; FElysiumEntityWorld* World = nullptr; FElysiumEntityHandle Owner;
 		bool bCollectNativeOutput = false;
 		bool bPendingInactive = false;
+		uint16 GameFlags = 0; //26016930: semantic object#7/#8 word, owned by this actual incarnation
 	};
 	TArray<FNativeAssociation> NativeAssociations;
 	struct FSemanticQueryAssociation
@@ -609,7 +610,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	Ar << State.Pose << State.LinearVelocity << State.AngularVelocityRadians << State.bAsleep << State.bGravity;
 	Ar << State.CurrentMassKg << State.CurrentLinearDamping << State.CurrentAngularDamping;
 	Ar << State.CurrentInertia << State.CurrentInverseInertia << State.CurrentMassFrame;
-	Ar << State.CurrentSurface;
+	Ar << State.CurrentSurface << State.CurrentGameFlags;
 	Ar << State.CollisionProfile << State.CollisionMask << State.CollisionResponses << State.BboxCollisionEnabled;
 	int32 ModelShapeCount = State.ModelShapeFlags.Num(); Ar << ModelShapeCount;
 	if (ModelShapeCount < 0 || ModelShapeCount > 65536) { Ar.SetError(); return Ar; }
@@ -751,6 +752,32 @@ bool ElysiumModelPhysics::IsCurrentOutput(const FNativeOutput& Output)
 {
 	return NativeAssociations.ContainsByPredicate([&](const FNativeAssociation& Entry)
 	{ return Entry.Actor == Output.Actor && Entry.Incarnation == Output.Incarnation && ComponentFor(Entry.Actor); });
+}
+
+bool ElysiumModelPhysics::GetGameFlags(const FNativeOutput& Object, uint16& OutFlags)
+{
+	if (!IsCurrentOutput(Object)) return false;
+	const auto* Entry = NativeAssociations.FindByPredicate([&](const FNativeAssociation& Item)
+	{ return Item.Actor == Object.Actor && Item.Incarnation == Object.Incarnation; });
+	OutFlags = Entry->GameFlags;
+	return true;
+}
+
+bool ElysiumModelPhysics::SetGameFlags(const FNativeOutput& Object, uint32 Flags)
+{
+	if (!IsCurrentOutput(Object)) return false;
+	auto* Entry = NativeAssociations.FindByPredicate([&](const FNativeAssociation& Item)
+	{ return Item.Actor == Object.Actor && Item.Incarnation == Object.Incarnation; });
+	//26016d40 stores the low WORD only; no collision, solver, wake or owner write.
+	Entry->GameFlags = static_cast<uint16>(Flags);
+	return true;
+}
+
+bool ElysiumModelPhysics::AddGameFlags(const FNativeOutput& Object, uint32 Flags)
+{
+	uint16 Current;
+	//1002e0a0: read object#8, OR requested bits, write object#7.
+	return GetGameFlags(Object, Current) && SetGameFlags(Object, Current | Flags);
 }
 
 FElysiumEntity* ElysiumModelPhysics::GameDataFor(const FNativeOutput& Output, FElysiumEntityWorld& World)
@@ -1070,6 +1097,7 @@ bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutStat
 	const FElysiumPhysicsBodyRecipe* Recipe = RecipeFor(Actor);
 	const FBodyInstance* NativeBody = Identity(Component);
 	if (!NativeBody || !Recipe) return false;
+	if (!GetGameFlags(Actor, OutState.CurrentGameFlags)) return false;
 	OutState.Recipe = *Recipe;
 	OutState.bHasObject = true;
 	OutState.Pose = NativeBody->GetUnrealWorldTransform();
@@ -1742,6 +1770,9 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 	if (!CreatePhysicsRecipe(Component, Surfaces, State.Recipe, State.bAsleep, OutError)) return false;
 	bool bRestoreSucceeded = false;
 	ON_SCOPE_EXIT { if (!bRestoreSucceeded) Destroy(Component); };
+	//26019070 restores object#7 before subsequent native wake/motion/filter writes.
+	if (!SetGameFlags(ActorIdentity(Component), State.CurrentGameFlags))
+	{ OutError = TEXT("restored native body has no current game flag association"); return false; }
 	if (!State.CollisionProfile.IsNone()) Component->SetCollisionProfileName(State.CollisionProfile);
 	if (State.CollisionResponses.Num() == NativeResponseChannelCount)
 		for (int32 Channel = 0; Channel < NativeResponseChannelCount; ++Channel)

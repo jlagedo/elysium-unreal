@@ -1,0 +1,600 @@
+{
+  "name": "l0_physics_body_game_flags",
+  "about": "Bounded P1 current per-native16-bit game flags. Real registered CPhysicsProp Damagetype exact1 producer on admitted cooked native body; default,2,-1 and genuine no-binary negatives. Current aliases and hidden flags persist through real host save/reload before first think, independently reconstructed fields then borrowed225 retirement. Native family additionally proves upper bits, runtime key/current-word independence, incarnation fencing and genuine transition. I2 angular impact damage reader10151c00 remains open; no gameplay impact parity claimed.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12,
+  "player": {
+    "at": "start"
+  },
+  "rows": [
+    {
+      "classname": "prop_physics",
+      "name": "one",
+      "at": [
+        5000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/street/trashcan1/trashcan1_base.mdl",
+        "spawnflags": "1",
+        "Damagetype": "1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "default",
+      "at": [
+        6000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/street/trashcan1/trashcan1_base.mdl",
+        "spawnflags": "1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "two",
+      "at": [
+        7000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/street/trashcan1/trashcan1_base.mdl",
+        "spawnflags": "1",
+        "Damagetype": "2"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "negative",
+      "at": [
+        8000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/street/trashcan1/trashcan1_base.mdl",
+        "spawnflags": "1",
+        "Damagetype": "-1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "prop_alias",
+      "at": [
+        9000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/street/trashcan1/trashcan1_base.mdl",
+        "spawnflags": "1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "retired",
+      "at": [
+        10000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/street/trashcan1/trashcan1_base.mdl",
+        "spawnflags": "1",
+        "Damagetype": "1"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "no_binary",
+      "at": [
+        11000,
+        5000,
+        3000
+      ],
+      "keys": {
+        "model": "models/scenery/structural/society/chair.mdl",
+        "spawnflags": "1",
+        "Damagetype": "1"
+      }
+    },
+    {
+      "classname": "info_target",
+      "name": "base_alias",
+      "at": [
+        12000,
+        5000,
+        3000
+      ],
+      "keys": {}
+    }
+  ],
+  "script": [
+    {
+      "t": 0.1,
+      "do": "entity_call",
+      "target": "one",
+      "function": "GetDamageType",
+      "args": []
+    },
+    {
+      "t": 0.15,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "one"
+      ]
+    },
+    {
+      "t": 0.17,
+      "do": "entity_call",
+      "target": "prop_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        null
+      ]
+    },
+    {
+      "t": 0.18,
+      "do": "entity_call",
+      "target": "prop_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "one"
+      ]
+    },
+    {
+      "t": 0.2,
+      "do": "fire",
+      "target": "one",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.22,
+      "do": "fire",
+      "target": "base_alias",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.24000000000000002,
+      "do": "fire",
+      "target": "prop_alias",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.3,
+      "do": "entity_call",
+      "target": "retired",
+      "function": "VPhysicsDestroyObject",
+      "args": []
+    },
+    {
+      "t": 0.8,
+      "do": "save",
+      "slot": "l0_physics_body_game_flags",
+      "checkpoint": "flags",
+      "fields": [
+        {
+          "who": "one",
+          "field": "physics.game_flags"
+        },
+        {
+          "who": "one",
+          "field": "physics.present"
+        },
+        {
+          "who": "one",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "default",
+          "field": "physics.game_flags"
+        },
+        {
+          "who": "default",
+          "field": "physics.present"
+        },
+        {
+          "who": "default",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "two",
+          "field": "physics.game_flags"
+        },
+        {
+          "who": "two",
+          "field": "physics.present"
+        },
+        {
+          "who": "two",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "negative",
+          "field": "physics.game_flags"
+        },
+        {
+          "who": "negative",
+          "field": "physics.present"
+        },
+        {
+          "who": "negative",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.game_flags"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "prop_alias",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "retired",
+          "field": "physics.present"
+        },
+        {
+          "who": "retired",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.present"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.game_flags"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "base_alias",
+          "field": "physics.list_count"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "l0_physics_body_game_flags",
+      "checkpoint": "flags"
+    },
+    {
+      "after": "ready",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "one",
+      "input": "ScriptUnhide"
+    },
+    {
+      "after": "ready",
+      "delay": 0.2,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        null
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.21,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "one"
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.22,
+      "do": "entity_call",
+      "target": "base_alias",
+      "function": "VPhysicsDestroyObject",
+      "args": []
+    }
+  ],
+  "expect": [
+    {
+      "label": "base_slot_independent",
+      "who": "one",
+      "kind": "script",
+      "match": "entity_call GetDamageType done value=0",
+      "by": 0.25
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "probes": [
+    {
+      "at": "captured",
+      "who": "one",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "one",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "default",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "default",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "two",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "two",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "negative",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "negative",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "one",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "one",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "one",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "default",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "default",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "two",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "two",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "negative",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "negative",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "retired",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "one",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "one",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "base_alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "prop_alias",
+      "probe": "witness",
+      "field": "physics.game_flags",
+      "equals": 1
+    }
+  ]
+}

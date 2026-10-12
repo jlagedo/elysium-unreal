@@ -130,6 +130,7 @@ struct FElysiumSaveVersion
 		PhysicsShadowDamping = 49, // original shared damping retained through controller removal
 		PhysicsInertiaState = 50, // selected current and original native inertia pairs/principal frames
 		PhysicsMaterialState = 51, // current semantic selection survives shadow removal
+		PhysicsGameFlags = 52, // current per-native semantic WORD, independent of authored Damagetype
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -164,7 +165,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = PhysicsMaterialState; // disposable saves: current native semantic material
+	static constexpr int32 MinSupported = PhysicsGameFlags; // disposable saves: current native game flags
 
 	static const FGuid GUID;
 };

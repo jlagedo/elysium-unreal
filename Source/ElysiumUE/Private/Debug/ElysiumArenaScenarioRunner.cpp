@@ -4024,6 +4024,7 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 				}
 				else if (Field == TEXT("physics.surface")) Out.String = State.CurrentSurface;
 				else if (Field == TEXT("physics.mass")) Out.Number = State.CurrentMassKg;
+				else if (Field == TEXT("physics.game_flags")) Out.Number = State.CurrentGameFlags;
 				else if (Field == TEXT("physics.pose.x")) Out.Number = State.Pose.GetLocation().X;
 				else if (Field == TEXT("physics.pose.y")) Out.Number = State.Pose.GetLocation().Y;
 				else Out.Number = State.Pose.GetLocation().Z;

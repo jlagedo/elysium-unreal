@@ -3598,3 +3598,14 @@ spawnflags bit1 sleep input. PhysProp's actual Spawn/SetModel/Kill/world teardow
 use the dedicated native body adapter; GetAttachBody remains a scene attachment anchor, while
 dynamic body identity and activity are queried separately. This does not complete generic
 VPhysicsSetObject, deferred deletion, callback/relink order or solved-pose publication.
+
+The same datamap `1058d864` carries INTEGER `m_damageType`(+0x784), external `Damagetype`,
+SAVE|KEY flags6 and calloc default0. This now has its actual registered integer key/save producer.
+CPhysicsProp `10191510` tests exact1 after successful native creation and calls `1002e0a0`
+to OR native game flag1. Value2/-1/default0 do not enter that branch. A runtime field write does
+not rewrite an existing object's word, and base GetDamageType slot189 remains independent.
+The native Physics archive therefore saves its current16-bit game word separately from the key;
+schema52/floor52 restores it before final hidden reconnect and first think, including ordinary
+reload and transition. A saved key0/current0x8001 and current aliases are deliberate witnesses of
+that independence. The real `10151c00` bit1 angular impact reader remains unimplemented I2 in
+this same layer; see the bounded current-native game flags recovery in physics-interaction.md.

@@ -116,6 +116,7 @@ static void BuildPhysPropClass(FElysiumClassDesc& D)
 {
 	ElysiumAddClassField(D, TEXT("massbias"), &FElysiumPhysProp::MassBias);
 	ElysiumAddClassField(D, TEXT("override_mass"), &FElysiumPhysProp::MassOverride);
+	ElysiumAddClassField(D, TEXT("Damagetype"), &FElysiumPhysProp::DamageType);
 	ElysiumAddClassField(D, TEXT("npc_kickable"), &FElysiumPhysProp::bNpcKickable);
 	D.Input(TEXT("Wake"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumPhysProp&>(E).InputWake(Args); });

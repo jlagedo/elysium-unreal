@@ -1611,6 +1611,56 @@ it does not itself write this latch. Final art gates do not recreate a missing n
 ->archive ->ApplySnapshot observes null field/no native actor after reconnect. Generic shadow225
 remains unfinished.
 
+## Current native game flags and the authored producer (2026-10-11)
+
+`PhysSetFlags` vampire.dll `1002e0a0` reads object slot8, ORs its uint32 argument, then
+writes object slot7. The installed vphysics.dll object table `260c9db0` resolves those
+slots to `26016d50` (read WORD+0x3e) and `26016d40` (write low WORD+0x3e). They have no
+collision/filter/wake side effects. `26016930` initializes the word to0. This is semantic
+game state on each actual native incarnation; a collision profile cannot replace it.
+Unknown bits remain valid. The port's guarded current-native getter/setter/OR preserves all
+16 bits, rejects null/foreign/retired incarnations, and removes the word before native release.
+Current object aliases share this word; clearing, overwriting or swapping a reference does not
+reset a detached producer's word. Geometry, contacts, broadphase and rigid mechanics remain Chaos.
+
+CPhysicsProp `10191510` first calls VPhysicsInitNormal(6,0,spawnflags&1,0). On success,
+only `m_damageType == 1` calls `1002e0a0(body,1)`, before positive massbias and override.
+Datamap `1058d864` names external `Damagetype`, INTEGER+0x784, SAVE|KEY flags6. Factory
+`10191340` allocates through `100aa720` -> engine.dll `201092d0` calloc; breakable constructor
+`1018f1c0` does not overwrite this word, so default0. The registered port field feeds real
+Spawn/SetModel creation and is saved independently; a runtime field write does not alter an
+existing body's flags. `GetDamageType` slot189 remains the separate constant-zero selector.
+The tutorial has54 prop_physics rows and no authored Damagetype; hub has0. The positive fixture
+supplies the actual registered key1 on an admitted selected native body, not a claimed shipped1.
+The adapter configures mass inside native creation before publishing the flag. Native wake/sleep
+callbacks only record activity and transform callbacks only record output; no intervening flag
+reader, game callback or native frame observes that setup sequence.
+
+Vphysics save `26018f20` copies the current WORD to Physics template[17]. Restore `26019070`
+constructs/initializes the object then writes object slot7 from that saved value before later
+wake/motion/collision writes. The port's typed Physics row carries current `CurrentGameFlags`,
+separate from the recipe, key and shape eligibility. Restore writes it on the successful actual
+incarnation before mechanics/reconnect/first think. Schema52 and disposable floor52 refuse51.
+Each reconstructed saved alias gets an independent object with the same captured word.
+
+The real gameplay reader is `10151c00`, called from `100a8400` through `100126e8`: it chooses
+the collision partner (victimIndex0 -> partner1, otherwise0), reads partner object slot8 bit1,
+and only then computes squared pre-impact angular speed. After the mass/speed/angular earlyouts,
+angular speed strictly above table[5] enters the inertia/pre-angular energy sum and `10151b70`
+angular table. Positive angular damage ORs damage mask4 before the remaining linear/small-object
+arms. This proves the word has a gameplay observer. It does **not** establish impact parity:
+the port's TakeDamageFromCollision slot remains a logging dispatch, and I2 is an open later
+milestone in this same L0 layer. No test-only damage formula or upward-hook substitution closes it.
+The separate CPhysBox `1004e500` writer and other flag writers remain outside this bounded producer.
+
+`Elysium.Substrate.ModelPhysics.BodyGameFlags` observes the registered exact1/default/0/2/-1
+producer, complete WORD/truncating OR/set behavior, unchanged native mechanics, actual alias
+lifetime, hidden native frame, key0/current0x8001 typed archive, independent alias reconstruction,
+ordinary reload and true transition before first think, count0, truncated row, below-floor51,
+SetModel failure/replacement, borrowed225 callbacks, Kill and component/world teardown. Arena
+`l0_physics_body_game_flags` joins the real key/body/alias/hidden host save/reload and retirement
+path. These are bounded producer/persistence/lifetime witnesses; P1/D02/fullL0 and I2 stay open.
+
 ## Supported PhysProp hidden native lifetime and restore (2026-10-11)
 
 The tutorial's authored StartHidden prop_physics plus_food rows1799–1806,1811–1812 use
