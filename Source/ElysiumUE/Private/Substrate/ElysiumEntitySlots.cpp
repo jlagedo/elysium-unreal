@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 76 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 80 are defined by hand in the substrate,
-// and 48 are still stubs — 47 29c, 1 unassigned. 15 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 81 are defined by hand in the substrate,
+// and 47 are still stubs — 46 29c, 1 unassigned. 15 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -1249,10 +1249,9 @@ void FElysiumEntity::VelocityPunch(const FVector&)
 
 // slot 176 0x100a4c20 (sdk) `void EndTouch(CBaseEntity*)`
 //   layer 0, story 29c
-void FElysiumEntity::EndTouch(FElysiumEntity*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::EndTouch"), TEXT("0x100a4c20"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::EndTouch`, written by hand in the substrate: `CBaseEntity::EndTouch`
+// 0x100a4c20: live authored ParentHandle relay with original toucher, no KILLME gate;
+// ElysiumEntityWorldInteraction.cpp. Declared here, defined there.
 
 // slot 178 0x100a4d40 (sdk) `void Blocked(CBaseEntity*)`
 //   layer 0, story 29c
@@ -2339,7 +2338,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::Touch),
 				nullptr },
 			{ 176, TEXT("0x100a4c20"), TEXT("CBaseEntity"), TEXT("EndTouch"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::EndTouch),
 				nullptr },
 			{ 178, TEXT("0x100a4d40"), TEXT("CBaseEntity"), TEXT("Blocked"),

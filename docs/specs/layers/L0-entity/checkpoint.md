@@ -7,28 +7,42 @@ No genuine owner decision currently. Unreal services preserve retail observable 
 
 ## Latest accepted run
 
-The local commit containing this checkpoint accepts preparatory native contact lifecycle
-evidence only. Exact HEAD/tree/path hashes and main gates are recorded after commit in
-E:/elysium-work/codex/l0-p2-contact-lifecycle-main-20261012/acceptance-checkpoint.json.
-Parent860d053c; production admission foundation below unchanged. Sole worker
-/root/l0_physical_contact_lifecycle terminal, all engine jobs terminal.
-Worker freeze E:/elysium-work/codex/l0-p2-contact-lifecycle-20261012/freeze.json:
-2 changed paths/13 evidence hashes independently verified; SHA
-86a606814a12b38135b9f01b48b040c550b783ea089119fda3dc7b207cdfee3a.
-Only opt-in Slow native probe and matching oracle section changed; no production/audit closure.
-Public complete retained contacts survive sleep/disabled/expired states; actual prune follows
-the solver frame. Same constraint address can be reused with new UniqueIdx/incarnation.
-Allocation/current/initial/disabled/active-point absence alone cannot define physical Start/End.
-Query44's recovered skin threshold is not an event birth rule. No new gameplay threshold.
+The local commit containing this checkpoint accepts the bounded production native physical
+Start/End adapter and ordered touch consumers. Exact HEAD/tree/path hashes and main gates:
+E:/elysium-work/codex/l0-p2-physical-event-adapter-main-20261012/acceptance-checkpoint.json.
+Parent6a757880; sole worker /root/l0_physical_event_adapter terminal; all engine jobs terminal.
+Worker freeze E:/elysium-work/codex/l0-p2-physical-event-adapter-20261012/freeze.json:
+SHA9beddebeafb1afc1ef6c9a82a023d3c4dfb1af829fe3081d413e788e09a8d01e;
+16source/39evidence hashes independently verified, final sources unchanged after gates.
+Main retail/API/diff review, raw baseline reviews and retained failed gates in main scratch.
 
-Main build221910.814533Z exit0; default+probe221918.699403Z:218/218 pass, all217 default
-baseline names preserved, zero failures/errors/unfinished. Main arena222001.579665Z:3/3 pass,
-one boot/host exit0, no scenario errors/first_unmet.31 known LogPython Error lines, nonPython0.
-Raw indices/review/hash receipts in main scratch. Previous1671 arm baseline from220742 is
-retained: no Arm implementation/production change; this is a preparatory run, full event story
-closure and its fresh arm gate remain required. No milestone or full L0 acceptance follows.
-Next: production physical event state projection plus ordered immediate/queued touch consumers;
-reuse this exact native service proof, do not repeat the diagnostic. No owner decision/blocker.
+Chaos complete PostSolve retained contacts supply participation without invented Phi threshold;
+semantic state preserves sleeping lifetime, actual awake loss/rejection/readmission and ordered
+incarnation identity. Current listener GameData/callback OR4/staticOR8 admit copied payloads
+before226/229; queue admission survives later native retirement. Ordered direct live FIFO drain,
+successful-link sentinel stamps, End flag1, mutable link/removal safety and base176 authored
+parent relay are joined. Wrapper destruction clears flags/GameData before backend destruction;
+body rebuild suppresses physical End but keeps entity sentinels; distinct entity removal notifies
+flagged other-side End. Reset fences new dispatch. Native scenario proves actual geometry/events.
+See docs/contracts/seam_physical_touch.md and physics-interaction.md; no IVP clone/equivalence claim.
+
+Main build225654.603882Z PASS; default225700.061775Z218/218 (all217 preserved, exact native
+physical touch addition), affected arena225734.457276Z22/22 in four boots (all20 prior preserved;
+all host exit0, scenario error/first_unmet none); fresh arm230109.063220Z1671/1671, all1671
+preserved. Tests have zero failures/errors/unfinished. Raw reports225700.212277Z/default,
+225734.666070Z/arena and230229.092799Z/arm. Arena124 known LogPython startup Error lines,
+nonPython0; limitation distinguished from scenario verdicts. Doctor225821.937705Z0warnings;
+generated shape225700.062276Z all surfaces match. Main shape225252.057888Z failed because
+recovered176 lacked generator Hand classification; same-worker bounded repair and refreeze,
+failed receipt retained. No retail ledger edits, no push. Audit/mapped rows remain partial/open;
+full P1/E2/P2/P3/M1/L0 unclosed; broader l0_touch_lifecycle arena remains absent.
+
+Preparatory contact lifecycle6a757880 evidence is retained at
+E:/elysium-work/codex/l0-p2-contact-lifecycle-main-20261012/acceptance-checkpoint.json;
+complete native visitor/sleep/prune/incarnation proof is reused, not replayed.
+Next bounded query contract: sleeping selected44 lifetime through actual L0 consumers,
+keeping query skin qualification distinct from physical event state. See next-packet.md.
+No genuine owner decision or external blocker.
 
 ## Accepted native admission foundation
 
@@ -93,11 +107,7 @@ Previous checkpoint/packet archived in main scratch. No imports/content/corpus/r
 
 ## Remaining / next witness
 
-Next P2 contract: real physical contact lifecycle producer and event-driven game touch links,
-with callback flags4/8, endpoint order, current GameData ownership, copied point/normal,
-immediate/queued phase, mutation/removal/recreation and sleeping lifetime. See next-packet.md.
-Do not synthesize physical events from rejected candidate pairs or missing awake friction44.
-P1 core caller/writer/lifecycle final disposition remains; E2 Kill100acf90/CNotify/Aim10000/
+Next P2 contract: sleeping selected44 retention, actual world/null and Blocked consumer disposition; reuse accepted physical event state and native lifecycle proof. P1 core caller/writer/lifecycle final disposition remains; E2 Kill100acf90/CNotify/Aim10000/
 PhysicsAnimLink1014ec70; P2 native62/wheel/query/material/sleeping44/event consumers; P3 shadow
 simulation/parent/bounds/native landmark travel/collision SAVE global merge remain open.
 FuncRotating51 D07/P3, CPhysBox17 D08/I1, I2 impact10151c00/fullBreak/wider constraints,

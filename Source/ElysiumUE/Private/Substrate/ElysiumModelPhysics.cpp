@@ -158,12 +158,19 @@ namespace
 	};
 	struct FSolveFilterOutput : Chaos::FSimCallbackOutput
 	{
+		struct FPhysicalContact
+		{
+			const void* Proxies[2]; Chaos::FUniqueIdx Ids[2]; uint64 Generations[2]; const void* Shapes[2];
+			FVector PointCm = FVector::ZeroVector, Normal = FVector::ZeroVector;
+			bool bBegin = false;
+		};
+		TArray<FPhysicalContact> PhysicalEvents;
 		TArray<FNativeContactOutput> Contacts;
 		TArray<ElysiumModelPhysics::FNativeAdmissionSample> Admissions;
 		struct FShadowSample { const void* Proxy; Chaos::FUniqueIdx UniqueIdx; uint64 Generation; uint64 Revision;
 			FElysiumPhysicsShadowState State; ElysiumModelPhysics::FShadowEventSample Sample; };
 		TArray<FShadowSample> Shadows;
-		void Reset() { Contacts.Reset(); Admissions.Reset(); Shadows.Reset(); }
+		void Reset() { Contacts.Reset(); Admissions.Reset(); Shadows.Reset(); PhysicalEvents.Reset(); }
 	};
 	class FSolveFilterCallback final : public Chaos::TSimCallbackObject<FSolveFilterInput,
 		FSolveFilterOutput, Chaos::ESimCallbackOptions::ContactModification | Chaos::ESimCallbackOptions::Presimulate | Chaos::ESimCallbackOptions::PostSolve>
@@ -174,6 +181,22 @@ namespace
 			const void* Proxies[2]; Chaos::FUniqueIdx Ids[2]; const void* Shapes[2]; uint64 Generations[2];
 		};
 		TArray<FRejectedConstraint> RejectedConstraints; //our cached rejection only; borrowed keys are equality-only
+		TArray<FSolveFilterOutput::FPhysicalContact> PhysicalContacts; //PT semantic participation, not Chaos cached storage
+		static bool SamePhysicalContact(const FSolveFilterOutput::FPhysicalContact& A, const FSolveFilterOutput::FPhysicalContact& B)
+		{
+			for (int32 Flip = 0; Flip < 2; ++Flip)
+			{
+				bool bEqual = true;
+				for (int32 Side = 0; Side < 2; ++Side)
+				{
+					const int32 Other = Flip ? 1 - Side : Side;
+					bEqual &= A.Proxies[Side] == B.Proxies[Other] && A.Ids[Side] == B.Ids[Other]
+						&& A.Generations[Side] == B.Generations[Other] && A.Shapes[Side] == B.Shapes[Other];
+				}
+				if (bEqual) return true;
+			}
+			return false;
+		}
 		TSharedRef<TMap<uint64,uint64>, ESPMode::ThreadSafe> RetiredControllers = MakeShared<TMap<uint64,uint64>, ESPMode::ThreadSafe>();
 	public:
 		void RetireShadow_External(uint64 Generation, uint64 Revision)
@@ -248,9 +271,52 @@ namespace
 		}
 		virtual void OnPostSolve_Internal() override
 		{
-			const auto* Input = GetConsumerInput_Internal(); if (!Input || !Input->bObservePostSolve) return;
+			const auto* Input = GetConsumerInput_Internal(); if (!Input) return;
 			auto* NativeSolver = static_cast<Chaos::FPBDRigidsSolver*>(GetSolver());
 			auto& Output = GetProducerOutputData_Internal();
+			TArray<FSolveFilterOutput::FPhysicalContact> Retained;
+			NativeSolver->GetEvolution()->GetCollisionConstraints().GetConstraintAllocator().VisitConstCollisions(
+				[&](const Chaos::FPBDCollisionConstraint& Contact)
+				{
+					const auto* First = Contact.GetParticle0(); const auto* Second = Contact.GetParticle1();
+					if (!First || !Second || Contact.GetIsProbe() || !Contact.IsCurrent()) return Chaos::ECollisionVisitorResult::Continue;
+					const FSolveFilterIdentity* Identities[2] = {nullptr,nullptr};
+					const Chaos::FGeometryParticleHandle* Particles[2] = {First,Second};
+					for (int32 Side = 0; Side < 2; ++Side)
+						Identities[Side] = Input->Identities.FindByPredicate([&](const auto& Entry)
+						{ return Entry.Proxy == Particles[Side]->PhysicsProxy() && Entry.UniqueIdx == Particles[Side]->UniqueIdx(); });
+					if (!Identities[0] || !Identities[1]) return Chaos::ECollisionVisitorResult::Continue;
+					FSolveFilterOutput::FPhysicalContact State {{First->PhysicsProxy(),Second->PhysicsProxy()},
+						{First->UniqueIdx(),Second->UniqueIdx()},{Identities[0]->Generation,Identities[1]->Generation},
+						{Contact.GetShape0(),Contact.GetShape1()}};
+					const auto* Prior = PhysicalContacts.FindByPredicate([&](const auto& Item) { return SamePhysicalContact(Item,State); });
+					if (Contact.IsSleeping())
+					{
+						if (Prior) Retained.Add(*Prior); //sleep disables active points, never births a cached candidate
+						return Chaos::ECollisionVisitorResult::Continue;
+					}
+					if (Contact.GetDisabled()) return Chaos::ECollisionVisitorResult::Continue;
+					for (int32 PointIndex = 0; PointIndex < Contact.NumManifoldPoints(); ++PointIndex)
+						if (Contact.IsManifoldPointActive(PointIndex) && Contact.GetManifoldPoint(PointIndex).ContactPoint.IsSet())
+						{
+							const auto& Point = Contact.GetManifoldPoint(PointIndex).ContactPoint;
+							State.PointCm = Contact.GetShapeWorldTransform0().TransformPositionNoScale(Chaos::FVec3(Point.ShapeContactPoints[0]));
+							State.Normal = Contact.GetShapeWorldTransform1().TransformVectorNoScale(Chaos::FVec3(Point.ShapeContactNormal));
+							State.bBegin = true;
+							Retained.Add(Prior ? *Prior : State); //original endpoint order survives opposite visitor direction
+							if (!Prior) Output.PhysicalEvents.Add(State); //actual native participation, independent of GameData/flags
+							break;
+						}
+					return Chaos::ECollisionVisitorResult::Continue;
+				},Chaos::ECollisionVisitorFlags::VisitAllCurrentAndExpired);
+			for (const auto& Prior : PhysicalContacts)
+				if (!Retained.ContainsByPredicate([&](const auto& Item) { return SamePhysicalContact(Item,Prior); }))
+				{
+					auto End = Prior; End.bBegin = false; End.PointCm = End.Normal = FVector::ZeroVector;
+					Output.PhysicalEvents.Add(End);
+				}
+			PhysicalContacts = MoveTemp(Retained);
+			if (!Input->bObservePostSolve) return;
 			for (const auto& Controller : Controllers)
 			{
 				if (Controller.Revision <= RetiredControllers->FindRef(Controller.Generation)) continue;
@@ -435,6 +501,7 @@ namespace
 	TSet<UWorld*> PostSolveObservationWorlds; //GT diagnostic opt-in; never accessed on PT
 	TSet<UWorld*> AdmissionObservationWorlds;
 	TMap<UWorld*, TArray<ElysiumModelPhysics::FNativeAdmissionSample>> CompletedAdmissions;
+	TMap<UWorld*, TArray<FSolveFilterOutput::FPhysicalContact>> CompletedPhysicalContacts;
 	void CleanupSolveFilter(UWorld* World, bool, bool)
 	{
 		if (const FSolveFilterRegistration* Registration = SolveFilters.Find(World))
@@ -443,6 +510,7 @@ namespace
 		NativeIgnoredPairs.RemoveAll([World](const auto& Pair) { return Pair->World == World; });
 		PostSolveObservationWorlds.Remove(World);
 		AdmissionObservationWorlds.Remove(World); CompletedAdmissions.Remove(World);
+		CompletedPhysicalContacts.Remove(World);
 		SemanticQueryAssociations.RemoveAll([World](const auto& Entry)
 		{ return !Entry.Component.IsValid() || Entry.Component->GetWorld() == World; });
 		ForgetCompletedWorld(World);
@@ -597,6 +665,8 @@ namespace
 	void RetireWorldContact(void* Actor)
 	{
 		if (!Actor) return;
+		for (auto& Records : CompletedPhysicalContacts)
+			Records.Value.RemoveAll([Actor](const auto& Contact) { return Contact.Proxies[0] == Actor || Contact.Proxies[1] == Actor; });
 		RetiredNativeActors.Add(Actor);
 		ForgetCompletedActor(Actor);
 		for (auto& Roster : ContactRosters)
@@ -624,6 +694,40 @@ namespace
 		if (!Registration) return;
 		while (auto Output = Registration->Callback->PopOutputData_External())
 		{
+			for (const auto& Event : Output->PhysicalEvents)
+			{
+				auto& Records = CompletedPhysicalContacts.FindOrAdd(World);
+				auto Same = [&](const auto& Prior)
+				{
+					for (int32 Side = 0; Side < 2; ++Side)
+						if (Prior.Proxies[Side] != Event.Proxies[Side] || Prior.Ids[Side] != Event.Ids[Side]
+							|| Prior.Generations[Side] != Event.Generations[Side] || Prior.Shapes[Side] != Event.Shapes[Side]) return false;
+					return true;
+				};
+				if (!Event.bBegin && !Records.ContainsByPredicate(Same)) continue; //logical wrapper retirement already suppressed this end
+				if (Event.bBegin) Records.Add(Event); else Records.RemoveAll(Same);
+				FElysiumEntity* Owners[2] = {nullptr,nullptr}; uint16 CallbackWord = 0; bool bStatic = false, bCurrent = true;
+				for (int32 Side = 0; Side < 2; ++Side)
+				{
+					const ElysiumModelPhysics::FNativeOutput Endpoint {const_cast<void*>(Event.Proxies[Side]),Event.Generations[Side]};
+					if (!CurrentAdmissionEndpoint(World,Endpoint)) { bCurrent = false; break; }
+					const auto* Native = NativeAssociations.FindByPredicate([&](const auto& Entry)
+					{ return Entry.Actor == Endpoint.Actor && Entry.Incarnation == Endpoint.Incarnation; });
+					if (Native)
+					{
+						const auto* Proxy = ElysiumModelPhysics::ActorIdentity(Native->Component.Get());
+						if (!Proxy || Proxy->GetGameThreadAPI().UniqueIdx() != Event.Ids[Side]) { bCurrent = false; break; }
+						CallbackWord |= Native->CallbackFlags;
+						const auto* Recipe = ElysiumModelPhysics::RecipeFor(Endpoint.Actor); bStatic |= Recipe && Recipe->bStatic;
+					}
+					else { CallbackWord |= 0x1127 | 0x200; bStatic = true; }
+					Owners[Side] = ElysiumModelPhysics::GameDataForObject(Endpoint.Actor);
+				}
+				//2600eff0/2600f180: callback admission at listener time, never controls raw participation.
+				if (bCurrent && Owners[0] && Owners[1] && Owners[0]->World == Owners[1]->World
+					&& (CallbackWord & 4) != 0 && (!bStatic || (CallbackWord & 8) != 0))
+					Owners[0]->World->PhysicalTouchEvent({Owners[0]->Handle,Owners[1]->Handle,Event.PointCm,Event.Normal,Event.bBegin});
+			}
 			for (const auto& Sample : Output->Admissions)
 				if (CurrentAdmissionEndpoint(World,Sample.First) && CurrentAdmissionEndpoint(World,Sample.Second))
 					CompletedAdmissions.FindOrAdd(World).Add(Sample);
@@ -1283,6 +1387,13 @@ void ElysiumModelPhysics::RefreshContactOutputs(FElysiumEntityWorld& World)
 
 void ElysiumModelPhysics::RetireNative(UPrimitiveComponent* Component)
 {
+	if (Component) ConsumeContactOutputs(Component->GetWorld()); //already born listener events precede wrapper clearing
+	//26016c10 clears wrapper GameData/+3c before backend deletion: no listener End.
+	//Keep the live entity's sentinel links; its distinct1003d8f0 removal owns notification.
+	if (Component)
+		if (auto* Records = CompletedPhysicalContacts.Find(Component->GetWorld()))
+			Records->RemoveAll([&](const auto& Event)
+			{ return Event.Proxies[0] == ActorIdentity(Component) || Event.Proxies[1] == ActorIdentity(Component); });
 	// Called before Super::OnDestroyPhysicsState releases Chaos. No field may retain a dead actor.
 	TArray<void*> RetiringActors;
 	for (int32 Index = NativeAssociations.Num() - 1; Index >= 0; --Index)

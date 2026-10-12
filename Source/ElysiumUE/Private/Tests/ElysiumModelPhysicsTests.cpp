@@ -23,6 +23,7 @@
 #include "Substrate/ElysiumPropLeaves.h"
 #include "Substrate/ElysiumTerminal.h"
 #include "Substrate/ElysiumCollisionPairs.h"
+#include "Substrate/ElysiumDataObjects.h"
 #include "ElysiumEntityQueryBox.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
 #include "Substrate/ElysiumNpc.h"
@@ -1143,6 +1144,171 @@ bool FElysiumNativeContactLifetimeProbe::RunTest(const FString&)
 	B->VPhysicsSetObject(NativeB.Actor); ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
 	BodyB = ElysiumModelPhysics::Identity(ComponentB); ComponentB->SetEnableGravity(false);
 	Place(); Observe(TEXT("new_incarnation_birth"),true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativePhysicalTouchTest, "Elysium.Substrate.ModelPhysics.NativePhysicalTouch",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumNativePhysicalTouchTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+	auto* Map = Fixture.SpawnMapActorDeferred(); Map->bStageOnly = true; Map->bStageWithoutCatalogue = true;
+	Map->FinishSpawning(FTransform::Identity);
+	for (int32 FrameIndex = 0; FrameIndex < 20 && !Map->IsRuntimeActive(); ++FrameIndex) Fixture.TestWorld.TickTestWorld(.02f);
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("native_physical_touch");
+	FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+	for (const TCHAR* Name : {TEXT("touch_a"),TEXT("touch_b")})
+	{
+		auto Def = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/physics/bottle/bottle.mdl"),Name);
+		Def.Origin = FVector(5000,5000,5000); Defs.Defs.Add(Def);
+	}
+	FElysiumStageSeat Seat; Seat.FeetCm = FVector(-1000,0,1000); FString Error;
+	if (!Map->RebuildStageWorld(MoveTemp(Defs),{},Seat,Error)) { AddError(Error); return false; }
+	for (int32 FrameIndex = 0; FrameIndex < 20 && !Map->IsRuntimeActive(); ++FrameIndex) Fixture.TestWorld.TickTestWorld(.02f);
+	auto* Entities = Map->GetEntityWorld(); auto* A = Entities->FindByName(TEXT("touch_a")); auto* B = Entities->FindByName(TEXT("touch_b"));
+	if (!A || !B || !A->VPhysicsGetObject() || !B->VPhysicsGetObject()) return false;
+	const auto NativeA = ElysiumModelPhysics::CaptureIdentity(A->VPhysicsGetObject());
+	auto NativeB = ElysiumModelPhysics::CaptureIdentity(B->VPhysicsGetObject());
+	auto* ComponentA = ElysiumModelPhysics::ComponentFor(NativeA.Actor); auto* ComponentB = ElysiumModelPhysics::ComponentFor(NativeB.Actor);
+	auto* BodyA = ElysiumModelPhysics::Identity(ComponentA); auto* BodyB = ElysiumModelPhysics::Identity(ComponentB);
+	ComponentA->SetEnableGravity(false); ComponentB->SetEnableGravity(false);
+	TArray<FString> Events;
+	TArray<FString> ConsumerEvents;
+	Entities->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event) { if (Event.Text.Contains(TEXT("tag=physical_touch"))) Events.Add(Event.Text); ConsumerEvents.Add(Event.Text); });
+	ON_SCOPE_EXIT { if (auto* Current = Map->GetEntityWorld()) Current->SetAiTraceSink({}); };
+	double Clock = 10.;
+	auto Place = [&]()
+	{
+		BodyA->SetBodyTransform(FTransform(FQuat::Identity,FVector(5000,5000,5000)),ETeleportType::TeleportPhysics);
+		BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(5001,5000,5000)),ETeleportType::TeleportPhysics);
+		BodyA->SetLinearVelocity(FVector::ZeroVector,false); BodyB->SetLinearVelocity(FVector::ZeroVector,false);
+		BodyA->WakeInstance(); BodyB->WakeInstance();
+	};
+	auto Frame = [&]()
+	{
+		Entities->BeginNativePhysicsFrame(Clock,.02); ElysiumModelPhysics::PreparePhysicsFrame(*Fixture.World,.02f,1.f,true);
+		TestTrue(TEXT("physical event advances real solved frame"),Fixture.TestWorld.TickTestWorld(.02f));
+		Entities->FinishNativePhysicsFrame(); Clock += .02;
+	};
+	auto Link = [&](FElysiumEntity* Entity, FElysiumEntityHandle Other) -> FElysiumTouchLink*
+	{
+		auto* Head = static_cast<FElysiumTouchLink*>(Entity->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink));
+		if (Head) for (auto* Node = Head->NextLink; Node != Head; Node = Node->NextLink) if (Node->EntityTouched == Other) return Node;
+		return nullptr;
+	};
+	BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(6000,5000,5000)),ETeleportType::TeleportPhysics); BodyB->WakeInstance(); Frame();
+	Events.Reset(); Place(); Frame();
+	const auto Trace = Entities->PhysicalTouchTrace();
+	if (!TestTrue(TEXT("native solved geometry reaches physical production listener and reciprocal links"),Link(A,B->Handle) && Link(B,A->Handle))) return false;
+	TestTrue(TEXT("copied native ordered endpoints identify actual GameData owners"),(Trace.First==A->Handle && Trace.Second==B->Handle) || (Trace.First==B->Handle && Trace.Second==A->Handle));
+	TestTrue(TEXT("copied native world point and unit normal"),Trace.PointCm.Size()>1000. && Trace.Normal.IsNormalized());
+	TestEqual(TEXT("physical link sentinel"),Link(A,B->Handle)->TouchStamp,-1);
+	TestEqual(TEXT("ordinary solid pair retains link without initial174"),Link(A,B->Handle)->Flags,0);
+	TestEqual(TEXT("actual native birth listener queues then dispatches once"),Events.Num(),2);
+	const int32 BirthEvents = Events.Num();
+	BodyA->PutInstanceToSleep(); BodyB->PutInstanceToSleep(); Frame();
+	TestEqual(TEXT("sleep produces no listener transition"),Events.Num(),BirthEvents);
+	A->SetCollisionGroup(4); B->SetCollisionGroup(4); Frame();
+	TestTrue(TEXT("sleeping filter mutation retains exact sentinel"),Link(A,B->Handle) && Link(A,B->Handle)->TouchStamp==-1);
+	TestEqual(TEXT("sleeping rejection no synthetic event"),Events.Num(),BirthEvents);
+	BodyA->WakeInstance(); BodyB->WakeInstance(); Frame();
+	TestTrue(TEXT("actual awake rejected manifold emits end and unlinks both"),!Link(A,B->Handle) && !Link(B,A->Handle) && Events.Num()>BirthEvents);
+	const int32 BeforeReadmit = Events.Num(); B->SetCollisionGroup(5); Frame();
+	TestTrue(TEXT("readmission on same native cache produces new physical begin"),Link(A,B->Handle) && Events.Num()>BeforeReadmit);
+	const auto Readmitted = Entities->PhysicalTouchTrace();
+	BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(6000,5000,5000)),ETeleportType::TeleportPhysics); BodyB->WakeInstance(); Frame();
+	TestTrue(TEXT("real separation retires physical sentinel links"),!Link(A,B->Handle) && !Link(B,A->Handle));
+	//Suppressed birth must remain raw participation: changing callback flags cannot manufacture Start.
+	ElysiumModelPhysics::SetCallbackFlags(NativeA,0); ElysiumModelPhysics::SetCallbackFlags(NativeB,0);
+	A->SetCollisionGroup(0); B->SetCollisionGroup(0); Place(); const int32 Suppressed = Events.Num(); Frame();
+	TestTrue(TEXT("bit4 OR absent suppresses actual birth"),!Link(A,B->Handle) && Events.Num()==Suppressed);
+	ElysiumModelPhysics::SetCallbackFlags(NativeA,4); Frame();
+	TestTrue(TEXT("flags enabling on retained native contact invents no birth"),!Link(A,B->Handle) && Events.Num()==Suppressed);
+	BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(6000,5000,5000)),ETeleportType::TeleportPhysics); BodyB->WakeInstance(); Frame();
+	Place(); Frame(); TestTrue(TEXT("new genuine contact uses current flags"),Link(A,B->Handle)!=nullptr);
+	const int32 BeforeDestroy = Events.Num(); FElysiumSavedPhysicsBody SavedB;
+	if (!ElysiumModelPhysics::Capture(NativeB.Actor,SavedB)) return false;
+	ElysiumModelPhysics::Destroy(ComponentB);
+	TestTrue(TEXT("wrapper GameData clearing suppresses listener end and retains entity sentinel"),Events.Num()==BeforeDestroy && Link(A,B->Handle));
+	Frame(); TestTrue(TEXT("subsequent raw prune cannot replay suppressed retirement end"),Events.Num()==BeforeDestroy && Link(A,B->Handle));
+	if (!ElysiumModelPhysics::Restore(ComponentB,Entities->PhysicsSurfaces(),SavedB,Error)) { AddError(Error); return false; }
+	NativeB = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(ComponentB));
+	B->VPhysicsSetObject(NativeB.Actor); ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	BodyB = ElysiumModelPhysics::Identity(ComponentB); ComponentB->SetEnableGravity(false); Place(); Frame();
+	TestTrue(TEXT("new incarnation actual birth retains one entity link"),Link(A,B->Handle) && Link(A,B->Handle)->TouchStamp==-1 && Events.Num()>BeforeDestroy);
+	TestTrue(TEXT("endpoints keep genuine native order across retained contact"),Readmitted.First.IsSet() && Readmitted.Second.IsSet());
+	A->SetCheckUntouch(true); A->PhysicsCheckForEntityUntouch();
+	TestTrue(TEXT("ordinary deferred untouch never expires physical sentinel"),Link(A,B->Handle)!=nullptr);
+	//Actual static wrapper requires callback bit8 in addition to bit4.
+	BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(6000,5000,5000)),ETeleportType::TeleportPhysics); BodyB->WakeInstance(); Frame();
+	if (!ElysiumModelPhysics::Capture(NativeB.Actor,SavedB)) return false;
+	ElysiumModelPhysics::Destroy(ComponentB); SavedB.Recipe.bStatic = true; SavedB.CurrentCallbackFlags = 0;
+	if (!ElysiumModelPhysics::Restore(ComponentB,Entities->PhysicsSurfaces(),SavedB,Error)) { AddError(Error); return false; }
+	NativeB = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(ComponentB));
+	B->VPhysicsSetObject(NativeB.Actor); ElysiumModelPhysics::SetGameData(NativeB.Actor,*B); BodyB = ElysiumModelPhysics::Identity(ComponentB);
+	Place(); const int32 BeforeStatic = Events.Num(); Frame();
+	TestTrue(TEXT("actual static contact without OR8 suppresses birth"),!Link(A,B->Handle) && Events.Num()==BeforeStatic);
+	ElysiumModelPhysics::SetCallbackFlags(NativeA,12); Frame();
+	TestEqual(TEXT("static callback enabling invents no birth on retained contact"),Events.Num(),BeforeStatic);
+	BodyA->SetBodyTransform(FTransform(FQuat::Identity,FVector(7000,5000,5000)),ETeleportType::TeleportPhysics); BodyA->WakeInstance(); Frame();
+	A->SetSolidFlags(A->RetailSolidFlags|0x20u); B->SetSolidFlags(B->RetailSolidFlags|0x20u);
+	static TFunction<void(FElysiumEntity&,FElysiumEntity*)> TouchObserver;
+	TArray<FElysiumEntityHandle> TouchOrder;
+	TouchObserver = [&](FElysiumEntity& Receiver,FElysiumEntity*)
+	{
+		TouchOrder.Add(Receiver.Handle);
+		//First queued callback changes current native flags; the already captured event still completes second side.
+		ElysiumModelPhysics::SetCallbackFlags(NativeA,0); ElysiumModelPhysics::SetCallbackFlags(NativeB,0);
+	};
+	A->TouchCallback = B->TouchCallback = [](FElysiumEntity& Receiver,FElysiumEntity* Other) { if (TouchObserver) TouchObserver(Receiver,Other); };
+	const auto CallbackA = A->Handle, CallbackB = B->Handle;
+	ON_SCOPE_EXIT { TouchObserver = {}; if (auto* Current = Map->GetEntityWorld()) { if (auto* Live = Current->Resolve(CallbackA)) Live->TouchCallback = nullptr; if (auto* Live = Current->Resolve(CallbackB)) Live->TouchCallback = nullptr; } };
+	Place(); Frame();
+	const auto Ordered = Entities->PhysicalTouchTrace();
+	FString OrderEvidence;
+	for (const auto& Handle : TouchOrder) OrderEvidence += FString::Printf(TEXT(" %d"),Handle.Index);
+	AddInfo(FString::Printf(TEXT("physical_callback_order native=%d,%d callbacks=%s events=%d"),Ordered.First.Index,Ordered.Second.Index,*OrderEvidence,Events.Num()));
+	TestTrue(TEXT("static actual OR4 OR8 contact admits flagged reciprocal links"),Link(A,B->Handle) && Link(B,A->Handle) && Link(A,B->Handle)->Flags==1 && Link(B,A->Handle)->Flags==1);
+	TestTrue(TEXT("queued first then second survive flag mutation before active self sentinel refresh"),TouchOrder.Num()==3 && TouchOrder[0]==Ordered.First && TouchOrder[1]==Ordered.Second && TouchOrder[2]==A->Handle);
+	TestTrue(TEXT("third callback follows actual deferred untouch manager"),ConsumerEvents.ContainsByPredicate([](const FString& Text) { return Text.Contains(TEXT("tag=untouch_drain")) && Text.Contains(TEXT("phase=call")); }));
+	//10030d50 dispatches queued records directly even while new listener events append at the tail.
+	TouchOrder.Reset(); ConsumerEvents.Reset();
+	auto* RelayParent = Entities->Entities()[0].Get(); A->ParentHandle = RelayParent->Handle;
+	bool bAppended = false;
+	TouchObserver = [&](FElysiumEntity& Receiver,FElysiumEntity*)
+	{
+		TouchOrder.Add(Receiver.Handle);
+		if (!bAppended) { bAppended = true; Entities->PhysicalTouchEvent({A->Handle,B->Handle,Ordered.PointCm,Ordered.Normal,true}); }
+	};
+	Entities->BeginNativePhysicsFrame(Clock,.02);
+	Entities->PhysicalTouchEvent({A->Handle,B->Handle,Ordered.PointCm,Ordered.Normal,true});
+	Entities->PhysicalTouchEvent({A->Handle,B->Handle,{}, {},false});
+	Entities->DrainPhysicalTouchEvents();
+	TestTrue(TEXT("live growing queue preserves begin end appended begin FIFO"),TouchOrder.Num()==4 && TouchOrder[0]==A->Handle && TouchOrder[1]==B->Handle && TouchOrder[2]==A->Handle && TouchOrder[3]==B->Handle && Link(A,B->Handle));
+	TestTrue(TEXT("flagged End176 reaches live authored parent with original partner"),ConsumerEvents.ContainsByPredicate([&](const FString& Text) { return Text.Contains(TEXT("tag=endtouch")) && Text.Contains(TEXT("other=2 parent=-1")); }));
+	A->ParentHandle = {}; TouchObserver = {}; Entities->FinishNativePhysicsFrame();
+	//Successful result is required: a now-parent-rejected ordinary link must not be stamped sentinel.
+	Link(A,B->Handle)->TouchStamp = 7; A->MoveParent = B->Handle;
+	Entities->PhysicalTouchEvent({A->Handle,B->Handle,Ordered.PointCm,Ordered.Normal,true});
+	TestEqual(TEXT("rejected existing link is not converted into sentinel"),Link(A,B->Handle)->TouchStamp,7);
+	A->MoveParent = {}; Link(A,B->Handle)->TouchStamp = -1;
+	//Sentinel refresh is mutable: first callback removes its partner through the real retirement route.
+	TouchObserver = [&](FElysiumEntity&,FElysiumEntity* Other) { if (Other) Other->Kill(); };
+	A->SetCheckUntouch(true); A->PhysicsCheckForEntityUntouch();
+	TestTrue(TEXT("sentinel callback partner removal releases reciprocal physical links safely"),B->IsDead() && !Link(A,B->Handle));
+	TouchObserver = {};
+	auto* WorldEntity = Entities->Entities()[0].Get();
+	Entities->PhysicalTouchEvent({A->Handle,WorldEntity->Handle,Ordered.PointCm,Ordered.Normal,true});
+	TouchObserver = [](FElysiumEntity& Receiver,FElysiumEntity*) { Receiver.Kill(); };
+	A->SetCheckUntouch(true); A->PhysicsCheckForEntityUntouch();
+	TestTrue(TEXT("sentinel self removal safely stops caller tail and releases other link"),A->IsDead() && !Link(WorldEntity,A->Handle));
+	TouchObserver = {}; A->TouchCallback = B->TouchCallback = nullptr;
+	const auto OldHandle = A->Handle;
+	FElysiumEntityDefs ResetDefs; ResetDefs.MapName = TEXT("physical_touch_reset"); ResetDefs.Defs.Add(WorldDef);
+	if (!Map->RebuildStageWorld(MoveTemp(ResetDefs),{},Seat,Error)) { AddError(Error); return false; }
+	TestTrue(TEXT("world rebuild retires old epoch and all sentinel state"),Map->GetEntityWorld()->Resolve(OldHandle)==nullptr && Map->GetEntityWorld()->TouchLinkCount()==0);
 	return true;
 }
 

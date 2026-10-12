@@ -1133,6 +1133,19 @@ whose stamp differs from the owner's `m_touchStamp`; a link stamped `0xffffffff`
 carries the `0x1` bit that `PhysicsMarkEntityAsTouched` set when it dispatched the begin** — ends are
 paired to begins by construction, not by a liveness test. Neither function tests `EFL_KILLME`.
 
+`CBaseEntity::EndTouch` (`vampire.dll 0x100a4c20`, slot176) validates the authored
+`m_pParent` handle at+254 against the live entity table, then calls that parent's
+virtual176 with the original touching entity pointer. It adds no KILLME test and
+does not consult the separate movement parent. The bounded physical consumer
+implements this same-L0 relay alongside existing174/175, including the still-valid
+dying pointer supplied by1003d8f0's separate other-side removal notification.
+The exact module-labelled recovery is retained in the physical-event adapter run's
+`retail-end-parent-relay.txt`. End/unlink traversal retains allocation identity across
+mutable callbacks; sentinel175 dispatch rechecks each captured link before calling,
+and the deferred caller reacquires its live entity before clearing the pending bit.
+The native physical witness covers this consumer; broader motion/trigger M1 and the
+missing `l0_touch_lifecycle` arena record remain open.
+
 ### The deferred untouch check and the solid words (L0-r015, decompiled)
 
 Who asks for an untouch pass, and when it runs (`docs/specs/layers/L0-entity/walks/L0-r015.md`; port

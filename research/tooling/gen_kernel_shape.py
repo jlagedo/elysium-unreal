@@ -430,6 +430,7 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
               "225 then hierarchy detach and ground clear; ElysiumEntity.cpp"),
     174: ("", "`CBaseEntity::StartTouch` 0x100a49d0: live ParentHandle relay; ElysiumPusher.cpp"),
     175: ("", "`CBaseEntity::Touch` 0x100a4af0: installed callback then live ParentHandle relay; ElysiumPusher.cpp"),
+    176: ("", "`CBaseEntity::EndTouch` 0x100a4c20: live authored ParentHandle relay with original toucher, no KILLME gate; ElysiumEntityWorldInteraction.cpp"),
     90: ("", "`CBaseEntity::IsTransparent` 0x100aa840: RenderMode !=0; all497 vampire.dll classes share this body"),
     102: ("", "`CBaseEntity::Physics_TraceEntity` 0x100ab450 ->101cd110: actual cooked native entity sweep; ElysiumPusher.cpp"),
     239: ("bool", "`CBaseEntity::PhysicsPushRotate` 0x100389e0 returns AL blockage, not the SDK pointer; ElysiumPusher.cpp"),

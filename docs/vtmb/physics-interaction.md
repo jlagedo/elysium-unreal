@@ -1555,6 +1555,50 @@ Exact declaration/source excerpts and hashes, complete diagnostic observations, 
 receipts and source freeze are in `E:/elysium-work/codex/l0-p2-contact-lifecycle-20261012/`.
 All worker engine jobs are terminal. No broad default/arm/arena gate was run by this worker.
 
+#### Physical event semantic projection and wrapper destruction (2026-10-12)
+
+The bounded production adapter consumes the installed public PostSolve complete retained
+contact visitor. An enabled, non-probe active IsSet native manifold supplies physical
+participation without transferring query44's skin or adding a Phi threshold. The semantic
+state retains a previously participating sleeping record, including native disabled/zero
+active-point sleep, but does not promote an unqualified cached sleeping candidate. Completed
+awake loss of native participation, expired records and actual prune retire that state.
+This is an observed game-event contract over Chaos geometry/solving, not equality of IVP and
+Chaos internal contact algorithms. The full P2/native62/wheel/material/sleeping44 disposition
+and M1 remain open.
+
+The state keys both ordered proxy/UniqueIdx/native incarnation and native shapes. Callback
+WORD/GameData admission is independent: suppressing a genuine birth cannot manufacture a
+later birth when flags change on the retained record. End preserves original endpoint order.
+The GT listener captures current owners and flags before mutable226/229, copies native world
+contact point (cm) and normal, and applies OR4 plus OR8 for a static endpoint. Once admitted,
+the game queue retains entity handles and copies independently of subsequent native retirement.
+The frame gate covers environment26/226/229, clears before insertion-order live-count touch
+drain10030d50, and the clear-gate listener dispatches immediately. Start10030ba0 marks first
+then second; only successful1003dc70 results receiveFFFFFFFF. End10030cb0 invokes ordered
+flagged1003d640 unlink. Allocation serials fence callback removal/recreation without exposing
+Unreal storage pointers as game identity. Ordinary ActiveTouches/motion/trigger paths retain
+their existing stamp reconciliation.
+
+One recovered removal fact prohibits synthesizing listener End at wrapper retirement.
+Public environment DestroyObject26010f80 removes its owned-list entry, tests flags+61/+62,
+and the immediate arm repairs the active list then calls deleting slot0 at2601103e.
+Installed body table260c9db0 slot0 is26016910, whose26016913 directly calls destructor26016c10.
+The deferred arm queues the wrapper;26011240 calls that same deleting slot0 after active-list
+repair. Destructor26016c10 removes shadow26018600, clears callbackWORD+3c, GameData+4 and the
+backend wrapper reference+b0 **before** backend deletion2602e200/2602e260. Therefore both
+wrapper/GameData listener requirements fail at destruction; no physical game End is emitted.
+Raw semantic retirement suppresses its later Chaos prune output while leaving the live
+entity's sentinel links. Entity removal1003d8f0 remains a separate other-side flagged End
+notification, passing the still-valid dying entity pointer even when its handle is dead.
+World teardown clears game queues and forbids new dispatch after its active fence.
+
+Exact module-labelled corpus and reached PE/table captures are in
+`E:/elysium-work/codex/l0-p2-physical-event-adapter-20261012/`.
+Focused production witness/gates are recorded in that run's delivery/freeze; acceptance
+belongs to the independent coordinator. No full milestone or broader algorithm equivalence
+claim follows from this bounded adapter.
+
 `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` executes StandardFilterRules `0x101d3080`,
 pass rules `0x101d2fc0`, **candidate slot 91**, candidate BCC targetable/script-hidden gate,
 actual rules slot 77, then **candidate slot 68 before pass slot 68**, with short-circuiting.

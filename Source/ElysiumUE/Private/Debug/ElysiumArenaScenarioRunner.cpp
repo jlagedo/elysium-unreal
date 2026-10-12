@@ -2512,7 +2512,7 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			return true;
 		}
 		if (Action.Function == TEXT("SetCollisionGroup") || Action.Function == TEXT("ObserveNativeAdmission")
-			|| Action.Function == TEXT("NativeAdmission"))
+			|| Action.Function == TEXT("NativeAdmission") || Action.Function == TEXT("PhysicalTouchState"))
 		{
 			FElysiumEntity* AdmissionReceiver = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
 			UWorld* AdmissionWorld = Host.GetWorld();
@@ -2533,6 +2533,14 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				ElysiumModelPhysics::ObserveNativeAdmission(*AdmissionWorld,Action.Args[0].Value.bBool);
 				ElysiumModelPhysics::TakeNativeAdmissions(*AdmissionWorld);
 				AdmissionText = FString::Printf(TEXT("entity_call ObserveNativeAdmission done enabled=%d"),Action.Args[0].Value.bBool);
+			}
+			else if (Action.Function == TEXT("PhysicalTouchState"))
+			{
+				if (!Action.Args.IsEmpty()) { OutError = TEXT("PhysicalTouchState takes no arguments"); return false; }
+				const auto& PhysicalTrace = World.PhysicalTouchTrace();
+				AdmissionText = FString::Printf(TEXT("entity_call PhysicalTouchState done touching=%d links=%d ordered=%d,%d point=%s normal_unit=%d object=%d"),
+					AdmissionReceiver->IsCurrentlyTouching(),World.TouchLinkCount(),PhysicalTrace.First.Index,PhysicalTrace.Second.Index,
+					*PhysicalTrace.PointCm.ToString(),PhysicalTrace.Normal.IsNormalized(),AdmissionReceiver->VPhysicsGetObject()!=nullptr);
 			}
 			else
 			{

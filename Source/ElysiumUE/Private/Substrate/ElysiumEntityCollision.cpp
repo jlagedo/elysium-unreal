@@ -636,11 +636,13 @@ void FElysiumEntity::PhysicsCheckForEntityUntouch()
 	{
 		return;
 	}
-	const int32 Expired = World->ExpireStaleTouchLinks(*this);
-	World->EmitRetailSite(*this, TEXT("untouch_check"), TEXT("CBaseEntity::PhysicsCheckForEntityUntouch"), 0x1003d5c9u,
+	auto* TouchWorld = World; const auto Self = Handle;
+	const int32 Expired = TouchWorld->ExpireStaleTouchLinks(*this);
+	auto* Live = TouchWorld->Resolve(Self); if (!Live) return; //sentinel175 can remove/rebuild this entity
+	TouchWorld->EmitRetailSite(*Live, TEXT("untouch_check"), TEXT("CBaseEntity::PhysicsCheckForEntityUntouch"), 0x1003d5c9u,
 		TEXT("call"), FString::Printf(TEXT("fn=CBaseEntity::SetCheckUntouch on=0 expired=%d touching=%d m_touchStamp=%d"),
-			Expired, IsCurrentlyTouching() ? 1 : 0, TouchStamp));
-	SetCheckUntouch(false);
+			Expired, Live->IsCurrentlyTouching() ? 1 : 0, Live->TouchStamp));
+	if (auto* Current = TouchWorld->Resolve(Self)) Current->SetCheckUntouch(false);
 }
 
 // --- The physical words `ScriptHide` / `ScriptUnhide` save and write ---------------------------

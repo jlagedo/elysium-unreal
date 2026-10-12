@@ -2177,7 +2177,7 @@ void FElysiumEntityWorld::FinishNativePhysicsFrame()
 	if (!bActive || bApplyingSnapshot || bDetached) return;
 	//1002ea40: object game data receives226, even when its current field is an alias or null.
 	const auto ActiveSnapshot = ElysiumModelPhysics::ActiveOutputs(*this);
-	ElysiumModelPhysics::RefreshContactOutputs(*this); //contact births/retirements before any mutable226/178 callback
+	ElysiumModelPhysics::RefreshContactOutputs(*this); //native event listener captures owners/flags before mutable226/229
 	for (const auto& Output : ActiveSnapshot)
 		if (ElysiumModelPhysics::IsCurrentOutput(Output))
 			if (FElysiumEntity* Entity = ElysiumModelPhysics::GameDataFor(Output, *this)) Entity->VPhysicsUpdate(Output.Actor);
@@ -2191,6 +2191,8 @@ void FElysiumEntityWorld::FinishNativePhysicsFrame()
 					EmitRetailSite(*Entity, TEXT("shadow_feedback"), TEXT("PhysFrame"), 0x1002ea40u, TEXT("dispatch"), TEXT("slot=229 awake=1"));
 					Entity->VPhysicsShadowUpdate(Object);
 				}
+	bPhysicalTouchQueueGate = false; //1002ecf3 before FrameUpdate touch drain
+	DrainPhysicalTouchEvents(); //10030d50 touch queue; full friction/damage FrameUpdate remains open
 	FinishFrame(NativeFrameNow);
 }
 
@@ -2198,6 +2200,7 @@ void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics, TOptional<do
 {
 	// A new admitted host frame cannot retain a tail from a retired/paused frame.
 	bNativeFramePending = false;
+	bPhysicalTouchQueueGate = false;
 	if (!bActive || bApplyingSnapshot || bDetached) // 0x1011a620: no simulation inside restore fence
 	{
 		return;
@@ -2272,6 +2275,7 @@ void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics, TOptional<do
 	{
 		NativeFrameNow = Now;
 		bNativeFramePending = true;
+		bPhysicalTouchQueueGate = true; //1002eb7a environment26 then active226/shadow229
 		return;
 	}
 	FinishFrame(Now);
@@ -3343,6 +3347,8 @@ void FElysiumEntityWorld::Teardown()
 
 	bActive = false;
 	ActiveTouches.Empty();
+	PhysicalTouchEvents.Reset(); bPhysicalTouchQueueGate = false;
+	CurrentPhysicalTouchTrace = {};
 	UntouchCheckList.Empty();   // CEntityListSystem::LevelShutdownPostEntity 0x100f90a0: the manager's vector emptied
 
 	// The player's live state goes back into the session record before the entity holding it

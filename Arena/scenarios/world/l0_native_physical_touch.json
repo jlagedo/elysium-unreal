@@ -1,0 +1,34 @@
+{
+  "name": "l0_native_physical_touch",
+  "about": "Bounded P2 physical event witness: actual prepared bottle contact, native readmission birth, handler queue and dispatch copies, genuine awake filter end. Broader l0_touch_lifecycle movement/trigger M1 remains open.",
+  "stage": "arena", "seed": 1, "duration": 0.6,
+  "player": {"at": "start"},
+  "rows": [
+    {"classname": "prop_physics", "name": "physical_a", "at": [5000,5000,3000], "keys": {"model": "models/scenery/physics/bottle/bottle.mdl", "spawnflags": "1"}},
+    {"classname": "prop_physics", "name": "physical_b", "at": [5001,5000,3000], "keys": {"model": "models/scenery/physics/bottle/bottle.mdl", "spawnflags": "1"}}
+  ],
+  "script": [
+    {"t": 0.05, "do": "entity_call", "target": "physical_a", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.05, "do": "entity_call", "target": "physical_b", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.1, "do": "fire", "target": "physical_a", "input": "Wake"},
+    {"t": 0.1, "do": "fire", "target": "physical_b", "input": "Wake"},
+    {"t": 0.2, "do": "entity_call", "target": "physical_a", "function": "PhysicalTouchState", "args": []},
+    {"t": 0.22, "do": "entity_call", "target": "physical_b", "function": "SetCollisionGroup", "args": [5]},
+    {"t": 0.23, "do": "fire", "target": "physical_a", "input": "Wake"},
+    {"t": 0.23, "do": "fire", "target": "physical_b", "input": "Wake"},
+    {"t": 0.26, "do": "entity_call", "target": "physical_a", "function": "PhysicalTouchState", "args": []},
+    {"t": 0.3, "do": "entity_call", "target": "physical_b", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.31, "do": "fire", "target": "physical_a", "input": "Wake"},
+    {"t": 0.31, "do": "fire", "target": "physical_b", "input": "Wake"},
+    {"t": 0.38, "do": "entity_call", "target": "physical_a", "function": "PhysicalTouchState", "args": []}
+  ],
+  "expect": [
+    {"label": "rejected_no_links", "who": "physical_a", "kind": "script", "match": "PhysicalTouchState done touching=0 links=0", "by": 0.21},
+    {"label": "native_listener_birth", "who": "CCollisionEvent", "kind": "retail_site", "site": "physical_touch", "match": "va=0x100315c0 phase=queue begin=1", "by": 0.28},
+    {"label": "ordered_game_dispatch", "who": "CCollisionEvent", "kind": "retail_site", "site": "physical_touch", "match": "va=0x10030ba0 phase=dispatch begin=1", "by": 0.28},
+    {"label": "actual_physical_links", "who": "physical_a", "kind": "script", "match": "PhysicalTouchState done touching=1 links=2", "by": 0.28},
+    {"label": "native_listener_end", "who": "CCollisionEvent", "kind": "retail_site", "site": "physical_touch", "match": "va=0x100316f0 phase=queue begin=0", "by": 0.41},
+    {"label": "ordered_end_dispatch", "who": "CCollisionEvent", "kind": "retail_site", "site": "physical_touch", "match": "va=0x10030cb0 phase=dispatch begin=0", "by": 0.41},
+    {"label": "completed_rejection_unlinks", "who": "physical_a", "kind": "script", "match": "PhysicalTouchState done touching=0 links=0", "by": 0.41}
+  ]
+}

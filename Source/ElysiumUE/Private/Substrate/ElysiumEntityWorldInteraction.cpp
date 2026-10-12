@@ -180,8 +180,14 @@ namespace
 	}
 }
 
-void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumEntityHandle& Other)
+uint64 FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumEntityHandle& Other)
 {
+	FElysiumEntity* Candidate = Resolve(Other);
+	if (!Candidate || Candidate == &Entity || Entity.MoveParent == Other || Candidate->MoveParent == Entity.Handle
+		|| ((Entity.Flags | Candidate->Flags) & 0x400000u) != 0) return false;
+	if ((Entity.RetailSolidFlags & Candidate->RetailSolidFlags & 8u) != 0
+		&& !(Entity.RetailSolidType != 0 && (Entity.RetailSolidFlags & 4u) == 0)
+		&& !(Candidate->RetailSolidType != 0 && (Candidate->RetailSolidFlags & 4u) == 0)) return false;
 	// `PhysicsMarkEntityAsTouched` 0x1003dc70's data-object step: `H = GetDataObject(this, 1)`; when
 	// none, `H = CreateDataObject(this, 1)` and the zero-filled block becomes the empty circular head
 	// (`H[+0xC] = H; H[+8] = H`), with no null test on the create result.
@@ -193,7 +199,7 @@ void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumE
 		{
 			// Retail would fault here (no accessor registered). The port's registry always has slot 1,
 			// so this is an entity outside a world: nothing to link.
-			return;
+			return false;
 		}
 		Head->PrevLink = Head;
 		Head->NextLink = Head;
@@ -202,10 +208,11 @@ void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumE
 	// `PhysicsTouch`: never a second begin and never a second node.
 	if (FElysiumTouchLink* Existing = ElysiumWorldFindTouchLink(Head, Other))
 	{
+		const uint64 ExistingSerial = TouchLinkSerials.FindRef(Existing);
 		Existing->TouchStamp = Entity.TouchStamp;
 		FElysiumEntity* Toucher = Resolve(Other);
 		if (Toucher && !Entity.IsMarkedForDeletion() && !Toucher->IsMarkedForDeletion()) Entity.Touch(Toucher); //1003daa0
-		return;
+		return ExistingSerial;
 	}
 	// `AllocTouchLink` (pool `DAT_106bd904`, counter `DAT_106bd9b8`): the cap is 0x200 -- retail prints
 	// "AllocTouchLink: MAX_TOUCHLINKS limit" and answers no link. Native allocation supplies
@@ -213,10 +220,12 @@ void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumE
 	if (LiveTouchLinks >= 0x200)
 	{
 		UE_LOG(LogElysiumWorld, Error, TEXT("AllocTouchLink: MAX_TOUCHLINKS limit"));
-		return;
+		return false;
 	}
 	++LiveTouchLinks;
 	FElysiumTouchLink* Node = new FElysiumTouchLink();
+	const uint64 AllocatedSerial = ++NextTouchLinkSerial;
+	TouchLinkSerials.Add(Node,AllocatedSerial);
 	Node->EntityTouched = Other;
 	// `[1]` = this entity's `m_touchStamp` (+0x1ac) at link time (`puVar9[1] = this->field_0x1ac`); the
 	// stamp's producer is `SetCheckUntouch` 0x100b11d0 (slot 6, `ElysiumEntityCollision.cpp`).
@@ -243,6 +252,88 @@ void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumE
 			if (LiveSelf && Toucher) LiveSelf->Touch(Toucher);
 		}
 	}
+	return AllocatedSerial;
+}
+
+void FElysiumEntity::EndTouch(FElysiumEntity* Other)
+{
+	//100a4c20: live authored parent+254, original toucher pointer, no KILLME gate.
+	if (World)
+	{
+		World->EmitRetailSite(*this,TEXT("endtouch"),TEXT("CBaseEntity::EndTouch"),0x100a4c20u,TEXT("dispatch"),
+			FString::Printf(TEXT("other=%d parent=%d"),Other ? Other->Handle.Index : INDEX_NONE,ParentHandle.Index));
+		if (auto* Parent = World->Resolve(ParentHandle)) Parent->EndTouch(Other);
+	}
+}
+
+void FElysiumEntityWorld::PhysicalTouchEvent(const FPhysicalTouchEvent& Event)
+{
+	if (!bActive || bApplyingSnapshot || bDetached || Event.First.Epoch != Epoch || Event.Second.Epoch != Epoch) return;
+	EmitRetailSite(TEXT("CCollisionEvent"),TEXT("physical_touch"),
+		Event.bBegin ? TEXT("StartTouch") : TEXT("EndTouch"),Event.bBegin ? 0x100315c0u : 0x100316f0u,
+		bPhysicalTouchQueueGate ? TEXT("queue") : TEXT("dispatch"),
+		FString::Printf(TEXT("begin=%d first=%d second=%d point=%s normal=%s"),Event.bBegin,Event.First.Index,Event.Second.Index,*Event.PointCm.ToString(),*Event.Normal.ToString()));
+	if (bPhysicalTouchQueueGate)
+	{
+		PhysicalTouchEvents.Add(Event); //100315c0/100316f0: captured owners, never reread native flags at drain
+		return;
+	}
+	DispatchPhysicalTouchEvent(Event);
+}
+
+void FElysiumEntityWorld::DispatchPhysicalTouchEvent(const FPhysicalTouchEvent& Event)
+{
+	if (!bActive || bApplyingSnapshot || bDetached || Event.First.Epoch != Epoch || Event.Second.Epoch != Epoch) return;
+	if (!Event.bBegin)
+	{
+		NotifyPhysicalUntouch(Event.First,Event.Second); //10030cb0 ordered, mutation can remove second
+		NotifyPhysicalUntouch(Event.Second,Event.First);
+		return;
+	}
+	CurrentPhysicalTouchTrace = Event; //10030ba0 copies transient point/normal before dispatch
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		const auto Self = Side == 0 ? Event.First : Event.Second;
+		const auto Other = Side == 0 ? Event.Second : Event.First;
+		if (auto* Entity = Resolve(Self))
+		{
+			const uint64 ReturnedSerial = TouchLinkBegin(*Entity,Other);
+			if (!ReturnedSerial) continue;
+			//1003e4e0 stamps the returned link AFTER callback, reacquire after possible removal.
+			if (auto* Live = Resolve(Self))
+				if (auto* Head = static_cast<FElysiumTouchLink*>(Live->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+					if (auto* Link = ElysiumWorldFindTouchLink(Head,Other); Link && TouchLinkSerials.FindRef(Link)==ReturnedSerial) Link->TouchStamp = -1;
+		}
+	}
+}
+
+void FElysiumEntityWorld::DrainPhysicalTouchEvents()
+{
+	//10030d50: live count; copied value survives tail insertion/reallocation.
+	for (int32 EventIndex = 0; EventIndex < PhysicalTouchEvents.Num(); ++EventIndex)
+	{
+		const auto Event = PhysicalTouchEvents[EventIndex];
+		EmitRetailSite(TEXT("CCollisionEvent"),TEXT("physical_touch"),Event.bBegin ? TEXT("StartTouch") : TEXT("EndTouch"),
+			Event.bBegin ? 0x10030ba0u : 0x10030cb0u,TEXT("dispatch"),
+			FString::Printf(TEXT("begin=%d first=%d second=%d point=%s normal=%s"),Event.bBegin,Event.First.Index,Event.Second.Index,*Event.PointCm.ToString(),*Event.Normal.ToString()));
+		DispatchPhysicalTouchEvent(Event);
+	}
+	PhysicalTouchEvents.Reset();
+}
+
+void FElysiumEntityWorld::NotifyPhysicalUntouch(const FElysiumEntityHandle& Self, const FElysiumEntityHandle& Other, FElysiumEntity* RetiringOther)
+{
+	auto* Entity = Resolve(Self); if (!Entity) return;
+	auto* Head = static_cast<FElysiumTouchLink*>(Entity->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink));
+	auto* Link = Head ? ElysiumWorldFindTouchLink(Head,Other) : nullptr;
+	if (!Link) return;
+	const uint64 OriginalSerial = TouchLinkSerials.FindRef(Link);
+	const bool bDispatch = (Link->Flags & 1) != 0;
+	if (bDispatch) if (auto* Toucher = RetiringOther ? RetiringOther : Resolve(Other)) Entity->EndTouch(Toucher); //1003d770 no KILLME gate
+	if (auto* Live = Resolve(Self))
+		if (auto* CurrentHead = static_cast<FElysiumTouchLink*>(Live->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+			if (auto* CurrentLink = ElysiumWorldFindTouchLink(CurrentHead,Other); CurrentLink && TouchLinkSerials.FindRef(CurrentLink)==OriginalSerial)
+				TouchLinkEnd(*Live,Other); //only the original link, never a callback-created replacement
 }
 
 void FElysiumEntityWorld::TouchLinkEnd(FElysiumEntity& Entity, const FElysiumEntityHandle& Other)
@@ -259,6 +350,7 @@ void FElysiumEntityWorld::TouchLinkEnd(FElysiumEntity& Entity, const FElysiumEnt
 		// `DAT_106bd9b8--`, the node back to the pool.
 		Node->NextLink->PrevLink = Node->PrevLink;
 		Node->PrevLink->NextLink = Node->NextLink;
+		TouchLinkSerials.Remove(Node);
 		delete Node;
 		--LiveTouchLinks;
 	}
@@ -272,6 +364,12 @@ void FElysiumEntityWorld::TouchLinkEnd(FElysiumEntity& Entity, const FElysiumEnt
 
 void FElysiumEntityWorld::ReleaseTouchedList(FElysiumEntity& Entity)
 {
+	const auto Outgoing = Entity.Handle;
+	//ReleaseForRemoval keeps a dead tombstone; callbacks may retire/rebuild the whole epoch.
+	auto CurrentOutgoing = [&]() -> FElysiumEntity*
+	{
+		return Outgoing.Epoch == Epoch && EntityList.IsValidIndex(Outgoing.Index) ? EntityList[Outgoing.Index].Get() : nullptr;
+	};
 	// `PhysicsRemoveTouchedList` 0x1003d8f0 (`~CBaseEntity` 0x1009df20, `DAT_10735d38` cleared around
 	// it), arms in retail order:
 	// 1. `H = GetDataObject(this, 1)`; none -> arm 4.
@@ -302,27 +400,29 @@ void FElysiumEntityWorld::ReleaseTouchedList(FElysiumEntity& Entity)
 		{
 			RouteEntityTouch(FElysiumEntityHandle(static_cast<int32>(static_cast<uint32>(Key >> 32)), Epoch),
 				FElysiumEntityHandle(static_cast<int32>(static_cast<uint32>(Key)), Epoch), /*bBegin*/ false);
+			if (!CurrentOutgoing()) return;
 		}
 	}
-	if (FElysiumTouchLink* Head = static_cast<FElysiumTouchLink*>(Entity.GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+	while (FElysiumEntity* Current = CurrentOutgoing())
 	{
-		while (Head->NextLink != Head)
+		auto* Head = static_cast<FElysiumTouchLink*>(Current->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink));
+		if (!Head) break;
+		if (Head->NextLink == Head)
 		{
-			FElysiumTouchLink* Node = Head->NextLink;
-			if (FElysiumEntity* OtherSide = Resolve(Node->EntityTouched))
-			{
-				// `PhysicsNotifyOtherOfUntouch` for a node no key names: the other side's node and its
-				// destroy-if-empty; no retained pair, so no `EndTouch` to dispatch.
-				TouchLinkEnd(*OtherSide, Entity.Handle);
-			}
-			Head->NextLink = Node->NextLink;
-			Node->NextLink->PrevLink = Head;
-			delete Node;
-			--LiveTouchLinks;
+			Current->DestroyDataObject(FElysiumDataObjectAccessSystem::TouchLink);
+			break;
 		}
-		Entity.DestroyDataObject(FElysiumDataObjectAccessSystem::TouchLink);
+		const auto Other = Head->NextLink->EntityTouched;
+		const uint64 OriginalSerial = TouchLinkSerials.FindRef(Head->NextLink);
+		//1003d8f0 notifies the OTHER link first, including flagged physical links.
+		//The outgoing destructor pointer remains a valid argument even though its handle is dead.
+		NotifyPhysicalUntouch(Other,Outgoing,Current);
+		if (auto* Live = CurrentOutgoing())
+			if (auto* CurrentHead = static_cast<FElysiumTouchLink*>(Live->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+				if (auto* Node = ElysiumWorldFindTouchLink(CurrentHead,Other); Node && TouchLinkSerials.FindRef(Node)==OriginalSerial)
+					TouchLinkEnd(*Live,Other); //own link is freed without own EndTouch
 	}
-	Entity.TouchStamp = 0;
+	if (auto* Current = CurrentOutgoing()) Current->TouchStamp = 0;
 }
 
 void FElysiumEntityWorld::EndBrushTouches(const FElysiumEntityHandle& Brush)
@@ -431,8 +531,20 @@ void FElysiumEntityWorld::FrameUpdatePostEntityThinkUntouch()
 
 int32 FElysiumEntityWorld::ExpireStaleTouchLinks(FElysiumEntity& Entity)
 {
+	//1003d490 sentinel arm walks real links, independent of ordinary directional pairs.
+	TArray<TPair<FElysiumEntityHandle,uint64>> PhysicalLinks;
+	if (auto* Head = static_cast<FElysiumTouchLink*>(Entity.GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+		for (auto* Node = Head->NextLink; Node != Head; Node = Node->NextLink)
+			if (Node->TouchStamp == -1) PhysicalLinks.Add({Node->EntityTouched,TouchLinkSerials.FindRef(Node)});
+	const auto Self = Entity.Handle;
+	for (const auto& Other : PhysicalLinks)
+		if (auto* Live = Resolve(Self))
+			if (auto* Head = static_cast<FElysiumTouchLink*>(Live->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+				if (auto* Node = ElysiumWorldFindTouchLink(Head,Other.Key); Node && Node->TouchStamp==-1 && TouchLinkSerials.FindRef(Node)==Other.Value)
+					if (auto* Toucher = Resolve(Other.Key); Toucher && !Live->IsMarkedForDeletion() && !Toucher->IsMarkedForDeletion()) Live->Touch(Toucher);
+	auto* Reconciled = Resolve(Self); if (!Reconciled) return 0;
 	// `0x1003d490`'s loop over `GetDataObject(this, 1)`: a link whose stamp is `-1` re-fires
-	// `PhysicsTouch` (no port writer makes one); a link whose stamp is not `m_touchStamp` (`1003d4f0`)
+	// `PhysicsTouch` (1003e4e0 writes sentinel); a link whose stamp is not `m_touchStamp` (`1003d4f0`)
 	// is untouched -- `PhysicsNotifyOtherOfUntouch(other, this)` (the other side's EndTouch and its
 	// link) then `PhysicsRemoveToucher(this, link)` (this side's EndTouch and the link). The pair's
 	// one routed end here does both: it drops the pair and calls the brush side's `OnTouchEnd`.
@@ -440,12 +552,17 @@ int32 FElysiumEntityWorld::ExpireStaleTouchLinks(FElysiumEntity& Entity)
 	for (const TPair<uint64, FTouchLinkStamps>& Pair : ActiveTouches)
 	{
 		bool bBrushSide = false;
-		if (!TouchPairSide(Pair.Key, Entity.Handle.Index, bBrushSide))
+		if (!TouchPairSide(Pair.Key, Self.Index, bBrushSide))
 		{
 			continue;
 		}
 		const int32 LinkStamp = bBrushSide ? Pair.Value.Brush : Pair.Value.Activator;
-		if (LinkStamp != Entity.TouchStamp)
+		if (auto* Head = static_cast<FElysiumTouchLink*>(Reconciled->GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+		{
+			const auto OtherHandle = FElysiumEntityHandle(static_cast<int32>(static_cast<uint32>(bBrushSide ? Pair.Key : Pair.Key >> 32)),Epoch);
+			if (auto* Node = ElysiumWorldFindTouchLink(Head,OtherHandle); Node && Node->TouchStamp==-1) continue;
+		}
+		if (LinkStamp != -1 && LinkStamp != Reconciled->TouchStamp)
 		{
 			Stale.Add(Pair.Key);
 		}
@@ -453,14 +570,15 @@ int32 FElysiumEntityWorld::ExpireStaleTouchLinks(FElysiumEntity& Entity)
 	Stale.Sort();   // the entity-index order every touch pass here uses in place of the list's
 	for (uint64 Key : Stale)
 	{
+		auto* Live = Resolve(Self); if (!Live) break;
 		const FElysiumEntityHandle Brush(static_cast<int32>(static_cast<uint32>(Key >> 32)), Epoch);
 		const FElysiumEntityHandle Activator(static_cast<int32>(static_cast<uint32>(Key)), Epoch);
-		const FElysiumEntity* Other = Resolve(Brush.Index == Entity.Handle.Index ? Activator : Brush);
-		EmitRetailSite(Entity, TEXT("untouch_check"), TEXT("CBaseEntity::PhysicsCheckForEntityUntouch"), 0x1003d4f0u,
+		const FElysiumEntity* Other = Resolve(Brush.Index == Self.Index ? Activator : Brush);
+		EmitRetailSite(*Live, TEXT("untouch_check"), TEXT("CBaseEntity::PhysicsCheckForEntityUntouch"), 0x1003d4f0u,
 			TEXT("untouch"), FString::Printf(TEXT("other=%s link_stamp=%d m_touchStamp=%d"),
 				*AiTraceName(Other),
-				Brush.Index == Entity.Handle.Index ? ActiveTouches[Key].Brush : ActiveTouches[Key].Activator,
-				Entity.TouchStamp));
+				Brush.Index == Self.Index ? ActiveTouches[Key].Brush : ActiveTouches[Key].Activator,
+				Live->TouchStamp));
 		RouteEntityTouch(Brush, Activator, /*bBegin*/ false);
 	}
 	return Stale.Num();

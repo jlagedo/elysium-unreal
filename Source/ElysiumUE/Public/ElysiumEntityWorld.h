@@ -426,8 +426,19 @@ public:
 	// retained pair released through the end edge (the other side's `OnTouchEnd` when it is the live
 	// brush, both nodes, each side's destroy-if-empty), any keyless node freed with its other side's,
 	// this entity's object destroyed unconditionally, `m_touchStamp = 0`.
-	void TouchLinkBegin(FElysiumEntity& Entity, const FElysiumEntityHandle& Other);
+	uint64 TouchLinkBegin(FElysiumEntity& Entity, const FElysiumEntityHandle& Other); //successful allocation identity, zero on rejection
 	void TouchLinkEnd(FElysiumEntity& Entity, const FElysiumEntityHandle& Other);
+	//100315c0/100316f0 listener copies; admission is performed before this queue.
+	struct FPhysicalTouchEvent
+	{
+		FElysiumEntityHandle First, Second;
+		FVector PointCm = FVector::ZeroVector, Normal = FVector::ZeroVector;
+		bool bBegin = false;
+	};
+	void PhysicalTouchEvent(const FPhysicalTouchEvent& Event);
+	void DrainPhysicalTouchEvents(); //10030d50 insertion order, live count
+	const FPhysicalTouchEvent& PhysicalTouchTrace() const { return CurrentPhysicalTouchTrace; }
+	void NotifyPhysicalUntouch(const FElysiumEntityHandle& Entity, const FElysiumEntityHandle& Other, FElysiumEntity* RetiringOther = nullptr);
 	void ReleaseTouchedList(FElysiumEntity& Entity);
 	// `DAT_106bd9b8`: the live touch-link node count (`AllocTouchLink` errors at 0x200).
 	int32 TouchLinkCount() const { return LiveTouchLinks; }
@@ -1285,6 +1296,12 @@ private:
 	// `CDataObjectAccessSystem` (L0-r019): the 32 accessor slots and their per-entity blocks.
 	TUniquePtr<FElysiumDataObjectAccessSystem> DataObjectSystem;
 	int32 LiveTouchLinks = 0;   // `DAT_106bd9b8`
+	bool bPhysicalTouchQueueGate = false;
+	void DispatchPhysicalTouchEvent(const FPhysicalTouchEvent& Event);
+	TArray<FPhysicalTouchEvent> PhysicalTouchEvents;
+	FPhysicalTouchEvent CurrentPhysicalTouchTrace;
+	TMap<const FElysiumTouchLink*, uint64> TouchLinkSerials; //allocation identity across callback removal/recreation
+	uint64 NextTouchLinkSerial = 0;
 
 	// This map's player entity, or Invalid when the map was built without one.
 	FElysiumEntityHandle Player;
