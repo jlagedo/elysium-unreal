@@ -7,8 +7,33 @@ No genuine owner decision currently. Unreal services preserve retail observable 
 
 ## Latest accepted run
 
-The local commit containing this checkpoint accepts the bounded native collision admission
-packet. Exact accepted HEAD/tree/path hashes and gate receipts are recorded after commit in
+The local commit containing this checkpoint accepts preparatory native contact lifecycle
+evidence only. Exact HEAD/tree/path hashes and main gates are recorded after commit in
+E:/elysium-work/codex/l0-p2-contact-lifecycle-main-20261012/acceptance-checkpoint.json.
+Parent860d053c; production admission foundation below unchanged. Sole worker
+/root/l0_physical_contact_lifecycle terminal, all engine jobs terminal.
+Worker freeze E:/elysium-work/codex/l0-p2-contact-lifecycle-20261012/freeze.json:
+2 changed paths/13 evidence hashes independently verified; SHA
+86a606814a12b38135b9f01b48b040c550b783ea089119fda3dc7b207cdfee3a.
+Only opt-in Slow native probe and matching oracle section changed; no production/audit closure.
+Public complete retained contacts survive sleep/disabled/expired states; actual prune follows
+the solver frame. Same constraint address can be reused with new UniqueIdx/incarnation.
+Allocation/current/initial/disabled/active-point absence alone cannot define physical Start/End.
+Query44's recovered skin threshold is not an event birth rule. No new gameplay threshold.
+
+Main build221910.814533Z exit0; default+probe221918.699403Z:218/218 pass, all217 default
+baseline names preserved, zero failures/errors/unfinished. Main arena222001.579665Z:3/3 pass,
+one boot/host exit0, no scenario errors/first_unmet.31 known LogPython Error lines, nonPython0.
+Raw indices/review/hash receipts in main scratch. Previous1671 arm baseline from220742 is
+retained: no Arm implementation/production change; this is a preparatory run, full event story
+closure and its fresh arm gate remain required. No milestone or full L0 acceptance follows.
+Next: production physical event state projection plus ordered immediate/queued touch consumers;
+reuse this exact native service proof, do not repeat the diagnostic. No owner decision/blocker.
+
+## Accepted native admission foundation
+
+Local commit860d053c accepts the bounded native collision admission packet.
+Exact accepted HEAD/tree/path hashes and gate receipts are recorded in
 E:/elysium-work/codex/l0-p2-native-admission-main-20261012/acceptance-checkpoint.json.
 Parent c19068e11b919f4d7a82c64c20dc9b3ed3615aed; runtime foundation348959fe.
 Sole worker /root/l0_native_collision_admission terminal; all engine jobs terminal.

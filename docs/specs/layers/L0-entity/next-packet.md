@@ -3,7 +3,31 @@
 Read goal.md/checkpoint.md/vision.md and active delivery/service/handoff maps.
 Main Sol Medium owns review/gates/exact local commit/checkpoint; one fresh Sol High worker,
 fork_turns=none, one run/worker at a time, no nested agents or worker commits. Never push.
-Start only after native-admission acceptance-checkpoint.json records its exact accepted HEAD.
+Start only after contact-lifecycle acceptance-checkpoint.json records its exact accepted HEAD:
+E:/elysium-work/codex/l0-p2-contact-lifecycle-main-20261012/acceptance-checkpoint.json.
+
+## Reused native producer proof; next implementation
+
+Preparatory probe is complete: E:/elysium-work/codex/l0-p2-contact-lifecycle-20261012/
+{freeze.json,delivery.md,installed-chaos-proof.txt,native-observations.txt}. Public PT PostSolve
+after prune supports VisitAllCurrentAndExpired; sleeping records remain current/disabled with
+zero active points. Awake predicate rejection retains allocation; readmission reuses it with
+initial=false and positive native Phi. Real separation and retirement prune next solver frame;
+recreation may reuse record address with new UniqueIdx/incarnation. Reuse, do not replay this
+probe or adopt <=0/query44 skin as event qualification. No direct individual deletion callback
+is needed merely to use supported complete native retained-record lifetime.
+
+Next run implements coherent semantic physical event state over actual native contact service,
+then ordered game dispatch/link consumers. Establish which native physical qualification and
+retirement transition is used; distinguish candidate/expired/disabled from genuine contact,
+preserve sleeping lifetime and actual filter rejection/readmission without manufacturing
+synchronous setter EndTouch. Supported native outputs own geometry/solving; adapter owns
+observed flags/GameData/identity/event sequencing. Bound any remaining recovery to its named
+game observer, no IVP internal reconstruction. No additional general cross-engine probe run.
+Include EntityWorld.cpp actual frame loop in permitted paths when joining event gate/drain;
+current RefreshContactOutputs only serves friction44 despite its contact-birth comment.
+Ordinary TouchLinkBegin/End and ActiveTouches expiry cannot silently stand in for physical
+FFFFFFFF sentinel links. Show actual native production callbacks before claiming closure.
 
 Native1002f1e0 admission and no-wake current-body mutations are accepted as a bounded slice;
 full P2/L0 remain open. Reuse all accepted native/body/material/shadow/SAVE evidence.

@@ -41,6 +41,7 @@
 #include "Chaos/PBDRigidsEvolutionGBF.h"
 #include "Chaos/SimCallbackObject.h"
 #include "Chaos/Collision/SpatialAccelerationBroadPhase.h"
+#include "Chaos/Collision/CollisionConstraintAllocator.h"
 #include "Player/ElysiumCommandBus.h"
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumSessionSubsystem.h"
@@ -1030,6 +1031,120 @@ bool FElysiumSwitchConstraintRestoreFailureTest::RunTest(const FString&)
 	return true;
 }
 #endif
+
+// Preparatory producer question only: retained Chaos allocation/current/initial are
+// not physical StartTouch. Observe all records, including sleeping and expired, using
+// actual native geometry before selecting the game event adapter. No event dispatch.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeContactLifetimeProbe, "Elysium.Slow.ModelPhysics.NativeContactLifetimeProbe",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumNativeContactLifetimeProbe::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+	auto* Map = Fixture.SpawnMapActorDeferred(); Map->bStageOnly = true; Map->bStageWithoutCatalogue = true;
+	Map->FinishSpawning(FTransform::Identity);
+	for (int32 FrameIndex = 0; FrameIndex < 20 && !Map->IsRuntimeActive(); ++FrameIndex) Fixture.TestWorld.TickTestWorld(.02f);
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("native_contact_lifetime_probe");
+	FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+	for (const TCHAR* Name : {TEXT("lifetime_a"),TEXT("lifetime_b")})
+	{
+		auto Def = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/physics/bottle/bottle.mdl"),Name);
+		Def.Origin = FVector(5000,5000,5000); Defs.Defs.Add(Def);
+	}
+	FElysiumStageSeat Seat; Seat.FeetCm = FVector(-1000,0,1000); FString Error;
+	if (!Map->RebuildStageWorld(MoveTemp(Defs),{},Seat,Error)) { AddError(Error); return false; }
+	for (int32 FrameIndex = 0; FrameIndex < 20 && !Map->IsRuntimeActive(); ++FrameIndex) Fixture.TestWorld.TickTestWorld(.02f);
+	auto* Entities = Map->GetEntityWorld();
+	auto* A = Entities->FindByName(TEXT("lifetime_a")); auto* B = Entities->FindByName(TEXT("lifetime_b"));
+	if (!A || !B || !TestTrue(TEXT("probe actual core native actors"),A->VPhysicsGetObject() && B->VPhysicsGetObject())) return false;
+	const auto NativeA = ElysiumModelPhysics::CaptureIdentity(A->VPhysicsGetObject());
+	auto NativeB = ElysiumModelPhysics::CaptureIdentity(B->VPhysicsGetObject());
+	auto* ComponentA = ElysiumModelPhysics::ComponentFor(NativeA.Actor); auto* ComponentB = ElysiumModelPhysics::ComponentFor(NativeB.Actor);
+	auto* BodyA = ElysiumModelPhysics::Identity(ComponentA); auto* BodyB = ElysiumModelPhysics::Identity(ComponentB);
+	ComponentA->SetEnableGravity(false); ComponentB->SetEnableGravity(false);
+	ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,true);
+	ON_SCOPE_EXIT { ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,false); };
+	double Clock = 10.;
+	auto Place = [&]()
+	{
+		BodyA->SetBodyTransform(FTransform(FQuat::Identity,FVector(5000,5000,5000)),ETeleportType::TeleportPhysics);
+		BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(5001,5000,5000)),ETeleportType::TeleportPhysics);
+		BodyA->SetLinearVelocity(FVector::ZeroVector,false); BodyB->SetLinearVelocity(FVector::ZeroVector,false);
+		BodyA->SetAngularVelocityInRadians(FVector::ZeroVector,false); BodyB->SetAngularVelocityInRadians(FVector::ZeroVector,false);
+		BodyA->WakeInstance(); BodyB->WakeInstance();
+	};
+	auto Observe = [&](const TCHAR* Label, bool bAdvance)
+	{
+		ElysiumModelPhysics::TakeNativeAdmissions(*Fixture.World);
+		if (bAdvance)
+		{
+			Entities->BeginNativePhysicsFrame(Clock,.02);
+			ElysiumModelPhysics::PreparePhysicsFrame(*Fixture.World,.02f,1.f,true);
+			TestTrue(TEXT("probe real native frame"),Fixture.TestWorld.TickTestWorld(.02f));
+			Entities->FinishNativePhysicsFrame(); Clock += .02;
+		}
+		auto* Proxy = static_cast<Chaos::FSingleParticlePhysicsProxy*>(NativeA.Actor);
+		auto* Solver = Proxy->GetSolver<Chaos::FPBDRigidsSolver>(); Solver->WaitOnPendingTasks_External();
+		int32 Records = 0, PhysicalPoints = 0;
+		FPhysicsCommand::ExecuteRead(BodyA->GetPhysicsActor(),[&](const FPhysicsActorHandle&)
+		{
+			Solver->GetEvolution()->GetCollisionConstraints().GetConstraintAllocator().VisitConstCollisions(
+				[&](const Chaos::FPBDCollisionConstraint& Contact)
+				{
+					const auto* First = Contact.GetParticle0(); const auto* Second = Contact.GetParticle1();
+					if (!First || !Second || !((First->PhysicsProxy() == NativeA.Actor && Second->PhysicsProxy() == NativeB.Actor)
+						|| (First->PhysicsProxy() == NativeB.Actor && Second->PhysicsProxy() == NativeA.Actor))) return Chaos::ECollisionVisitorResult::Continue;
+					++Records; int32 ActivePoints = 0; double Phi = TNumericLimits<double>::Max();
+					for (int32 PointIndex = 0; PointIndex < Contact.NumManifoldPoints(); ++PointIndex)
+					{
+						const auto& Point = Contact.GetManifoldPoint(PointIndex);
+						if (Point.ContactPoint.IsSet()) Phi = FMath::Min(Phi,static_cast<double>(Point.ContactPoint.Phi));
+						if (Contact.IsManifoldPointActive(PointIndex) && Point.ContactPoint.IsSet())
+						{
+							++ActivePoints;
+							if (Point.ContactPoint.Phi <= 0.) ++PhysicalPoints; // evidence only: literal native surface separation
+						}
+					}
+					AddInfo(FString::Printf(TEXT("lifetime_record label=%s record=%p first=%d ids=%d,%d current=%d sleep=%d disabled=%d probe=%d initial=%d points=%d active=%d phi=%.17g"),
+						Label,&Contact,First->PhysicsProxy() == NativeA.Actor,First->UniqueIdx().Idx,Second->UniqueIdx().Idx,
+						Contact.IsCurrent(),Contact.IsSleeping(),Contact.GetDisabled(),Contact.GetIsProbe(),Contact.IsInitialContact(),Contact.NumManifoldPoints(),ActivePoints,Phi));
+					return Chaos::ECollisionVisitorResult::Continue;
+				},Chaos::ECollisionVisitorFlags::VisitAllCurrentAndExpired);
+		});
+		int32 Candidates = 0, Allowed = 0;
+		for (const auto& Sample : ElysiumModelPhysics::TakeNativeAdmissions(*Fixture.World))
+			if ((Sample.First.Actor == NativeA.Actor && Sample.Second.Actor == NativeB.Actor)
+				|| (Sample.First.Actor == NativeB.Actor && Sample.Second.Actor == NativeA.Actor))
+			{ ++Candidates; if (Sample.Decision.bAllow) ++Allowed; }
+		AddInfo(FString::Printf(TEXT("lifetime_summary label=%s advance=%d records=%d nonpositive_active_points=%d candidates=%d allowed=%d awake=%d,%d generations=%llu,%llu"),
+			Label,bAdvance,Records,PhysicalPoints,Candidates,Allowed,BodyA->IsInstanceAwake(),BodyB->IsInstanceAwake(),NativeA.Incarnation,NativeB.Incarnation));
+		return TPair<int32,int32>(Records,PhysicalPoints);
+	};
+	Place(); const auto Birth = Observe(TEXT("overlap_birth"),true);
+	if (!TestTrue(TEXT("probe actual overlap produces native records and nonpositive active manifold"),Birth.Key > 0 && Birth.Value > 0)) return false;
+	BodyA->PutInstanceToSleep(); BodyB->PutInstanceToSleep();
+	Observe(TEXT("sleep_no_advance"),false); Observe(TEXT("sleep_frame"),true);
+	A->SetCollisionGroup(4); B->SetCollisionGroup(4);
+	Observe(TEXT("reject_sleep_no_advance"),false); Observe(TEXT("reject_sleep_frame"),true);
+	BodyA->WakeInstance(); BodyB->WakeInstance(); Observe(TEXT("reject_awake_frame"),true);
+	B->SetCollisionGroup(5); Observe(TEXT("readmit_frame"),true);
+	BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(6000,5000,5000)),ETeleportType::TeleportPhysics); BodyB->WakeInstance();
+	Observe(TEXT("separate_before_frame"),false);
+	const auto Separated = Observe(TEXT("separate_frame"),true);
+	TestEqual(TEXT("probe separated real geometry prunes owned pair records"),Separated.Key,0);
+	A->SetCollisionGroup(0); B->SetCollisionGroup(0); Place(); Observe(TEXT("replacement_birth"),true);
+	FElysiumSavedPhysicsBody SavedB;
+	if (!ElysiumModelPhysics::Capture(NativeB.Actor,SavedB)) return false;
+	ElysiumModelPhysics::Destroy(ComponentB);
+	Observe(TEXT("retire_before_frame"),false); Observe(TEXT("retire_frame"),true);
+	if (!ElysiumModelPhysics::Restore(ComponentB,Entities->PhysicsSurfaces(),SavedB,Error)) { AddError(Error); return false; }
+	NativeB = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(ComponentB));
+	B->VPhysicsSetObject(NativeB.Actor); ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	BodyB = ElysiumModelPhysics::Identity(ComponentB); ComponentB->SetEnableGravity(false);
+	Place(); Observe(TEXT("new_incarnation_birth"),true);
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeAdmissionTest, "Elysium.Substrate.ModelPhysics.NativeAdmission",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)

@@ -1486,6 +1486,75 @@ timing are not claimed by this bounded negative. No runtime/audit edits or engin
 performed. Exact module-labelled corpus captures, constructor/table PE reads, read-only PE
 xrefs and SHA256 freeze are in `E:/elysium-work/codex/l0-p2-cleanup-timing-20261012/`.
 
+#### Installed UE physical contact lifetime seam probe (2026-10-12)
+
+The next producer question is now bounded by installed UE5.8 declarations and actual
+core prepared bottle geometry. This is preparatory evidence, not a port of physical
+StartTouch/EndTouch, and not closure of P2 or M1. The observer remains the native
+PhysProp contact route2604cc80->26039b20->2600eff0->100315c0 and its destruction
+route2603d270->2603cf30->26039b60->2600f180->100316f0, distinct from ordinary
+motion/trigger stamping and the query-visible44 selection contract.
+
+The installed public `CollisionVisitor.h:31` flag `VisitAllCurrentAndExpired` visits
+sleeping, disabled and expired retained records. `CollisionConstraintAllocator.h:477`
+exposes complete const enumeration; `ParticleCollisions.h:124` exposes the per-particle
+equivalent. `PBDCollisionConstraint.h:389-407` resets disabled each tick but keeps a
+sleeping record current, and says that current means activated within Chaos CullDistance.
+Its initial flag at419 means activated this tick but not last. The contact modifier's
+`ContactModification.h:49-53` explicitly warns that contact modification may occur before
+an actual contact. None of allocation, current or initial alone proves physical birth.
+
+Installed source joins the timing/lifetime facts: `PBDRigidsEvolutionGBF.cpp:708` prunes
+before PostSolve at771. `CollisionConstraintAllocator.cpp:274-304` destroys unused
+non-sleeping midphases and their collisions, while retaining sleeping ones. Its375-395
+particle removal first detaches endpoints and leaves pruning to later detection.
+`SimCallbackObject.h:407/416` supports registered/unregistered particle notifications;
+the latter occurs immediately before UniqueIdx invalidation. These are available
+Unreal service seams, not an invitation to duplicate Chaos or IVP storage/topology.
+For the diagnostic's synchronized game-thread read, public
+`PhysicsSolverBase.h:578` waits on pending tasks, then public
+`PhysInterface_Chaos.h:73`/`PhysInterface_Chaos.cpp:532` ExecuteRead takes a scene read
+lock. The probe makes no physics-thread game callbacks and retains no dereferenced
+constraint pointer across reads. Pointer addresses in its log are equality evidence.
+
+Opt-in `Elysium.Slow.ModelPhysics.NativeContactLifetimeProbe` prepares real core bottle
+models through stage loading, advances the production native frame at .02 seconds,
+and copies native record state through that complete visitor. The test proves the
+fixture first reaches overlapping native geometry (four nonpositive active points),
+then observes these transitions without introducing a gameplay threshold:
+
+| Stimulus | Native observation |
+|---|---|
+| First overlap | One current, enabled, initial record; four active points, Phi -6.335907936cm. |
+| Explicit sleep followed by frame | Same record current/sleeping/disabled, four stored points but zero active points, no candidate callback. Missing active manifold is not destruction. |
+| Changed group rejection while sleeping | Same retained sleeping record; zero candidate callbacks, including next frame. No-wake filter mutation alone is not contact destruction. |
+| Wake into rejected group pair | Same record remains current/disabled with zero active points; real candidate rejects. Disabled allocation is distinct from deletion. |
+| Changed group readmission | Same record enabled, four active points, initial=false, Phi +0.000948251cm. Initial alone misses readmission; Phi<=0 would reject this actual admitted active manifold. |
+| Geometry separated1000cm | Previous stored record persists before frame advancement; complete retained enumeration has zero pair records after the next frame's prune. |
+| Native body retirement/recreation | Old record persists before advancement, disappears after the frame, and recreation reuses the same constraint address with new partner UniqueIdx7->9 and native incarnation2->3. Address alone is not lifetime identity. |
+
+The positive2.8563570231199265cm threshold recovered in the native44/pusher section
+below is only its query-visible qualification/retirement contract. This diagnostic
+does not transfer it to physical game events or assert equality with Chaos CullDistance.
+Its literal nonpositive point count is geometric evidence only, not a StartTouch gate.
+It asserts native geometry reach and separated-record pruning; it does not assert
+retail event counts, flags, endpoint callbacks or queue equivalence.
+
+Implementation consequence: a supported retained-contact lifetime seam exists, including
+sleep and actual prune/removal; awake friction44 snapshots and candidate-roster differences
+remain unsuitable. A coherent physical game adapter must still join an authoritative
+native physical qualification/retirement transition with disabled/cached record retention,
+the current native incarnation/GameData/flags and the recovered immediate/queued handler.
+In particular, emitting EndTouch from GetDisabled, or StartTouch solely from initial, would
+contradict this real producer evidence. The current RefreshContactOutputs loop only refreshes
+44 query data; its contact-birth comment is not implementation of100315c0/100316f0.
+No consumer adapter, audit verdict or milestone closure follows from this probe.
+
+Build20261012T221509.145576Z passes; focused test20261012T221637.320386Z passes1/1.
+Exact declaration/source excerpts and hashes, complete diagnostic observations, raw
+receipts and source freeze are in `E:/elysium-work/codex/l0-p2-contact-lifecycle-20261012/`.
+All worker engine jobs are terminal. No broad default/arm/arena gate was run by this worker.
+
 `CTraceFilterSimple::ShouldHitEntity 0x101d31c0` executes StandardFilterRules `0x101d3080`,
 pass rules `0x101d2fc0`, **candidate slot 91**, candidate BCC targetable/script-hidden gate,
 actual rules slot 77, then **candidate slot 68 before pass slot 68**, with short-circuiting.
