@@ -134,6 +134,7 @@ struct FElysiumSaveVersion
 		EntityRemovalFlags = 53, // full saved EFlags, pending latch independent of released tombstone
 		PhysicsFieldPresence = 54, //nonnull false128 ->223 versus omitted null field; brush actual saved words
 		SwitchAndConstraintRestore = 55, // retained native sequence phase/rate and constraint owner state
+		NativeCollisionAdmission = 56, //callbackWORD, contentsDWORD and base semantic filter fields
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -168,7 +169,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = SwitchAndConstraintRestore; // disposable saves, no migration
+	static constexpr int32 MinSupported = NativeCollisionAdmission; // disposable saves, no migration
 
 	static const FGuid GUID;
 };

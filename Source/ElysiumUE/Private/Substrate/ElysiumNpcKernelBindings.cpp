@@ -163,6 +163,10 @@ namespace ElysiumNpcKernelBindings
 
 	void AddBaseEntitySaveFields(FElysiumClassDesc& D)
 	{
+		ElysiumAddClassField(D, TEXT("m_CollisionGroup"), &FElysiumEntity::CollisionGroup, EElysiumField::Save); //+368
+		ElysiumAddClassField(D, TEXT("m_fFlags2"), &FElysiumEntity::EntityFlags2Word, EElysiumField::Save); //+438
+		ElysiumAddClassField(D, TEXT("m_MoveType"), &FElysiumEntity::RetailMoveType, EElysiumField::Save); //+35c
+		ElysiumAddClassField(D, TEXT("m_MoveCollide"), &FElysiumEntity::RetailMoveCollide, EElysiumField::Save); //+360
 		// Retail's persistence, and only that: a `SAVE` row with no external name is
 		// reachable by no keyvalue, no input and no Python attribute, so each registers
 		// under its RETAIL MEMBER NAME with `EElysiumField::Save` alone. The names are

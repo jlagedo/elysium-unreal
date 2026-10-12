@@ -15,13 +15,19 @@ bool FElysiumCollisionPairs::ContainsEntities(FElysiumEntityHandle First, FElysi
 }
 bool FElysiumCollisionPairs::ContainsObjects(void* First, void* Second) const
 {
+	if (ContainsRawObjects(First,Second)) return true;
 	const auto A = ElysiumModelPhysics::CaptureIdentity(First), B = ElysiumModelPhysics::CaptureIdentity(Second);
 	if (!ElysiumModelPhysics::IsCurrentOutput(A) || !ElysiumModelPhysics::IsCurrentOutput(B)) return false;
-	if (Objects.ContainsByPredicate([&](const FObjectPair& Pair)
-		{ return (Same(Pair.First,A) && Same(Pair.Second,B)) || (Same(Pair.First,B) && Same(Pair.Second,A)); })) return true;
 	const auto* AOwner = ElysiumModelPhysics::GameDataFor(A, World);
 	const auto* BOwner = ElysiumModelPhysics::GameDataFor(B, World);
 	return ContainsEntities(AOwner ? AOwner->Handle : FElysiumEntityHandle::Invalid(), BOwner ? BOwner->Handle : FElysiumEntityHandle::Invalid());
+}
+bool FElysiumCollisionPairs::ContainsRawObjects(void* First, void* Second) const
+{
+	const auto A = ElysiumModelPhysics::CaptureIdentity(First), B = ElysiumModelPhysics::CaptureIdentity(Second);
+	if (!ElysiumModelPhysics::IsCurrentOutput(A) || !ElysiumModelPhysics::IsCurrentOutput(B)) return false;
+	return Objects.ContainsByPredicate([&](const FObjectPair& Pair)
+		{ return (Same(Pair.First,A) && Same(Pair.Second,B)) || (Same(Pair.First,B) && Same(Pair.Second,A)); });
 }
 bool FElysiumCollisionPairs::Mutate(void* First, void* Second, bool bDirect, bool bAdd)
 {
@@ -48,7 +54,9 @@ bool FElysiumCollisionPairs::Mutate(void* First, void* Second, bool bDirect, boo
 	//10158ab0: first then second nonstatic object25, after the membership write.
 	ElysiumModelPhysics::RecheckCollisionFilter(A);
 	ElysiumModelPhysics::RecheckCollisionFilter(B);
-	ElysiumModelPhysics::SetNativePairIgnored(A, B, ContainsObjects(First,Second));
+	//A manager prefilter would precede1002f1e0's null/sameGameData/trigger early returns.
+	//Release only our former contribution; actual candidates read membership in retail order.
+	ElysiumModelPhysics::SetNativePairIgnored(A, B, false);
 	return true;
 }
 bool FElysiumCollisionPairs::AddTranslated(void* A, void* B) { return Mutate(A,B,false,true); }

@@ -2989,3 +2989,159 @@ Other InitNormal callers remain independently owned: L0 mid CPropDestructable/CP
 other mid callers; tail haunted prop/padlock/pushable; L2 weapon/inventory and higher grenade,
 cannister and player producers. Their required Spawn chains are not claimed by generic normal
 coverage. Simulation P3, pair/contact P2, impact/Break I2, IVP internals and higher gameplay remain open.
+
+## Native candidate admission — 1002f1e0 (2026-10-12, D02/P2 partial)
+
+The installed predicate is evaluated at real Chaos contact candidates, from immutable GT
+snapshots. It does not run entity virtual callbacks speculatively over all possible pairs or
+dereference game state on PT. This carries normal/static body admission; full1002f1e0/P2 is
+**open**, especially native trigger conversion62, vehicle wheel creation, higher68 and the
+physical contact event consumer. The latter must still build sentinel/EndTouch/event timing;
+current44 friction qualification is a separate observer. No pair diff manufactures Start/End.
+
+Direct vampire.dll PE1002f1e0 resolves the decompiler's operands in this order:
+
+1. Either null object6 GameData allows. Same GameData rejects OR GameFlags0x8000, then raw native
+   ignored membership; otherwise allows without translated membership or later entity rules.
+2. Different GameData rejects when both nativeGameFlags have2. CallbackWORD10 A40 dispatches
+   WheelCollidesWith1002f820 on B; then B40 on A. The helper allows other move94=8 or7 or native1
+   static. Its group2 comparison at1002f89e is dead flag debris; AL is cleared on the remaining arm.
+3. Entity224 A then B may allow. All installed table targets share100273b0's false body
+   (ledger's slot224 has zero overrides); no synthetic force override is installed.
+4. Both edicts: owner97 A==B, then B==A reject. Either live move parent25c:1012c9c0 follows move
+   parents, **not owners**, then rejects equal roots, entity-root pair and current-root raw objects.
+5. Read solid92 A/B, solidflags211 A/B, move94 A/B. Move8/live-parent A requires OTHER nativeB52
+   moveability; B similarly; both such sides reject; either solid0 rejects.
+6. NOT_SOLID4 allows only nativeA62 trigger against solidB, then nativeB62 against solidA; otherwise
+   rejects. Without4, TRIGGER8 A/B accepts only other solid6/1 or move7.
+7. Actual SP rules77, nativeA65contents & entityB237, then Bcontents & A237; entity pair then raw
+   native pair; A68 then B68; allow. Higher68 hook evidence records only branches actually reached.
+
+Native table260c9db0: object9/10 setter26016d20/getter26016d30 carry WORD+3c; object52
+26016e80 is nonstatic AND motion-enabled (sleep is movable); object62 260189c0 reads actual
+converted-trigger presence; object65 26019570/66 260175f0 carry DWORD+40. Constructor26016930
+initializes callbackWORD1127, GameFlags0, contents1. Save26018f20 templates16/17/18 and
+restore26019070 setter9/7/66 retain these independent words before later mechanics writes.
+The typed native save now carries current callbackWORD and contentsDWORD (schema56; disposable
+floor56), plus the base entity SAVE inputs group368, Flags2 438, MoveType35c and MoveCollide360.
+The replay datamap declares each of those four as INTEGER SAVE, flags2. Creation GameData is
+attached to the actual incarnation, independent of mutable entity object aliases.
+
+The bounded callback40 producer question is closed: vphysics2601bf90 creates `VehicleWheel`,
+clears its callbackWORD via9, copies chassis GameFlags through7, then ORs byte native+3c with40.
+That vehicle producer is **not implemented here**; its same-L0 map-specific ownership remains
+open. Shadow26018520 carries `(callbackWORD & ffdd)|10`; world10158600 adds200. Callback4/8
+event production/consumption remains later work and must never be substituted with GameFlags.
+Constructor default absence of40 is not evidence that40 never mutates.
+
+Slot237 scope is settled for installed tables: single1003e7a0 body, zero overrides (slots.md247;
+82 class tables cite it). Live Flags2000 selects202400b before actual cached player+a8 selects
+201400b, otherwise200400b. World bake signatures carry exact intersection answers for these
+three masks. The adapter explicitly rejects unsupported mask policies; it does not approximate
+an arbitrary higher mask by common-solid. Future custom237 requires extending this contract.
+
+Reached L0 68: Prop/PropSwitch/Terminal use the existing entity pair service. PhysicsProp101914a0
+first rejects actual other combat-character+9c with self spawnflags4, then actual player+a8 with
+self Flags2 bit1, then uses the pair service fallback1008bfe0. The generic Animating1008bfe0
+implementation remains L1-owned (audit2419 and existing hooks); its mutable stub is not declared
+fixed. Native snapshot policy explicitly exposes that hook and the BCC10340650/species overrides.
+
+100aaa40 group equality returns unchanged; changed store precedes current object25. Solid100dc480
+joins25 after its store and before partition; flags100dc580 stores the low WORD even on equality,
+then changed4 joins25 before changedc partition/untouch; move93 preserves its changed-type gate.
+Object25 refreshes the current creation-GameData snapshot without UE's waking mass/filter helper.
+Static cleanup and equality retain their existing no-wake semantics. The adapter releases only
+its old Chaos ignored-pair contribution: prefiltering translated/raw membership would erase
+candidates before early returns. At pre-simulation, the public particle collision visitor visits
+current and expired constraints only to match/prune this callback's owned rejection keys. A
+matching **current** constraint may clear its user-disabled bit when the immutable predicate
+admits it; expired constraints are never activated. Contact modification uses public Pair.Enable
+for the next admitted actual candidate. Clearing disabled does not activate a constraint or wake
+its particles. Keys require ordered proxy/UniqueIdx/incarnation and corresponding shape identity;
+body/shape reconstruction retires that incarnation. The installed project has one modifying
+callback; future multiple-modifier composition and in-place shape reuse need an explicit ownership
+protocol. The engine cookie/creation epoch is protected, not a public lifetime token. Other Chaos
+ignored-pair manager owners retain their contributions. There is no IVP topology reconstruction.
+
+The connected rejected pair's sleeping re-admission failure was a real adapter side effect:
+GateStaticModelCollision rewrote unchanged query/simulation flags during MoveType mutation.
+Installed ShapeInstance.h386/392 marks collision data dirty even on equality. Both native poses
+still overlapped and PT had one Dynamic/one Sleeping particle, but the old particle collision
+visitor had no constraint. The helper now compares public IsQueryShape/IsSimulationShape before
+writing and updates acceleration only on changed eligibility. The original connected sleeping
+stimulus then retains a current owned cached constraint and reaches real admitted contact44.
+
+`Elysium.Substrate.ModelPhysics.NativeAdmission` uses actual prepared core bottle bodies,
+production stage/entity factories, native object setters and real contact modification outputs.
+It checks group, owner, move-parent root, push/asleep/static, native words/contents, translated/raw
+pair domains, same-GameData precedence, real combat/player prop vetoes, explicit higher hook,
+foreign aliases, no-wake mutation, current native archive/reconstruction and retired incarnation.
+Accepted baseline and cached re-admission additionally require actual selected-pair44 contact;
+entity-pair rejection requires its absence. Existing SwitchCoupled retains suppression/resumption
+and now requires actual late EntityPair rejection plus absence of the former manager contribution.
+Development receipts204035,204740,205435,205613,205738,205902,210959,211307,211740 and211916
+preserve assertion failures; they are not claimed as passing witnesses. Receipt212222 preserves
+the rejected protected-cookie compile attempt, removed from the implementation. Build212308
+passes after diagnostic removal. Final affected family212348 passes32/32 (ModelPhysics31 plus
+CollisionRulesProduction1), including owned static rejection followed by actual body/shape
+retirement, distinct incarnation reconstruction and admitted native candidate/contact44.
+Focused212105 passes the original sleeping-cache, cross-domain,
+native word, snapshot and actual semantic ApplySnapshot restore/reject/re-admit consumer checks.
+Globally minted world epochs prevent two live worlds from minting equal complete handles; the
+real witness uses equal indices/distinct epochs and explicit immutable GameData domain identity.
+The isolated buffer boundary
+temporarily disables both map primary and gameplay tick functions after manual publication
+while native world physics runs; the old-word assertion is retained, then the next normal frame
+must see new words. The sleeping witness wakes its opposing body, and the registered stage
+player reaches its nonzero solid prerequisite through SetSolid before the downstream68 checks.
+The compact `l0_native_collision_admission` arena record uses actual group setters, real candidate
+outputs and selected native44 contact for cached rejection/re-admission without teleport.
+Its host observation count is the number of returned real selected-pair samples, not a simulated
+notification count. Main review/gates own arena acceptance; this is not full L0/P2 closure.
+
+Native admission exposed invalid prior mover fixture inputs in default receipt212732:
+manual `info_target` bbox GameData had solid0, actual door/door receivers both had move8,
+and actual door/world attempted move8 against native52 immovable world geometry. CWorld
+constructor1023b840 stores solid1/move8; Spawn1023bba0 does not correct that word. The exact
+constructor excerpt and full Spawn assembly are retained in
+`E:/elysium-work/codex/l0-p2-native-admission-20261012/world-producer-recovery.txt`
+(SHA2565eb39254d5041bcd66aa14d7f7ae31cf8a70e677469223ce271d42af3ea1ae66).
+The production CWorld and mover inputs remain faithful; these rejected combinations cannot
+prove a positive Door178/world observer. `Mover.NativeAdmissionRejectedInputs` now reaches
+actual candidates for unchanged door/door and door/world, requires ordered14/12-or13 rejection
+and absence of selected44. Receipt215021 records three real samples for each pair.
+
+The six manual material inputs now use actual SetSolid(2), preserving material/manifold/impact
+assertions (213207 passes4/4). Lifetime/Mirror/Swizzle retain the actual subject door and every
+history/178/order assertion with the same box geometry; opposing base0 entities use SetSolid(1)
+and real InitBrushPhysicsShadow100a6150. They prove native52 Dynamic/Sleeping and actual creation
+GameData, and after retirement repeat that lower producer to remint an incarnation (base virtual223
+returns false). Receipt214808 passes all three. DoorFeedback/MovingFirstContact retain their real
+door/linkedpeer receivers and authored pinned geometry with an admitted ordinary movable blocker;
+214109 passes both. No subject door movetype is rewritten to obtain contact.
+
+WorldContentsFilter now proves world masks, selected44, pause, retirement/recreation and world
+creation-owner epochs with ordinary base0 movable brush shadows. Origin-28 gives the unchanged
+ten-centimetre hull two centimetres of overlap; the former origin-35 left a five-centimetre gap
+and depended on DoorOpen movement. The ordinary fixture explicitly wakes the common body each
+host frame:215021 showed admitted28 but a settled sleeping/current/disabled constraint with zero
+active manifold points at.8. This is awake-only44 evidence; the sleeping friction-contact consumer
+disposition remains open before full P2. The actual func_button Spawn/move8 receiver is retained
+against a real ordinary movable blocker, including the original direct pusher-helper178 parent,
+callback-clock and retirement assertions. No new automatic226 claim replaces that baseline.
+
+Admission observation originally discarded every world endpoint via native-only IsCurrentOutput.
+The local observation validator now checks both native identity and world generation, current
+component/proxy/UniqueIdx, owning EngineWorld and live creation owner. It validates at consumption
+and at the GT drain so queued samples cannot outlive retirement. WorldContentsFilter requires
+real initial/recreated/new-owner candidate samples and fresh generations;215353 passes this test
+and both rejection pairs. Receipts214109/214808/215021 retain the failed assertions;214716 and
+215229 retain temporary compile errors corrected before the successful focused runs. These
+repairs do not close native trigger62 conversion, vehicle wheel production, higher68 or the
+physical contact-event consumer.
+
+Final repaired affected gate: build215437.398303Z passes;215527.829981Z passes53/53
+(ModelPhysics31, Mover21, CollisionRulesProduction1),0 failed/abstained and58 existing fixture
+warnings. It retains the original lifecycle/dual-contact/material/178/linkedpeer assertions,
+adds actual rejected mover candidates, and proves awake world44 plus world sample lifetime.
+Main acceptance/default/arena/arm gates remain independently owned; full P2 remains open.

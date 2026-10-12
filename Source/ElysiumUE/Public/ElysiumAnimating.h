@@ -17,6 +17,8 @@ struct FElysiumClipPhase;      // ElysiumAnimationIntent.h — one channel's pla
 class FElysiumAnimating : public FElysiumEntity
 {
 public:
+	//1008bfe0 is owned by L1 (audit row2419); native hook, not mutable virtual68 dispatch.
+	ElysiumCollisionRules::ENativeVeto NativeCollisionVetoPolicy() const override { return ElysiumCollisionRules::ENativeVeto::HigherLayer; }
 	// `skin` — a material family swap. One VtMB datamap record flagged both KEY and INPUT with a
 	// null inputFunc, so the keyvalue, the wire and `.skin =` are the same direct write
 	// (`docs/vtmb/entity_io.md`). Carried here for the whole chain; only the prop leaf paints with it.

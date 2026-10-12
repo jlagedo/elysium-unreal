@@ -4,6 +4,7 @@
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumPlayerWorldFixture.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMapEntities.h"
 #include "ElysiumContentPaths.h"
@@ -788,7 +789,16 @@ bool FElysiumSwitchCoupledTest::RunTest(const FString&)
 	Shared->InputTurnOn({}); //actual owner publication does not re-enable native constraint solving
 	ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(First->VPhysicsGetObject()))->SetBodyTransform(AliasContactPose,ETeleportType::TeleportPhysics);
 	static_cast<FElysiumPhysProp*>(First)->InputWake({});
-	TestTrue(TEXT("real native manager excludes reconstructed current alias through actual GameData relation"),NativeIgnoreProbe(First->VPhysicsGetObject(),Second->VPhysicsGetObject(),42.02));
+	ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,true);
+	TestFalse(TEXT("translated membership cannot suppress ordered predicate candidates in native manager"),NativeIgnoreProbe(First->VPhysicsGetObject(),Second->VPhysicsGetObject(),42.02));
+	const auto AdmissionSamples=ElysiumModelPhysics::TakeNativeAdmissions(*Fixture.World);
+	TestTrue(TEXT("actual reconstructed alias candidate rejects at retail late entity-pair arm"),AdmissionSamples.ContainsByPredicate([&](const auto& Sample)
+	{
+		return ((Sample.First.Actor==First->VPhysicsGetObject() && Sample.Second.Actor==Second->VPhysicsGetObject())
+			|| (Sample.Second.Actor==First->VPhysicsGetObject() && Sample.First.Actor==Second->VPhysicsGetObject()))
+			&& !Sample.Decision.bAllow && Sample.Decision.Arm==ElysiumCollisionRules::ENativeArm::EntityPair;
+	}));
+	ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,false);
 	FString ContactEvidence; const bool bExcludedContact=ElysiumModelPhysics::GetContactPoint(First->VPhysicsGetObject(),ContactPartner,&ContactEvidence);
 	AddInfo(FString::Printf(TEXT("excluded native alias contact: result=%d partner=%s evidence=%s first=%s second=%s former=%s"),bExcludedContact,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(ContactPartner)),*ContactEvidence,
 		*ElysiumModelPhysics::ComponentFor(First->VPhysicsGetObject())->GetComponentLocation().ToString(),*ElysiumModelPhysics::ComponentFor(Second->VPhysicsGetObject())->GetComponentLocation().ToString(),*ElysiumModelPhysics::ComponentFor(RestoredFormer.Actor)->GetComponentLocation().ToString()));
@@ -1020,6 +1030,288 @@ bool FElysiumSwitchConstraintRestoreFailureTest::RunTest(const FString&)
 	return true;
 }
 #endif
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeAdmissionTest, "Elysium.Substrate.ModelPhysics.NativeAdmission",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumNativeAdmissionTest::RunTest(const FString&)
+{
+	using namespace ElysiumCollisionRules;
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+	auto* Map = Fixture.SpawnMapActorDeferred(); Map->bStageOnly = true; Map->bStageWithoutCatalogue = true;
+	Map->FinishSpawning(FTransform::Identity);
+	for (int32 FrameIndex = 0; FrameIndex < 20 && !Map->IsRuntimeActive(); ++FrameIndex) Fixture.TestWorld.TickTestWorld(.02f);
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("native_admission");
+	FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+	//Real tutorial/hub core prepared geometry, through the production stage preparation.
+	for (const TCHAR* Name : {TEXT("admission_a"),TEXT("admission_b")})
+	{
+		auto Def = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/physics/bottle/bottle.mdl"),Name);
+		Def.Origin = FVector(5000,5000,5000); Defs.Defs.Add(Def);
+	}
+	FElysiumEntityDef AliasDef; AliasDef.Classname = TEXT("info_target"); AliasDef.TargetName = TEXT("admission_alias"); Defs.Defs.Add(AliasDef);
+	FElysiumEntityDef AdmissionPlayerDef; AdmissionPlayerDef.Classname = TEXT("player"); Defs.Defs.Add(AdmissionPlayerDef);
+	const FElysiumEntityDefs AdmissionDefs(Defs);
+	FElysiumStageSeat Seat; Seat.FeetCm = FVector(-1000,0,1000); FString Error;
+	if (!Map->RebuildStageWorld(MoveTemp(Defs),{},Seat,Error)) { AddError(Error); return false; }
+	for (int32 FrameIndex = 0; FrameIndex < 20 && !Map->IsRuntimeActive(); ++FrameIndex) Fixture.TestWorld.TickTestWorld(.02f);
+	auto* Entities = Map->GetEntityWorld();
+	auto* A = Entities->FindByName(TEXT("admission_a")); auto* B = Entities->FindByName(TEXT("admission_b"));
+	auto* Alias = Entities->FindByName(TEXT("admission_alias"));
+	if (!A || !B || !Alias || !TestTrue(TEXT("actual core native actors"),A->VPhysicsGetObject() && B->VPhysicsGetObject())) return false;
+	auto NativeA = ElysiumModelPhysics::CaptureIdentity(A->VPhysicsGetObject());
+	auto NativeB = ElysiumModelPhysics::CaptureIdentity(B->VPhysicsGetObject());
+	auto* ComponentA = ElysiumModelPhysics::ComponentFor(NativeA.Actor); auto* ComponentB = ElysiumModelPhysics::ComponentFor(NativeB.Actor);
+	auto* BodyA = ElysiumModelPhysics::Identity(ComponentA); auto* BodyB = ElysiumModelPhysics::Identity(ComponentB);
+	ComponentA->SetEnableGravity(false); ComponentB->SetEnableGravity(false);
+	ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,true);
+	ON_SCOPE_EXIT { ElysiumModelPhysics::ObserveNativeAdmission(*Fixture.World,false); };
+	double Clock = 10.;
+	auto Place = [&]()
+	{
+		BodyA->SetBodyTransform(FTransform(FQuat::Identity,FVector(5000,5000,5000)),ETeleportType::TeleportPhysics);
+		BodyB->SetBodyTransform(FTransform(FQuat::Identity,FVector(5001,5000,5000)),ETeleportType::TeleportPhysics);
+		BodyA->SetLinearVelocity(FVector::ZeroVector,false); BodyB->SetLinearVelocity(FVector::ZeroVector,false);
+		BodyA->WakeInstance(); BodyB->WakeInstance();
+	};
+	auto Observe = [&](const TCHAR* Label, ENativeArm Arm, bool bAllow, bool bPlace = true, TFunction<void()> AfterSnapshot = {}, uint8 ExpectedHooks = 0)
+	{
+		if (bPlace) Place();
+		ElysiumModelPhysics::TakeNativeAdmissions(*Fixture.World);
+		Entities->BeginNativePhysicsFrame(Clock,.02);
+		ElysiumModelPhysics::PreparePhysicsFrame(*Fixture.World,.02f,1.f,true);
+		const bool bMapTicking = Map->GameplayTickFunction.IsTickFunctionEnabled();
+		const bool bMapPrimaryTicking = Map->IsActorTickEnabled();
+		if (AfterSnapshot)
+		{
+			//Isolate the published buffer boundary: the ordinary map prephysics tick
+			//would otherwise publish a second, newer GT snapshot before StartPhysics.
+			Map->SetActorTickEnabled(false);
+			Map->GameplayTickFunction.SetTickFunctionEnable(false); AfterSnapshot();
+		}
+		TestTrue(TEXT("production native frame"),Fixture.TestWorld.TickTestWorld(.02f)); Entities->FinishNativePhysicsFrame(); Clock += .02;
+		if (AfterSnapshot)
+		{
+			Map->SetActorTickEnabled(bMapPrimaryTicking);
+			Map->GameplayTickFunction.SetTickFunctionEnable(bMapTicking);
+		}
+		const auto Samples = ElysiumModelPhysics::TakeNativeAdmissions(*Fixture.World);
+		int32 Count = 0;
+		for (const auto& Sample : Samples)
+			if ((Sample.First.Actor == NativeA.Actor && Sample.Second.Actor == NativeB.Actor)
+				|| (Sample.First.Actor == NativeB.Actor && Sample.Second.Actor == NativeA.Actor))
+			{
+				++Count;
+				auto ExpectedArm = Arm;
+				if (Sample.First.Actor != NativeA.Actor)
+				{
+					if (Arm == ENativeArm::OwnerA) ExpectedArm = ENativeArm::OwnerB;
+					if (Arm == ENativeArm::ContentsA) ExpectedArm = ENativeArm::ContentsB;
+					if (Arm == ENativeArm::VetoA) ExpectedArm = ENativeArm::VetoB;
+					if (Arm == ENativeArm::VetoB) ExpectedArm = ENativeArm::VetoA;
+					if (Arm == ENativeArm::OtherImmovableA) ExpectedArm = ENativeArm::OtherImmovableB;
+				}
+				TestEqual(Label,static_cast<int32>(Sample.Decision.Arm),static_cast<int32>(ExpectedArm));
+				TestEqual(TEXT("real candidate result"),Sample.Decision.bAllow,bAllow);
+				const uint8 OrientedHooks = Sample.First.Actor == NativeA.Actor ? ExpectedHooks :
+					Arm == ENativeArm::VetoB ? 0 : Arm == ENativeArm::VetoA ? 1 :
+					static_cast<uint8>(((ExpectedHooks & 1) << 1) | ((ExpectedHooks & 2) >> 1));
+				TestEqual(TEXT("actual candidate publishes exact higher hook disposition"),static_cast<int32>(Sample.Decision.HigherVetoHooks),static_cast<int32>(OrientedHooks));
+			}
+		TestTrue(Label,Count > 0);
+		if (Arm == ENativeArm::Allow && ExpectedHooks == 0 && (!bPlace || Clock < 10.03))
+		{
+			void* Partner = nullptr;
+			TestTrue(TEXT("accepted actual native solve retains selected pair contact44"),
+				ElysiumModelPhysics::GetContactPoint(NativeA.Actor,Partner) && Partner == NativeB.Actor);
+		}
+		if (Arm == ENativeArm::EntityPair)
+		{
+			void* Partner = nullptr;
+			TestFalse(TEXT("ordered pair rejection suppresses actual native contact44"),ElysiumModelPhysics::GetContactPoint(NativeA.Actor,Partner));
+		}
+		AddInfo(FString::Printf(TEXT("native_admission label=%s candidates=%d arm=%d allow=%d"),Label,Count,static_cast<int32>(Arm),bAllow));
+	};
+	Observe(TEXT("actual prepared baseline"),ENativeArm::Allow,true);
+	A->SetCollisionGroup(4); B->SetCollisionGroup(4);
+	Observe(TEXT("actual SP group rejection"),ENativeArm::Rules,false);
+	B->SetCollisionGroup(5);
+	Observe(TEXT("cached rejection re-admits after setter without teleport"),ENativeArm::Allow,true,false);
+	A->SetCollisionGroup(0); B->SetCollisionGroup(0);
+	//Two live worlds can mint equal indices. Epochs are globally minted by the real
+	//constructor; preserve that producer and also carry explicit GameData domain identity.
+	FElysiumEntityWorld OtherDomain(nullptr,nullptr);
+	FElysiumEntityDefs DomainDefs; DomainDefs.MapName = TEXT("native_other_domain");
+	for (int32 DomainIndex = 0; DomainIndex <= A->Handle.Index; ++DomainIndex)
+	{
+		FElysiumEntityDef DomainDef; DomainDef.Classname = TEXT("info_target");
+		DomainDef.TargetName = FString::Printf(TEXT("domain_%d"),DomainIndex); DomainDefs.Defs.Add(DomainDef);
+	}
+	OtherDomain.Load(MoveTemp(DomainDefs));
+	auto* OtherOwner = OtherDomain.FindByName(FString::Printf(TEXT("domain_%d"),A->Handle.Index));
+	if (!TestTrue(TEXT("actual live worlds mint equal indices with distinct epoch/domain"),OtherOwner
+		&& OtherOwner->Handle.Index == A->Handle.Index && OtherOwner->Handle.Epoch != A->Handle.Epoch)) return false;
+	OtherOwner->SetSolid(3); OtherOwner->SetCollisionGroup(4); A->SetCollisionGroup(4);
+	ElysiumModelPhysics::SetGameData(NativeB.Actor,*OtherOwner);
+	Observe(TEXT("real cross-domain GameData rebind reaches ordinary rules"),ENativeArm::Rules,false);
+	ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	A->SetCollisionGroup(0);
+	A->SetOwnerEntity(B->Handle);
+	Observe(TEXT("actual owner arm precedes rules"),ENativeArm::OwnerA,false);
+	A->SetOwnerEntity({});
+	A->SetParent(Alias,0); B->SetParent(Alias,0);
+	Observe(TEXT("real move-parent root equality"),ENativeArm::SameRoot,false);
+	A->ClearParent(); B->ClearParent();
+	A->SetMoveType(8,0); B->SetMoveType(8,0);
+	Observe(TEXT("real push movetypes reject before group rules"),ENativeArm::BothParentOrPush,false);
+	B->SetMoveType(7,0);
+	Place(); BodyB->PutInstanceToSleep(); BodyA->WakeInstance(); BodyA->SetLinearVelocity(FVector(1,0,0),false);
+	TestTrue(TEXT("cached pair actual sleeping other before publication"),!BodyB->IsInstanceAwake());
+	TestTrue(TEXT("cached pair actual awake opposing body before publication"),BodyA->IsInstanceAwake());
+	Observe(TEXT("cached rejection re-admits against actual sleeping other"),ENativeArm::Allow,true,false);
+	A->SetMoveType(7,0);
+	Entities->CollisionPairs().AddTranslated(NativeA.Actor,NativeB.Actor);
+	Observe(TEXT("real translated pair reaches candidate late arm"),ENativeArm::EntityPair,false);
+	ElysiumModelPhysics::SetGameFlags(NativeA,2); ElysiumModelPhysics::SetGameFlags(NativeB,2);
+	Observe(TEXT("native game words precede pair arm"),ENativeArm::BothGameFlags,false);
+	ElysiumModelPhysics::SetGameFlags(NativeA,0); ElysiumModelPhysics::SetGameFlags(NativeB,0);
+	Entities->CollisionPairs().RemoveTranslated(NativeA.Actor,NativeB.Actor);
+	Entities->CollisionPairs().AddDirect(NativeA.Actor,NativeB.Actor);
+	Observe(TEXT("actual raw pair distinct from translated"),ENativeArm::RawPair,false);
+	Entities->CollisionPairs().RemoveDirect(NativeA.Actor,NativeB.Actor);
+	ElysiumModelPhysics::SetContents(NativeA,0);
+	Observe(TEXT("actual native contents veto"),ENativeArm::ContentsA,false);
+	ElysiumModelPhysics::SetContents(NativeA,1);
+	Observe(TEXT("immutable published snapshot retains old word this step"),ENativeArm::Allow,true,true,[&]() { ElysiumModelPhysics::SetGameFlags(NativeA,2); ElysiumModelPhysics::SetGameFlags(NativeB,2); });
+	Observe(TEXT("next frame publishes new native words"),ENativeArm::BothGameFlags,false);
+	ElysiumModelPhysics::SetGameFlags(NativeA,0); ElysiumModelPhysics::SetGameFlags(NativeB,0);
+	ElysiumModelPhysics::SetGameData(NativeB.Actor,*A);
+	Entities->CollisionPairs().AddTranslated(NativeA.Actor,NativeB.Actor);
+	A->SetCollisionGroup(1); //sameGameData skips rules and the translated self relation
+	Observe(TEXT("same GameData early allow survives former broadphase prefilter"),ENativeArm::SameGameDataAllow,true);
+	Entities->CollisionPairs().AddDirect(NativeA.Actor,NativeB.Actor);
+	Observe(TEXT("same GameData raw relation rejects"),ENativeArm::SameGameDataRaw,false);
+	ElysiumModelPhysics::SetGameFlags(NativeA,0x8000);
+	Observe(TEXT("same GameData flag precedes raw relation"),ENativeArm::SameGameDataFlag,false);
+	ElysiumModelPhysics::SetGameFlags(NativeA,0); A->SetCollisionGroup(0);
+	Entities->CollisionPairs().RemoveDirect(NativeA.Actor,NativeB.Actor); Entities->CollisionPairs().RemoveTranslated(NativeA.Actor,NativeB.Actor);
+	ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	//Real registered player cached downcasts feed101914a0; object6 is the actual native setter.
+	auto* Player = Entities->FindPlayer();
+	if (!TestNotNull(TEXT("production registered player"),Player)) return false;
+	//The stage player has no higher-layer physical initialization yet. Produce the
+	//lower-layer solid prerequisite through its real setter before testing101914a0.
+	Player->SetSolid(3);
+	ElysiumModelPhysics::SetGameData(NativeB.Actor,*Player);
+	A->SpawnFlags |= 4;
+	Observe(TEXT("physics prop real combat marker veto"),ENativeArm::VetoA,false);
+	A->SpawnFlags &= ~4;
+	A->AddFlag2(1);
+	Observe(TEXT("physics prop real player and Flags2 veto"),ENativeArm::VetoA,false);
+	A->RemoveFlag2(1);
+	Observe(TEXT("adjacent player predicate exposes owned higher68 hook"),ENativeArm::Allow,true,true,{},2);
+	ElysiumModelPhysics::SetGameData(NativeA.Actor,*Player);
+	B->SpawnFlags |= 4; ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	Observe(TEXT("reverse real physics prop veto"),ENativeArm::VetoB,false,true,{},1);
+	B->SpawnFlags &= ~4; ElysiumModelPhysics::SetGameData(NativeA.Actor,*A);
+	Alias->VPhysicsSetObject(NativeA.Actor); Alias->SetCollisionGroup(1);
+	Observe(TEXT("foreign field alias keeps actual creation GameData group"),ENativeArm::Allow,true);
+	A->SetMoveType(8,0);
+	//Retire the earlier connected pair and publish a fresh real native incarnation.
+	//A shared cached island does not schedule its sleeping member as a new candidate.
+	FElysiumSavedPhysicsBody SleepingPartner;
+	if (!TestTrue(TEXT("capture sleeping candidate geometry"),ElysiumModelPhysics::Capture(NativeB.Actor,SleepingPartner))) return false;
+	ElysiumModelPhysics::Destroy(ComponentB);
+	if (!TestTrue(TEXT("fresh real sleeping candidate incarnation"),ElysiumModelPhysics::Restore(ComponentB,Entities->PhysicsSurfaces(),SleepingPartner,Error))) return false;
+	NativeB = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(ComponentB));
+	B->VPhysicsSetObject(NativeB.Actor); ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	Place(); //Restore overlap before selecting the sleeping-other candidate witness.
+	BodyB->PutInstanceToSleep();
+	BodyA->WakeInstance();
+	BodyA->SetLinearVelocity(FVector(1,0,0),false);
+	TestTrue(TEXT("actual other native body is sleeping before candidate publication"),!BodyB->IsInstanceAwake());
+	TestTrue(TEXT("opposing actual native body is awake for sleeping candidate"),BodyA->IsInstanceAwake());
+	Observe(TEXT("sleeping other still satisfies native52 moveability"),ENativeArm::Allow,true,false);
+	A->SetMoveType(7,0);
+	BodyA->PutInstanceToSleep(); BodyB->PutInstanceToSleep();
+	const float Mass = BodyA->GetBodyMass(); const FVector Velocity = BodyA->GetUnrealWorldVelocity();
+	A->SetCollisionGroup(4); A->SetCollisionGroup(4); A->SetSolidFlags(A->RetailSolidFlags);
+	TestTrue(TEXT("setter equality and object25 preserve sleep mechanics"),!BodyA->IsInstanceAwake() && BodyA->GetBodyMass() == Mass && BodyA->GetUnrealWorldVelocity() == Velocity);
+	A->SetCollisionGroup(0);
+	FElysiumSavedPhysicsBody SavedB;
+	TestTrue(TEXT("actual dynamic partner capture before static producer"),ElysiumModelPhysics::Capture(NativeB.Actor,SavedB));
+	ElysiumModelPhysics::Destroy(ComponentB);
+	TestTrue(TEXT("real selected model static environment producer"),ElysiumModelPhysics::CreateStaticModel(Cast<UStaticMeshComponent>(ComponentB),Entities->PhysicsSurfaces(),Error));
+	NativeB = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(ComponentB));
+	B->VPhysicsSetObject(NativeB.Actor); ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	A->SetMoveType(8,0);
+	Observe(TEXT("real static partner cannot satisfy OTHER native52"),ENativeArm::OtherImmovableA,false);
+	A->SetMoveType(7,0);
+	Observe(TEXT("adjacent dynamic against real static model admits"),ENativeArm::Allow,true);
+	A->SetMoveType(8,0);
+	Observe(TEXT("static rejection owns the soon-retired native constraint"),ENativeArm::OtherImmovableA,false);
+	const auto RetiredStaticPartner = NativeB;
+	ElysiumModelPhysics::Destroy(ComponentB);
+	TestTrue(TEXT("real dynamic reconstruction after static witness"),ElysiumModelPhysics::Restore(ComponentB,Entities->PhysicsSurfaces(),SavedB,Error));
+	NativeB = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(ComponentB));
+	B->VPhysicsSetObject(NativeB.Actor); ElysiumModelPhysics::SetGameData(NativeB.Actor,*B);
+	TestTrue(TEXT("shape/body replacement publishes a distinct native incarnation"),NativeB.Incarnation != RetiredStaticPartner.Incarnation);
+	Observe(TEXT("retired rejection cannot disable actual rebuilt geometry"),ENativeArm::Allow,true,false);
+	A->SetMoveType(7,0);
+	//Native typed archive roundtrip carries the current words, independent of authored recipe.
+	ElysiumModelPhysics::SetCallbackFlags(NativeA,0xaaaa1234); ElysiumModelPhysics::SetContents(NativeA,0x202400b);
+	FElysiumSavedPhysicsBody Saved;
+	TestTrue(TEXT("actual native capture"),ElysiumModelPhysics::Capture(NativeA.Actor,Saved));
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); Writer << Saved;
+	FElysiumSavedPhysicsBody Persisted; FMemoryReader Reader(Bytes,true); Reader << Persisted;
+	TestTrue(TEXT("native WORD16/DWORD18 archive"),Persisted.CurrentCallbackFlags == 0x1234 && Persisted.CurrentContents == 0x202400b);
+	Alias->VPhysicsSetObject(nullptr);
+	ElysiumModelPhysics::Destroy(ComponentA);
+	TestFalse(TEXT("retired native cannot mutate recycled semantic inputs"),ElysiumModelPhysics::SetContents(NativeA,1));
+	TestTrue(TEXT("native reconstruction restores current fields"),ElysiumModelPhysics::Restore(ComponentA,Entities->PhysicsSurfaces(),Persisted,Error));
+	const auto Restored = ElysiumModelPhysics::CaptureIdentity(ElysiumModelPhysics::ActorIdentity(ComponentA));
+	uint16 CallbackWord = 0; uint32 Contents = 0;
+	TestTrue(TEXT("restored native has new incarnation and exact words"),Restored.Incarnation != NativeA.Incarnation
+		&& ElysiumModelPhysics::GetCallbackFlags(Restored,CallbackWord) && CallbackWord == 0x1234
+		&& ElysiumModelPhysics::GetContents(Restored,Contents) && Contents == 0x202400b);
+	A->VPhysicsSetObject(Restored.Actor); ElysiumModelPhysics::SetGameData(Restored.Actor,*A);
+	A->SetCollisionGroup(4); B->SetCollisionGroup(4); A->AddFlag2(1); A->SetMoveType(8,3);
+	FElysiumMapSnapshot SemanticSnapshot; Entities->Freeze(SemanticSnapshot);
+	TArray<uint8> SemanticBytes; FMemoryWriter SemanticWriter(SemanticBytes,true);
+	FElysiumSaveArchive SemanticSave(SemanticWriter,FElysiumSaveVersion::Latest); SemanticSave << SemanticSnapshot;
+	FElysiumMapSnapshot SemanticPersisted; FMemoryReader SemanticReader(SemanticBytes,true);
+	FElysiumSaveArchive SemanticLoad(SemanticReader,FElysiumSaveVersion::Latest); SemanticLoad << SemanticPersisted;
+	const auto* EntityRow = SemanticPersisted.Entities.FindByPredicate([&](const auto& Row) { return Row.Index == A->Handle.Index; });
+	if (!TestNotNull(TEXT("actual semantic Entities archive row"),EntityRow)) return false;
+	for (const TPair<FName,int32>& Expected : {TPair<FName,int32>(TEXT("m_CollisionGroup"),4),TPair<FName,int32>(TEXT("m_fFlags2"),1),
+		TPair<FName,int32>(TEXT("m_MoveType"),8),TPair<FName,int32>(TEXT("m_MoveCollide"),3)})
+	{
+		const auto* Field = EntityRow->Fields.FindByPredicate([&](const auto& Item) { return Item.Key == Expected.Key; });
+		TestTrue(TEXT("actual retail SAVE field walk carries collision input"),Field && Field->Value.ToInt() == Expected.Value);
+	}
+	//Consume the archive through the real inactive-world restore, then observe the
+	//reconstructed native candidates using the restored semantic words.
+	SemanticPersisted.PhysicsBodies.Reset(); //Actual named Physics block bytes are authoritative.
+	FElysiumWorldServices AdmissionServices; AdmissionServices.Embodiment = Map;
+	Map->AdoptEntityWorldForTests(MakePimpl<FElysiumEntityWorld>(Map,nullptr,AdmissionServices));
+	Entities = Map->GetEntityWorld(); Entities->Load(FElysiumEntityDefs(AdmissionDefs));
+	if (!TestTrue(TEXT("actual semantic and Physics restore consumers"),Entities->ApplySnapshot(SemanticPersisted,42.) >= 0)) return false;
+	Entities->Activate(42.); Clock = 42.;
+	A = Entities->FindByName(TEXT("admission_a")); B = Entities->FindByName(TEXT("admission_b"));
+	if (!TestTrue(TEXT("actual reconstructed native owners"),A && B && A->VPhysicsGetObject() && B->VPhysicsGetObject())) return false;
+	TestEqual(TEXT("restored collision group"),A->CollisionGroup,4);
+	TestEqual(TEXT("restored Flags2"),A->EntityFlags2Word,1u);
+	TestEqual(TEXT("restored move type"),A->RetailMoveType,8);
+	TestEqual(TEXT("restored move collide"),A->RetailMoveCollide,3);
+	NativeA = ElysiumModelPhysics::CaptureIdentity(A->VPhysicsGetObject()); NativeB = ElysiumModelPhysics::CaptureIdentity(B->VPhysicsGetObject());
+	ComponentA = ElysiumModelPhysics::ComponentFor(NativeA.Actor); ComponentB = ElysiumModelPhysics::ComponentFor(NativeB.Actor);
+	BodyA = ElysiumModelPhysics::Identity(ComponentA); BodyB = ElysiumModelPhysics::Identity(ComponentB);
+	Observe(TEXT("restored semantic group rejects actual reconstructed candidate"),ENativeArm::Rules,false);
+	B->SetCollisionGroup(5);
+	Observe(TEXT("restored semantic setter re-admits cached native contact"),ENativeArm::Allow,true,false);
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsNativeTest, "Elysium.Substrate.ModelPhysics.NativeInputs",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)

@@ -11,6 +11,7 @@ public:
 	explicit FElysiumCollisionPairs(FElysiumEntityWorld& InWorld) : World(InWorld) {}
 	bool ContainsEntities(FElysiumEntityHandle First, FElysiumEntityHandle Second) const;
 	bool ContainsObjects(void* First, void* Second) const;
+	bool ContainsRawObjects(void* First, void* Second) const; //1002f1e0 raw-key arms, no object6 translation
 	bool AddTranslated(void* First, void* Second); //10158b40, object6 -> entity keys
 	bool RemoveTranslated(void* First, void* Second); //10158af0
 	bool AddDirect(void* First, void* Second); //10158c00, native keys

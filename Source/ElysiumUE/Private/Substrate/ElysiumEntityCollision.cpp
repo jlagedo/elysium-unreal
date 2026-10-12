@@ -437,6 +437,14 @@ void FElysiumEntity::CheckForUntouchOnSolidChange()
 	Owner->SetCheckUntouch(true);
 }
 
+void FElysiumEntity::SetCollisionGroup(int32 Group)
+{
+	//100aaa40: equality exits; new group is visible before current-object25.
+	if (CollisionGroup == Group) return;
+	CollisionGroup = Group;
+	if (void* Object = VPhysicsGetObject()) ElysiumModelPhysics::RecheckCollisionFilter(ElysiumModelPhysics::CaptureIdentity(Object));
+}
+
 void FElysiumEntity::SetSolid(int32 Type)
 {
 	// `FUN_100dc480` 0x100dc480 (`"CBaseEntity::SetSolid"` 0x1053dafc is the wrapper's scope-trace
@@ -460,8 +468,7 @@ void FElysiumEntity::SetSolid(int32 Type)
 		Stored = 6;
 	}
 	RetailSolidType = Stored;                                                      // 100dc4e7: the store
-	// `owner->m_pPhysicsObject` (`+0x36c`) non-NULL -> its slot 25 (`[vtbl+0x64]`). There is no vphysics
-	// object here (`vphysics.dll` is engine-replaced; the slot's name is UNRECOVERED), so the NULL arm.
+	if (void* Object = VPhysicsGetObject()) ElysiumModelPhysics::RecheckCollisionFilter(ElysiumModelPhysics::CaptureIdentity(Object));
 	UpdatePartitionMembership();                                                   // 100dc4fd -> 0x100ddc40
 	const bool bIsSolid = RetailIsSolid(RetailSolidType, RetailSolidFlags);       // 100dc502-100dc516
 	if (World != nullptr)
@@ -509,13 +516,12 @@ void FElysiumEntity::SetSolidFlags(uint16 Word)
 	}
 	if ((Changed & 0x4u) != 0)                                                     // 3. 100dc5b6 / 100dc5c3 / 100dc5c7
 	{
-		// `[coll+0x3c]->m_pPhysicsObject` (`+0x36c`) NULL -> `JZ 100dc5c3`; else `CALL [vtbl+0x64]` (slot 25,
-		// no args, result unused). No vphysics object exists here (engine-replaced; the slot's name is
-		// UNRECOVERED, `vphysics.dll` is not in the corpus), so the NULL arm.
+		void* Object = VPhysicsGetObject();
+		if (Object) ElysiumModelPhysics::RecheckCollisionFilter(ElysiumModelPhysics::CaptureIdentity(Object));
 		if (World != nullptr)
 		{
 			World->EmitRetailSite(*this, TEXT("solid_flags"), TEXT("FUN_100dc580"), 0x100dc5c3u, TEXT("branch"),
-				TEXT("arm=no_physics_object"));
+				Object ? TEXT("arm=object25") : TEXT("arm=no_physics_object"));
 		}
 	}
 	if ((Changed & 0xcu) != 0)                                                     // 4. 100dc5d5 / 100dc5d9 / 100dc5e0

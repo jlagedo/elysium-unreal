@@ -2511,6 +2511,55 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				Receiver->VPhysicsGetObject() != nullptr, Receiver->VPhysicsGetObjectList(&ListedReference, 1));
 			return true;
 		}
+		if (Action.Function == TEXT("SetCollisionGroup") || Action.Function == TEXT("ObserveNativeAdmission")
+			|| Action.Function == TEXT("NativeAdmission"))
+		{
+			FElysiumEntity* AdmissionReceiver = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			UWorld* AdmissionWorld = Host.GetWorld();
+			if (!AdmissionReceiver || AdmissionReceiver->IsDead() || !AdmissionWorld)
+			{ OutError = TEXT("native admission receiver/world is unavailable"); return false; }
+			FString AdmissionText;
+			if (Action.Function == TEXT("SetCollisionGroup"))
+			{
+				if (Action.Args.Num() != 1 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::Number)
+				{ OutError = TEXT("SetCollisionGroup takes [group number]"); return false; }
+				AdmissionReceiver->SetCollisionGroup(static_cast<int32>(Action.Args[0].Value.Number)); //100aaa40
+				AdmissionText = FString::Printf(TEXT("entity_call SetCollisionGroup done group=%d"),AdmissionReceiver->CollisionGroup);
+			}
+			else if (Action.Function == TEXT("ObserveNativeAdmission"))
+			{
+				if (Action.Args.Num() != 1 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::Bool)
+				{ OutError = TEXT("ObserveNativeAdmission takes [enabled bool]"); return false; }
+				ElysiumModelPhysics::ObserveNativeAdmission(*AdmissionWorld,Action.Args[0].Value.bBool);
+				ElysiumModelPhysics::TakeNativeAdmissions(*AdmissionWorld);
+				AdmissionText = FString::Printf(TEXT("entity_call ObserveNativeAdmission done enabled=%d"),Action.Args[0].Value.bBool);
+			}
+			else
+			{
+				if (Action.Args.Num() != 1 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::String)
+				{ OutError = TEXT("NativeAdmission takes [live partner name]"); return false; }
+				FElysiumEntity* AdmissionPartner = ElysiumArenaRunnerDetail::FindEntity(World,Action.Args[0].Value.String);
+				if (!AdmissionPartner || AdmissionPartner->IsDead() || !AdmissionReceiver->VPhysicsGetObject() || !AdmissionPartner->VPhysicsGetObject())
+				{ OutError = TEXT("NativeAdmission needs two current native bodies"); return false; }
+				int32 AdmissionCount = 0, AdmissionArm = -1;
+				bool bAdmissionAllow = false;
+				for (const auto& AdmissionSample : ElysiumModelPhysics::TakeNativeAdmissions(*AdmissionWorld))
+					if ((AdmissionSample.First.Actor == AdmissionReceiver->VPhysicsGetObject() && AdmissionSample.Second.Actor == AdmissionPartner->VPhysicsGetObject())
+						|| (AdmissionSample.Second.Actor == AdmissionReceiver->VPhysicsGetObject() && AdmissionSample.First.Actor == AdmissionPartner->VPhysicsGetObject()))
+					{
+						++AdmissionCount; AdmissionArm = static_cast<int32>(AdmissionSample.Decision.Arm);
+						bAdmissionAllow = AdmissionSample.Decision.bAllow;
+					}
+				void* AdmissionContactPartner = nullptr;
+				const bool bAdmissionContact = ElysiumModelPhysics::GetContactPoint(AdmissionReceiver->VPhysicsGetObject(),AdmissionContactPartner)
+					&& AdmissionContactPartner == AdmissionPartner->VPhysicsGetObject();
+				AdmissionText = FString::Printf(TEXT("entity_call NativeAdmission done observed=%d allow=%d arm=%d contact=%d candidates=%d"),
+					AdmissionCount > 0,bAdmissionAllow,AdmissionArm,bAdmissionContact,AdmissionCount);
+			}
+			FEvent& AdmissionDone = Events.AddDefaulted_GetRef(); StampEvent(AdmissionDone,World.NowSeconds());
+			AdmissionDone.Kind = ElysiumArenaRunnerDetail::ScriptKind(); AdmissionDone.Name = Action.Target; AdmissionDone.Text = MoveTemp(AdmissionText);
+			return true;
+		}
 		if (Action.Function == TEXT("GetVelocity") || Action.Function == TEXT("VPhysicsDestroyObject"))
 		{
 			FElysiumEntity* VelocityReceiver = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);

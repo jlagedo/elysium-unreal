@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumPhysicsBodyRecipe.h"
 #include "ElysiumEntityHandle.h"
+#include "ElysiumCollisionRules.h"
 class UStaticMeshComponent;
 class UPrimitiveComponent;
 class UElysiumBrushComponent;
@@ -58,6 +59,17 @@ namespace ElysiumModelPhysics
 	bool GetGameFlags(const FNativeOutput& Object, uint16& OutFlags);
 	bool SetGameFlags(const FNativeOutput& Object, uint32 Flags);
 	bool AddGameFlags(const FNativeOutput& Object, uint32 Flags);
+	bool GetCallbackFlags(const FNativeOutput& Object, uint16& OutFlags);
+	bool SetCallbackFlags(const FNativeOutput& Object, uint32 Flags); //26016d20, low WORD only
+	bool GetContents(const FNativeOutput& Object, uint32& OutContents);
+	bool SetContents(const FNativeOutput& Object, uint32 Contents); //260175f0, no wake/recheck
+	struct FNativeAdmissionSample
+	{
+		FNativeOutput First, Second;
+		ElysiumCollisionRules::FNativeDecision Decision;
+	};
+	void ObserveNativeAdmission(UWorld& World, bool bObserve);
+	TArray<FNativeAdmissionSample> TakeNativeAdmissions(UWorld& World);
 	inline bool GetGameFlags(void* Actor, uint16& OutFlags) { return GetGameFlags(CaptureIdentity(Actor), OutFlags); }
 	inline bool SetGameFlags(void* Actor, uint32 Flags) { return SetGameFlags(CaptureIdentity(Actor), Flags); }
 	inline bool AddGameFlags(void* Actor, uint32 Flags) { return AddGameFlags(CaptureIdentity(Actor), Flags); }

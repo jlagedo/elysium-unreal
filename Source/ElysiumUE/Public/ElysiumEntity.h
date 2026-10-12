@@ -7,6 +7,7 @@
 #include "ElysiumInteraction.h"
 #include "ElysiumNpcMindTypes.h"
 #include "ElysiumVariant.h"
+#include "ElysiumCollisionRules.h"
 
 struct FElysiumEntityDef;
 struct FElysiumClassDesc;
@@ -195,6 +196,8 @@ public:
 	// Lifted here at story 8 wave 2 from the four per-class spellings (the NPC's, the director's,
 	// the controller's and the Tzimisce runner's). The meaning of bits 4 / 0x10 / 0x20 is unrecovered.
 	uint32  EntityFlags2Word = 0;
+	//GT-only policy selection, never virtual68/gameplay dispatch on the physics thread.
+	virtual ElysiumCollisionRules::ENativeVeto NativeCollisionVetoPolicy() const { return ElysiumCollisionRules::ENativeVeto::Base; }
 	void AddFlag2(uint32 Bits) { EntityFlags2Word |= Bits; }
 	void RemoveFlag2(uint32 Bits) { EntityFlags2Word &= ~Bits; }
 	FVector Velocity = FVector::ZeroVector;

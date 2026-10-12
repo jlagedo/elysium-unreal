@@ -1056,9 +1056,10 @@ void FElysiumEntity::SetMoveType(int32 MoveType, int32 MoveCollide)
 		if (void* Object = VPhysicsGetObject())
 		{
 			//The object callback reads creation GameData, independently of mutable field aliases.
-			//Use the existing no-wake shape adapter; full P2 pair/filter callbacks remain open.
+			//Current GameData supplies the no-wake shape adapter before candidate snapshot refresh.
 			if (auto* Owner = ElysiumModelPhysics::GameDataForObject(Object))
 				ElysiumModelPhysics::GateStaticModelCollision(ElysiumModelPhysics::ComponentFor(Object), !Owner->IsRetailNotSolid());
+			ElysiumModelPhysics::RecheckCollisionFilter(ElysiumModelPhysics::CaptureIdentity(Object));
 		}
 	}
 }

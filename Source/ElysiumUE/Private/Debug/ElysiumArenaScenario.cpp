@@ -2248,6 +2248,8 @@ const TArray<FString>& EntityCallAllowlist()
 		TEXT("VPhysicsDestroyObject"),
 		// P1 current-reference calls take one named live producer or null, never native recipes.
 		TEXT("VPhysicsSetObject"), TEXT("VPhysicsSwapObject"),
+		// Native admission witness: actual setter and immutable candidate/contact observations.
+		TEXT("SetCollisionGroup"), TEXT("ObserveNativeAdmission"), TEXT("NativeAdmission"),
 		// L0.entity_core.monster-template: slot 70 `IsMonster()` on a live entity, no arguments.
 		TEXT("IsMonster"),
 		// L0.entity_core.save-block-framework (L0-r029): the engine's calls into CServerGameDLL's save

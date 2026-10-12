@@ -692,8 +692,12 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// SwitchAndConstraintRestore retains switch source cycle/playback clocks and native
 	// constraint owner/typed endpoint state, including Physics GameData identity. This breaking
 	// record layout moves the disposable floor; earlier PhysicsFieldPresence payloads are refused.
-	TestEqual(TEXT("the disposable floor carries switch clocks and native constraint restore state"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::SwitchAndConstraintRestore);
+	// NativeCollisionAdmission then inserts the current native callback WORD and contents DWORD
+	// mid-record in the Physics block, and joins the base semantic filter SAVE fields. These words
+	// are ungated under the disposable policy, so schema55 is refused before deserialization.
+	// ModelPhysics.NativeAdmission proves their typed archive and real restore/admission consumer.
+	TestEqual(TEXT("the disposable floor carries native collision admission state"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::NativeCollisionAdmission);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -775,8 +779,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `ComfortSweep` appends the comfort sweep's `m_flNextComfortCheckTime` and the NPC's
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
-	TestEqual(TEXT("the newest schema explicitly carries switch clocks and native constraint restore state"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::SwitchAndConstraintRestore);
+	TestEqual(TEXT("the newest schema explicitly carries native collision admission state"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NativeCollisionAdmission);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

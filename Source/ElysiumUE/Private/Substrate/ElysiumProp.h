@@ -29,6 +29,7 @@ class FElysiumProp : public FElysiumEntity
 {
 public:
 	bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
+	ElysiumCollisionRules::ENativeVeto NativeCollisionVetoPolicy() const override { return ElysiumCollisionRules::ENativeVeto::EntityPairs; }
 	virtual ~FElysiumProp() override;
 	void ReleaseForRemoval() override;
 	void OnPostRestore(FElysiumEntityWorld& InWorld) override;

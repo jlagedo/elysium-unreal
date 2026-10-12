@@ -151,11 +151,9 @@ FVector SizeUnits = FVector::ZeroVector;
  *  unsettled word. */
 float Field_0x1ddc = 0.f;
 
-/** `+0x0368 m_CollisionGroup`, a `CBaseEntity` word below the NPC table. The ONE input of slot 91
- *  `ShouldCollide` (`0x100b4de0`). Nothing in this runtime writes it yet: this substrate's collision
- *  is Unreal's channel set on the body, so the retail group number has no producer. Declared so the
- *  rule has the word it reads rather than a guess. Retail's `COLLISION_GROUP_DEBRIS` is 1. */
+/** +0x368, constructor0 and100aaa40. Read by trace91 and native1002f1e0 rules77. */
 int32 CollisionGroup = 0;
+void SetCollisionGroup(int32 Group);
 
 /** `DAT_1072cb48`, the file-static filter word `FireBullets` writes before it traces
  *  (`flags | 0x1000`) and every trace in the pass reads. A global in retail, carried per NPC here

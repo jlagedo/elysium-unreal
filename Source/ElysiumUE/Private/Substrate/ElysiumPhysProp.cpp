@@ -22,7 +22,12 @@
 
 // Console gate for prop_physics simulation. 1 (default) simulates the body as a Chaos rigid body;
 bool FElysiumPhysProp::ShouldIgnoreCollision(FElysiumEntity* Other)
-{ return World && World->CollisionPairs().ContainsEntities(Handle,Other ? Other->Handle : FElysiumEntityHandle::Invalid()); } //1008bfe0 ->10158b90
+{
+	//101914a0: actual cached combat/player downcasts, then the base animation pair service.
+	if (Other && Other->AsCombatCharacter() && (SpawnFlags & 4)) return true;
+	if (Other && Other->AsPlayer() && (EntityFlags2Word & 1)) return true;
+	return World && World->CollisionPairs().ContainsEntities(Handle,Other ? Other->Handle : FElysiumEntityHandle::Invalid());
+}
 
 // 0 leaves it standing as a static, non-solid mesh (visual parity, like a prop_dynamic). Read in
 // the leaf's Spawn — takes effect next load.

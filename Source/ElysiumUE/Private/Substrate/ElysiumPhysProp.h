@@ -33,6 +33,7 @@ public:
 
 	virtual void Spawn() override;
 	bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
+	ElysiumCollisionRules::ENativeVeto NativeCollisionVetoPolicy() const override { return ElysiumCollisionRules::ENativeVeto::PhysicsProp; }
 	virtual void Kill() override;
 	virtual void VPhysicsDestroyObject() override;
 	void OnPhysicsActorRetired() override { bSimulating = false; bRestoredNativePhysics = false; }

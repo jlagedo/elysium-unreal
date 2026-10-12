@@ -53,6 +53,20 @@ namespace ElysiumDoorCaseTests
 		Wrapper.ForwardErrorMessages(Test);
 		return false;
 	}
+	bool InitOrdinaryBrush(FAutomationTestBase& Test, FElysiumEntity& Entity)
+	{
+		//The same authored box and native shadow controller can belong to a base
+		//entity. Its real constructor move0 is admitted against push movers/world;
+		//two actual move8 doors are rejected by1002f1e0 before this contact observer.
+		Test.TestEqual(TEXT("ordinary brush retains actual base constructor move0"),Entity.GetMoveType(),0);
+		Entity.SetSolid(1);
+		if (!Test.TestTrue(TEXT("real lower shadow initialization for ordinary authored brush"),Entity.InitBrushPhysicsShadow())) return false;
+		const auto* Native = ElysiumModelPhysics::Identity(Entity.Body);
+		if (!Native || !Native->GetPhysicsActor()) return false;
+		const auto State = Native->GetPhysicsActor()->GetGameThreadAPI().ObjectState();
+		return Test.TestTrue(TEXT("ordinary native52 is genuinely movable"),State == Chaos::EObjectStateType::Dynamic || State == Chaos::EObjectStateType::Sleeping)
+			&& Test.TestTrue(TEXT("ordinary native creation GameData is its real entity"),ElysiumModelPhysics::GameDataForObject(Entity.VPhysicsGetObject()) == &Entity);
+	}
 	void AdvanceNativeFrames(FElysiumEntityWorld& World, FTestWorldWrapper& Wrapper, double Until, float* PreparedSeconds = nullptr,
 		const TFunction<void(const TCHAR*)>& FrameObserver = {})
 	{
@@ -427,8 +441,10 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); WorldDef.TargetName = TEXT("world_owner"); Defs.Defs.Add(MoveTemp(WorldDef));
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
-			FElysiumEntityDef Def; Def.Classname = TEXT("func_door"); Def.TargetName = Index == 0 ? TEXT("common_door") : TEXT("clip_door");
-			Def.Origin = FVector(Index * 200.f - 35.f, 0, 1000); Def.Model = Index + 1;
+			FElysiumEntityDef Def; Def.Classname = TEXT("info_target"); Def.TargetName = Index == 0 ? TEXT("common_door") : TEXT("clip_door");
+			//The former door at -35 moved into the world. Base0 has no door movement:
+			//-28 places its unchanged ten-centimetre hull two centimetres into the wall.
+			Def.Origin = FVector(Index * 200.f - 28.f, 0, 1000); Def.Model = Index + 1;
 			Def.Keys.Add(TEXT("model"), FString::Printf(TEXT("*%d"), Def.Model));
 			Def.Keys.Add(TEXT("speed"), TEXT("20")); Def.Keys.Add(TEXT("lip"), TEXT("0")); Def.Keys.Add(TEXT("wait"), TEXT("-1"));
 			FElysiumConvexHull Hull;
@@ -438,41 +454,46 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World(Owner, nullptr, Services.Bundle()); World.Load(MoveTemp(Defs)); World.Activate(0.);
 		auto* WorldOwner = World.FindByName(TEXT("world_owner"));
-		auto* Common = World.FindByName(TEXT("common_door"))->AsDoorBase();
-		auto* Clip = World.FindByName(TEXT("clip_door"))->AsDoorBase();
+		auto* Common = World.FindByName(TEXT("common_door"));
+		auto* Clip = World.FindByName(TEXT("clip_door"));
+		if (!Common || !Clip || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*Common) || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*Clip)) return false;
 		if (!TestNotNull(TEXT("common authored door creates native shadow"), Common ? Common->VPhysicsGetObject() : nullptr)
 			|| !TestNotNull(TEXT("clip authored door creates native shadow"), Clip ? Clip->VPhysicsGetObject() : nullptr)) return false;
 		for (UElysiumWorldCollisionComponent* Component : Collider->Bodies)
 			TestTrue(TEXT("world native creation GameData is actual worldspawn"), ElysiumModelPhysics::GameDataForObject(ElysiumModelPhysics::ActorIdentity(Component)) == WorldOwner);
 		TestEqual(TEXT("profiles remain identical across native pair filtering"), Collider->Bodies[0]->GetCollisionProfileName(), Collider->Bodies[1]->GetCollisionProfileName());
-		int32 CommonWorldBlocked = 0, ClipBlocked = 0;
-		World.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
-		{
-			if (Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=pusher_blocked")))
+		//World8/static rejects a real push door8 before masks. Ordinary dynamic
+		//base0 bodies preserve the legitimate world-mask/contact/lifetime observer.
+		ElysiumModelPhysics::ObserveNativeAdmission(*EngineWorld,true);
+		auto KeepCommonAwake=[&](const TCHAR* Phase) { if (FCString::Strcmp(Phase,TEXT("after_begin"))==0) ElysiumModelPhysics::Wake(Common->Body); };
+		//This is an awake contact observer, as the former moving door was. A settled
+		//sleeping static contact has no active manifold points and cannot prove44.
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.8,nullptr,KeepCommonAwake);
+		const auto InitialAdmissions=ElysiumModelPhysics::TakeNativeAdmissions(*EngineWorld);
+		void* InitialWorldActor=ElysiumModelPhysics::ActorIdentity(Collider->Bodies[0]);
+		uint64 InitialWorldGeneration=0; int32 CommonAdmissions=0;
+		for (const auto& Sample : InitialAdmissions)
+			if (Sample.First.Actor==InitialWorldActor || Sample.Second.Actor==InitialWorldActor)
 			{
-				AddInfo(Event.Text);
-				if (Event.Entity == Common->Handle && Event.Text.Contains(TEXT("other=world_owner"))) ++CommonWorldBlocked;
-				if (Event.Entity == Clip->Handle) ++ClipBlocked;
+				++CommonAdmissions; InitialWorldGeneration=Sample.First.Actor==InitialWorldActor?Sample.First.Incarnation:Sample.Second.Incarnation;
+				TestTrue(TEXT("actual common world candidate admitted"),Sample.Decision.bAllow);
 			}
-		});
-		Common->InputOpen(FElysiumEntityHandle::Invalid()); Clip->InputOpen(FElysiumEntityHandle::Invalid());
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .8);
-		TestTrue(TEXT("common native world contact reaches226 and actual178 with worldspawn"), CommonWorldBlocked > 0);
-		TestEqual(TEXT("rejected clip-only pair never becomes native44 Blocked partner"), ClipBlocked, 0);
-		TestEqual(TEXT("clip-only input permits native door arrival"), Clip->State(), FElysiumDoorBase::EToggleState::AtTop);
+		TestTrue(TEXT("actual common world candidates observed"),CommonAdmissions>0);
+		void* CommonPartner = nullptr;
+		TestTrue(TEXT("ordinary dynamic common contact selects actual creation-owned worldspawn"),ElysiumModelPhysics::GetContactPoint(Common->VPhysicsGetObject(),CommonPartner)
+			&& ElysiumModelPhysics::GameDataForObject(CommonPartner) == WorldOwner);
 		void* ClipPartner = nullptr;
 		TestFalse(TEXT("disabled cached clip constraint cannot manufacture native44"), ElysiumModelPhysics::GetContactPoint(Clip->VPhysicsGetObject(), ClipPartner));
 		// Slot237's settled live Flags producer changes admission at the next real solve.
 		Clip->Flags |= 0x2000;
 		ElysiumModelPhysics::Wake(Clip->Body);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .86);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .86,nullptr,KeepCommonAwake);
 		TestTrue(TEXT("live NPC mask admits the actual dual-clip native contact"), ElysiumModelPhysics::GetContactPoint(Clip->VPhysicsGetObject(), ClipPartner));
 		TestTrue(TEXT("newly admitted clip contact retains world creation owner"), ElysiumModelPhysics::GameDataForObject(ClipPartner) == WorldOwner);
 		Clip->Flags &= ~0x2000;
 		ElysiumModelPhysics::Wake(Clip->Body);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .92);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .92,nullptr,KeepCommonAwake);
 		TestFalse(TEXT("live base mask retires formerly admitted native contact"), ElysiumModelPhysics::GetContactPoint(Clip->VPhysicsGetObject(), ClipPartner));
-		void* CommonPartner = nullptr;
 		TestTrue(TEXT("common contact survives the real completed frame"), ElysiumModelPhysics::GetContactPoint(Common->VPhysicsGetObject(), CommonPartner));
 		ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld, 0.f, 1.f, true);
 		void* PausedPartner = nullptr;
@@ -480,6 +501,8 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		UElysiumWorldCollisionComponent* CommonComponent = Collider->Bodies[0];
 		void* OldWorldActor = ElysiumModelPhysics::ActorIdentity(CommonComponent);
 		CommonComponent->DestroyPhysicsState();
+		for (const auto& Sample : ElysiumModelPhysics::TakeNativeAdmissions(*EngineWorld))
+			TestTrue(TEXT("queued admission cannot retain retired world endpoint"),Sample.First.Actor!=OldWorldActor && Sample.Second.Actor!=OldWorldActor);
 		TestNull(TEXT("native retirement clears old world owner mapping immediately"), ElysiumModelPhysics::GameDataForObject(OldWorldActor));
 		TestNull(TEXT("temporarily missing native world actor cannot alias null GameData query"), ElysiumModelPhysics::GameDataForObject(nullptr));
 		TestFalse(TEXT("retired native world contact is removed before another solve"), ElysiumModelPhysics::GetContactPoint(Common->VPhysicsGetObject(), CommonPartner));
@@ -488,7 +511,17 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		CommonComponent->CreatePhysicsState();
 		TestTrue(TEXT("actual native recreation retains component creation owner"), ElysiumModelPhysics::GameDataForObject(ElysiumModelPhysics::ActorIdentity(CommonComponent)) == WorldOwner);
 		ElysiumModelPhysics::Wake(Common->Body);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .98);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .98,nullptr,KeepCommonAwake);
+		int32 RecreatedAdmissions=0;
+		void* RecreatedWorldActor=ElysiumModelPhysics::ActorIdentity(CommonComponent);
+		for (const auto& Sample : ElysiumModelPhysics::TakeNativeAdmissions(*EngineWorld))
+			if (Sample.First.Actor==RecreatedWorldActor || Sample.Second.Actor==RecreatedWorldActor)
+			{
+				++RecreatedAdmissions;
+				const uint64 Generation=Sample.First.Actor==RecreatedWorldActor?Sample.First.Incarnation:Sample.Second.Incarnation;
+				TestTrue(TEXT("recreated world sample carries fresh generation"),Generation!=InitialWorldGeneration);
+			}
+		TestTrue(TEXT("recreated world has actual admission observations"),RecreatedAdmissions>0);
 		TestTrue(TEXT("recreated real world body supplies a fresh qualifying contact"), ElysiumModelPhysics::GetContactPoint(Common->VPhysicsGetObject(), CommonPartner)
 			&& ElysiumModelPhysics::GameDataForObject(CommonPartner) == WorldOwner);
 		World.SetAiTraceSink({});
@@ -500,29 +533,39 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		World.Teardown();
 		FElysiumEntityDefs NewEpoch; NewEpoch.MapName = Payload->MapName;
 		FElysiumEntityDef NewWorldDef; NewWorldDef.Classname = TEXT("worldspawn"); NewWorldDef.TargetName = TEXT("new_world_owner"); NewEpoch.Defs.Add(MoveTemp(NewWorldDef));
-		FElysiumEntityDef NewDoorDef; NewDoorDef.Classname = TEXT("func_door"); NewDoorDef.TargetName = TEXT("new_common_door"); NewDoorDef.Model = 1; NewDoorDef.Origin = FVector(-35,0,1000);
+		FElysiumEntityDef NewDoorDef; NewDoorDef.Classname = TEXT("info_target"); NewDoorDef.TargetName = TEXT("new_common_door"); NewDoorDef.Model = 1; NewDoorDef.Origin = FVector(-28,0,1000);
 		NewDoorDef.Keys.Add(TEXT("model"), TEXT("*1")); NewDoorDef.Keys.Add(TEXT("speed"), TEXT("20")); NewDoorDef.Keys.Add(TEXT("lip"), TEXT("0")); NewDoorDef.Keys.Add(TEXT("wait"), TEXT("-1"));
 		FElysiumConvexHull NewHull;
 		for (float X : { -10.f, 10.f }) for (float Y : { -10.f, 10.f }) for (float Z : { -10.f, 10.f }) NewHull.Vertices.Emplace(X,Y,Z);
 		NewDoorDef.Hulls.Add(NewHull); NewEpoch.Defs.Add(MoveTemp(NewDoorDef));
 		World.Load(MoveTemp(NewEpoch)); World.Activate(0.);
 		FElysiumEntity* NewWorldOwner = World.FindByName(TEXT("new_world_owner"));
-		auto* NewCommon = World.FindByName(TEXT("new_common_door"))->AsDoorBase();
+		auto* NewCommon = World.FindByName(TEXT("new_common_door"));
+		if (!NewCommon || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*NewCommon)) return false;
 		TestTrue(TEXT("new world receiver has a different semantic epoch"), NewWorldOwner && NewWorldOwner->Handle != OutgoingOwner);
 		TestTrue(TEXT("persistent native world geometry gains only the new creation handle"), ElysiumModelPhysics::GameDataForObject(ElysiumModelPhysics::ActorIdentity(CommonComponent)) == NewWorldOwner);
-		int32 NewWorldBlocked = 0;
-		World.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
-		{
-			if (Event.Entity == NewCommon->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=pusher_blocked"))
-				&& Event.Text.Contains(TEXT("other=new_world_owner"))) ++NewWorldBlocked;
-		});
-		NewCommon->InputOpen(FElysiumEntityHandle::Invalid());
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .3);
-		TestTrue(TEXT("fresh actual native contact dispatches178 with the rebuilt world receiver"), NewWorldBlocked > 0);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .3,nullptr,[&](const TCHAR* Phase) { if (FCString::Strcmp(Phase,TEXT("after_begin"))==0) ElysiumModelPhysics::Wake(NewCommon->Body); });
+		int32 NewEpochAdmissions=0;
+		for (const auto& Sample : ElysiumModelPhysics::TakeNativeAdmissions(*EngineWorld))
+			if (Sample.First.Actor==ElysiumModelPhysics::ActorIdentity(CommonComponent) || Sample.Second.Actor==ElysiumModelPhysics::ActorIdentity(CommonComponent))
+			{
+				++NewEpochAdmissions;
+				const uint64 Generation=Sample.First.Actor==ElysiumModelPhysics::ActorIdentity(CommonComponent)?Sample.First.Incarnation:Sample.Second.Incarnation;
+				TestTrue(TEXT("new owner epoch cannot reuse outgoing admission generation"),Generation!=InitialWorldGeneration);
+			}
+		TestTrue(TEXT("new owner epoch has real world admission observations"),NewEpochAdmissions>0);
+		ElysiumModelPhysics::ObserveNativeAdmission(*EngineWorld,false);
+		void* RebuiltWorldPartner = nullptr;
+		TestTrue(TEXT("fresh actual native44 selects the rebuilt world receiver"),ElysiumModelPhysics::GetContactPoint(NewCommon->VPhysicsGetObject(),RebuiltWorldPartner)
+			&& ElysiumModelPhysics::GameDataForObject(RebuiltWorldPartner) == NewWorldOwner);
 		World.SetAiTraceSink({});
-		// CBaseButton's actual mover Spawn/native producer inherits generic178. Its shipped
-		// DONTMOVE flag avoids inventing button motion; native contact supplies feedback input.
+		//Keep actual button Spawn/move8 and the pusher helper's generic178 receiver. The
+		//opposing ordinary movable brush is admitted; a static world is not.
 		NewCommon->Kill();
+		FElysiumEntityDef BlockerDef; BlockerDef.Classname=TEXT("info_target"); BlockerDef.TargetName=TEXT("generic_movable_blocker");
+		BlockerDef.Model=3; BlockerDef.Origin=FVector(-10,0,1000); BlockerDef.Keys.Add(TEXT("model"),TEXT("*3")); BlockerDef.Hulls.Add(NewHull);
+		FElysiumEntity* ButtonBlocker=World.Resolve(World.SpawnRuntimeEntity(MoveTemp(BlockerDef)));
+		if (!ButtonBlocker || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*ButtonBlocker)) return false;
 		FElysiumEntityDef ButtonDef; ButtonDef.Classname=TEXT("func_button"); ButtonDef.TargetName=TEXT("generic_blocked_button");
 		ButtonDef.Model=2; ButtonDef.Origin=FVector(-35,0,1000); ButtonDef.Keys.Add(TEXT("model"),TEXT("*2"));
 		ButtonDef.Keys.Add(TEXT("spawnflags"),TEXT("1")); ButtonDef.Hulls.Add(NewHull);
@@ -535,8 +578,8 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FVector ButtonContactTarget(-28,0,1000); Button->SetAbsOrigin(ButtonContactTarget); Button->UpdatePhysicsShadowToCurrentPosition(0.f);
 		ElysiumDoorCaseTests::AdvanceNativeFrames(World,TestWorld,.36);
 		void* ButtonPartner=nullptr;
-		if (!TestTrue(TEXT("button's real native44 contact is creation-owned worldspawn"),ElysiumModelPhysics::GetContactPoint(Button->VPhysicsGetObject(),ButtonPartner)
-			&& ElysiumModelPhysics::GameDataForObject(ButtonPartner)==NewWorldOwner)) return false;
+		if (!TestTrue(TEXT("button's real native44 contact is creation-owned movable blocker"),ElysiumModelPhysics::GetContactPoint(Button->VPhysicsGetObject(),ButtonPartner)
+			&& ElysiumModelPhysics::GameDataForObject(ButtonPartner)==ButtonBlocker)) return false;
 		Button->SetParent(OldParent,0);
 		auto RecordBlocked=[](FElysiumEntity& Receiver,FElysiumEntity* Other)
 		{ Receiver.World->EmitRetailSite(Receiver,TEXT("blocked_parent_contract"),TEXT("CBaseEntity::Blocked"),0x100a4d40u,TEXT("callback"),Other?Other->TargetName:TEXT("null")); };
@@ -551,13 +594,13 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		World.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
 		{
 			if (Event.Kind==TEXT("retail_site") && Event.Text.Contains(TEXT("tag=blocked_parent_contract")))
-			{ BlockedOrder.Add(Event.Name); TestTrue(TEXT("178 retains original creation-owned world partner"),Event.Text.Contains(TEXT("new_world_owner"))); }
+			{ BlockedOrder.Add(Event.Name); TestTrue(TEXT("178 retains original creation-owned movable partner"),Event.Text.Contains(TEXT("generic_movable_blocker"))); }
 		});
 		FVector ButtonSolved; ElysiumModelPhysics::GetShadowPosition(Button->VPhysicsGetObject(),&ButtonSolved,nullptr);
 		FVector ButtonDisplaced=ButtonSolved+FVector(40,0,0); Button->SetAbsOrigin(ButtonDisplaced); Button->Velocity=FVector(20,0,0);
 		Button->LocalTime=1.f; Button->StartFrameLocalTime=0.f; Button->PhysicsMoveDoneTime=0.f;
 		Button->VPhysicsUpdatePusher(Button->VPhysicsGetObject()); World.SetAiTraceSink({});
-		TestEqual(TEXT("actual226 reaches generic178 then live authored parent"),BlockedOrder.Num(),2);
+		TestEqual(TEXT("actual pusher helper reaches generic178 then live authored parent"),BlockedOrder.Num(),2);
 		if (BlockedOrder.Num()==2) { TestEqual(TEXT("installed178 first"),BlockedOrder[0],FString(TEXT("generic_blocked_button"))); TestEqual(TEXT("live+254 parent follows, not old parent or cleared+25c"),BlockedOrder[1],FString(TEXT("blocked_new_parent"))); }
 		TestTrue(TEXT("actual178 callback distinguishes authored and move parents"),Button->ParentHandle==NewParent->Handle && !Button->MoveParent.IsSet());
 		TestEqual(TEXT("captured correction overwrites callback clock write"),Button->LocalTime,0.f);
@@ -582,7 +625,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FElysiumEntityDefs Defs; Defs.MapName = TEXT("__native_door_feedback__");
 		for (int32 Model = 1; Model <= 3; ++Model)
 		{
-			FElysiumEntityDef Def; Def.Classname = TEXT("func_door"); Def.TargetName = Model == 2 ? TEXT("blocker") : TEXT("door_group");
+			FElysiumEntityDef Def; Def.Classname = Model == 2 ? TEXT("info_target") : TEXT("func_door"); Def.TargetName = Model == 2 ? TEXT("blocker") : TEXT("door_group");
 			Def.Origin = FVector(Model == 1 ? 0. : Model == 2 ? -16. : 1000., 0., 1000.); Def.Model = Model;
 			Def.Keys.Add(TEXT("model"), FString::Printf(TEXT("*%d"), Model));
 			Def.Keys.Add(TEXT("speed"), TEXT("10")); Def.Keys.Add(TEXT("wait"), TEXT("0.5"));
@@ -606,6 +649,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FElysiumDoorBase* Peer = nullptr;
 		World.ForEachNamed(TEXT("door_group"), [&](FElysiumEntity& Entity) { if (&Entity != Subject) Peer = Entity.AsDoorBase(); });
 		FElysiumDoorBase* Door = Subject ? Subject->AsDoorBase() : nullptr;
+		if (!Blocker || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*Blocker)) return false;
 		if (!TestNotNull(TEXT("authored START_OPEN sliding door resolves"), Door) || !TestNotNull(TEXT("linked authored door resolves"), Peer) || !TestNotNull(TEXT("actual blocker creates native brush"), Blocker ? Blocker->VPhysicsGetObject() : nullptr)) return false;
 		TestEqual(TEXT("sliding START_OPEN produces literal state0"), Door->State(), FElysiumDoorBase::EToggleState::AtTop);
 		TestEqual(TEXT("linked peer begins open before native Blocked"), Peer->State(), FElysiumDoorBase::EToggleState::AtTop);
@@ -1019,7 +1063,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FElysiumEntityDefs Defs; Defs.MapName = TEXT("__native_contact_lifetime__");
 		auto AddBody = [&Defs,&TransformTarget](const TCHAR* Name, int32 Model, const FVector& Origin)
 		{
-			FElysiumEntityDef Def; Def.Classname = TEXT("func_door"); Def.TargetName = Name;
+			FElysiumEntityDef Def; Def.Classname = Model == 1 ? TEXT("func_door") : TEXT("info_target"); Def.TargetName = Name;
 			Def.Origin = TransformTarget(Origin); Def.Model = Model; Def.Contents = 1;
 			Def.Keys.Add(TEXT("model"), FString::Printf(TEXT("*%d"), Model));
 			Def.Keys.Add(TEXT("speed"), TEXT("10")); Def.Keys.Add(TEXT("wait"), Model == 1 ? TEXT("0.5") : TEXT("-1"));
@@ -1039,6 +1083,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		FElysiumEntity* Subject = World.FindByName(TEXT("subject"));
 		FElysiumEntity* First = World.FindByName(TEXT("first"));
 		FElysiumEntity* Second = World.FindByName(TEXT("second"));
+		if (!First || !Second || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*First) || !ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*Second)) return false;
 		if (!Subject || !First || !Second || !TestNotNull(TEXT("authored subject creates native brush"), Subject->VPhysicsGetObject())) return false;
 		auto MoveTarget = [&TransformTarget](FElysiumEntity& Entity, FVector Position)
 		{
@@ -1240,6 +1285,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		MoveTarget(*Second, FVector(-19,0,1000));
 		Evidence = AdvanceObserved(TEXT("second_rebirth"), .35);
 		TestTrue(TEXT("retired separated contact returns as a later observed birth"), Evidence.bPresent && Evidence.Selected == Second);
+		const auto RetiringSecond=ElysiumModelPhysics::CaptureIdentity(Second->VPhysicsGetObject());
 		Second->VPhysicsDestroyObject(); Evidence = Observe(TEXT("second_retired"));
 		TestTrue(TEXT("native body retirement reveals the older surviving partner"), Evidence.bPresent && Evidence.Selected == First);
 		MoveTarget(*First, FVector(0,22.8,1000));
@@ -1250,7 +1296,8 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		Evidence = AdvanceObserved(TEXT("outside_skin"), .45);
 		TestFalse(TEXT("outside skin does not manufacture a contact from cached allocation"), Evidence.bPresent);
 		// Recreate through the actual recipe, then admit both physical partners in one native step.
-		Second->CreateVPhysics();
+		if (!ElysiumDoorCaseTests::InitOrdinaryBrush(*this,*Second)) return false;
+		TestTrue(TEXT("real ordinary brush reconstruction remints native incarnation"),ElysiumModelPhysics::CaptureIdentity(Second->VPhysicsGetObject()).Incarnation!=RetiringSecond.Incarnation);
 		MoveTarget(*First, FVector(0,100,1000)); MoveTarget(*Second, FVector(-100,0,1000));
 		AdvanceObserved(TEXT("same_step_clear"), .50);
 		MoveTarget(*First, FVector(0,19,1000)); MoveTarget(*Second, FVector(-19,0,1000));
@@ -2645,6 +2692,9 @@ bool FElysiumNativeMaterialEffectTest::RunTest(const FString&)
 		void* Actor=ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor=ElysiumModelPhysics::ActorIdentity(Floor);
 		ElysiumModelPhysics::SetGameData(Actor,*Dynamic); ElysiumModelPhysics::SetGameData(FloorActor,*FloorEntity);
 		Dynamic->VPhysicsSetObject(Actor); FloorEntity->VPhysicsSetObject(FloorActor);
+		//Manual bbox installation leaves info_target's semantic solid at NONE.
+		//Produce the bbox admission input through the real lower-layer setter.
+		Dynamic->SetSolid(2); FloorEntity->SetSolid(2);
 		Body->SetEnableGravity(false);
 		if (bReserved)
 		{
@@ -2809,6 +2859,7 @@ bool FElysiumNativeRawMaterialEffectTest::RunTest(const FString&)
 	void* Actor = ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor = ElysiumModelPhysics::ActorIdentity(Floor);
 	ElysiumModelPhysics::SetGameData(Actor,*Dynamic); ElysiumModelPhysics::SetGameData(FloorActor,*FloorEntity);
 	Dynamic->VPhysicsSetObject(Actor); FloorEntity->VPhysicsSetObject(FloorActor);
+	Dynamic->SetSolid(2); FloorEntity->SetSolid(2); //real semantic bbox input for manually installed native geometry
 	Body->SetEnableGravity(false);
 	ElysiumModelPhysics::Identity(Body)->SetLinearVelocity(FVector(0,0,-600),false);
 	ElysiumRawMaterialTests::FMechanics BodyInitial, FloorInitial;
@@ -2926,6 +2977,7 @@ bool FElysiumNativeMaterialAssociationTest::RunTest(const FString&)
 	void* Actor = ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor = ElysiumModelPhysics::ActorIdentity(Floor);
 	ElysiumModelPhysics::SetGameData(Actor,*Dynamic); ElysiumModelPhysics::SetGameData(FloorActor,*FloorEntity);
 	Dynamic->VPhysicsSetObject(Actor); FloorEntity->VPhysicsSetObject(FloorActor);
+	Dynamic->SetSolid(2); FloorEntity->SetSolid(2); //real semantic bbox input for manually installed native geometry
 	Body->SetEnableGravity(false);
 	const TArray<FVector> SemanticVertices = {FVector(-100,-100,5),FVector(100,-100,5),FVector(100,100,5),FVector(-100,100,5)};
 	if (!TestTrue(TEXT("immutable authored semantic query installation on actual identity"),ElysiumModelPhysics::ObserveSemanticTriangles(*Floor,SemanticVertices,{0,1,2,0,2,3},{7,7},Error)))
@@ -2989,6 +3041,7 @@ bool FElysiumNativeMaterialAssociationConvexTest::RunTest(const FString&)
 		if (!TestTrue(TEXT("convex fixture actual dynamic native body"),ElysiumModelPhysics::CreateBbox(Body,Surfaces,Recipe,false,Error))) return false;
 		void* Actor = ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor = ElysiumModelPhysics::ActorIdentity(Floor);
 		ElysiumModelPhysics::SetGameData(Actor,*Dynamic); Dynamic->VPhysicsSetObject(Actor); Body->SetEnableGravity(false);
+		Dynamic->SetSolid(2); //manual info_target bbox requires its actual semantic solid producer
 		const TArray<FVector> Vertices = {FVector(-100,-100,5),FVector(100,-100,5),FVector(100,100,5),FVector(-100,100,5)};
 		if (!TestTrue(TEXT("world generation-fenced source model0 plane query"),ElysiumModelPhysics::ObserveSemanticTriangles(*Floor,Vertices,{0,1,2,0,2,3},{7,11},Error,true))) { AddError(Error); return false; }
 		ElysiumModelPhysics::Identity(Body)->SetLinearVelocity(ModelFrame.TransformVectorNoScale(FVector(0,0,-600)),false);
@@ -3024,6 +3077,71 @@ bool FElysiumNativeMaterialAssociationConvexTest::RunTest(const FString&)
 		AddInfo(FString::Printf(TEXT("SEMANTIC_CONVEX_SUMMARY,case=%d,distinctSelected=%d,competingPoints=%d"),CaseIndex,ReachedSelectors.Num(),CompetingPoints));
 		ElysiumModelPhysics::Destroy(Body);
 	}
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoverNativeRejectedInputs,
+	"Elysium.Substrate.Mover.NativeAdmissionRejectedInputs", GElysiumMoverTestFlags)
+
+bool FElysiumMoverNativeRejectedInputs::RunTest(const FString& Parameters)
+{
+	FTestWorldWrapper Fixture;
+	if (!ElysiumDoorCaseTests::OpenEngineWorld(Fixture,this)) return false;
+	UWorld* EngineWorld=Fixture.GetTestWorld();
+	AActor* Owner=ElysiumDoorResyncTests::SpawnMoverOwner(this,EngineWorld);
+	if (!Owner) return false;
+	auto* Payload=NewObject<UElysiumMapCollisionPayload>(); Payload->MapName=TEXT("__native_rejected_movers__");
+	FElysiumCollisionHull WorldHull;
+	for (float X : {-20.f,20.f}) for (float Y : {-20.f,20.f}) for (float Z : {-20.f,20.f}) WorldHull.Vertices.Emplace(X+1000.f,Y,Z+1000.f);
+	Payload->AuthorWorldBody(3,{WorldHull},true);
+	if (!TestTrue(TEXT("real rejection world convex cooks"),Payload->CreatePhysicsMeshes())) return false;
+	auto* Collider=EngineWorld->SpawnActor<AElysiumWorldCollisionActor>();
+	if (!Collider || !TestEqual(TEXT("real world static body installed"),Collider->AuthorFromPayload(Payload),1)) return false;
+	FElysiumEntityDefs Defs; Defs.MapName=Payload->MapName;
+	FElysiumEntityDef WorldDef; WorldDef.Classname=TEXT("worldspawn"); WorldDef.TargetName=TEXT("world_owner"); Defs.Defs.Add(MoveTemp(WorldDef));
+	for (int32 Index=0;Index<3;++Index)
+	{
+		FElysiumEntityDef Def; Def.Classname=TEXT("func_door"); Def.TargetName=FString::Printf(TEXT("door_%d"),Index);
+		Def.Model=Index+1; Def.Origin=FVector(Index==2?1000.f:Index*19.f,0,1000);
+		Def.Keys.Add(TEXT("model"),FString::Printf(TEXT("*%d"),Def.Model));
+		Def.Keys.Add(TEXT("speed"),TEXT("20")); Def.Keys.Add(TEXT("lip"),TEXT("0")); Def.Keys.Add(TEXT("wait"),TEXT("-1"));
+		FElysiumConvexHull Hull;
+		for (float X : {-10.f,10.f}) for (float Y : {-10.f,10.f}) for (float Z : {-10.f,10.f}) Hull.Vertices.Emplace(X,Y,Z);
+		Def.Hulls.Add(Hull); Defs.Defs.Add(MoveTemp(Def));
+	}
+	FElysiumRecordingServices Services; FElysiumEntityWorld World(Owner,nullptr,Services.Bundle()); World.Load(MoveTemp(Defs)); World.Activate(0.);
+	auto* First=World.FindByName(TEXT("door_0")); auto* Second=World.FindByName(TEXT("door_1")); auto* AgainstWorld=World.FindByName(TEXT("door_2"));
+	if (!First || !Second || !AgainstWorld) return false;
+	for (FElysiumEntity* Door : {First,Second,AgainstWorld})
+	{
+		TestEqual(TEXT("actual door Spawn retains retail move8"),Door->GetMoveType(),8);
+		if (!TestNotNull(TEXT("actual door Spawn creates native shadow"),Door->VPhysicsGetObject())) return false;
+	}
+	void* WorldActor=ElysiumModelPhysics::ActorIdentity(Collider->Bodies[0]);
+	TestTrue(TEXT("actual world native creation GameData is worldspawn"),ElysiumModelPhysics::GameDataForObject(WorldActor)==World.FindByName(TEXT("world_owner")));
+	ElysiumModelPhysics::ObserveNativeAdmission(*EngineWorld,true);
+	ElysiumDoorCaseTests::AdvanceNativeFrames(World,Fixture,.05);
+	const auto Samples=ElysiumModelPhysics::TakeNativeAdmissions(*EngineWorld);
+	ElysiumModelPhysics::ObserveNativeAdmission(*EngineWorld,false);
+	int32 DoorPairs=0, WorldPairs=0;
+	for (const auto& Sample : Samples)
+	{
+		auto IsPair=[&](void* A,void* B) { return (Sample.First.Actor==A && Sample.Second.Actor==B) || (Sample.First.Actor==B && Sample.Second.Actor==A); };
+		if (IsPair(First->VPhysicsGetObject(),Second->VPhysicsGetObject()))
+		{
+			++DoorPairs; TestFalse(TEXT("actual door/door candidate rejected"),Sample.Decision.bAllow);
+			TestTrue(TEXT("door/door reaches ordered both-push arm"),Sample.Decision.Arm==ElysiumCollisionRules::ENativeArm::BothParentOrPush);
+		}
+		if (IsPair(AgainstWorld->VPhysicsGetObject(),WorldActor))
+		{
+			++WorldPairs; TestFalse(TEXT("actual door/world candidate rejected"),Sample.Decision.bAllow);
+			TestTrue(TEXT("door/world reaches ordered native52 immovable arm"),Sample.Decision.Arm==ElysiumCollisionRules::ENativeArm::OtherImmovableA || Sample.Decision.Arm==ElysiumCollisionRules::ENativeArm::OtherImmovableB);
+		}
+	}
+	TestTrue(TEXT("real door/door candidate observed"),DoorPairs>0); TestTrue(TEXT("real door/world candidate observed"),WorldPairs>0);
+	void* Partner=nullptr;
+	TestFalse(TEXT("rejected door/door produces no selected44"),ElysiumModelPhysics::GetContactPoint(First->VPhysicsGetObject(),Partner));
+	TestFalse(TEXT("rejected door/world produces no selected44"),ElysiumModelPhysics::GetContactPoint(AgainstWorld->VPhysicsGetObject(),Partner));
+	AddInfo(FString::Printf(TEXT("NATIVE_REJECTED_INPUTS,doorPairs=%d,worldPairs=%d"),DoorPairs,WorldPairs));
 	return true;
 }
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -279,6 +279,7 @@ public:
 	void OnPostRestore(FElysiumEntityWorld& InWorld) override;
 	void OnRuntimeCollisionChanged() override;
 	bool ShouldIgnoreCollision(FElysiumEntity* Other) override;
+	ElysiumCollisionRules::ENativeVeto NativeCollisionVetoPolicy() const override { return ElysiumCollisionRules::ENativeVeto::EntityPairs; }
 	void OnRuntimeModelAdmitted() override;
 	UElysiumEntityQueryBox* QueryBody() const { return QueryBox; }
 	UPrimitiveComponent* GetCollisionQueryBody() const override;

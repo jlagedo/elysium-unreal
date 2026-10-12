@@ -1,0 +1,28 @@
+{
+  "name": "l0_native_collision_admission",
+  "about": "D02/P2 partial native candidate witness: actual prepared core bottle bodies, real SetCollisionGroup reject/re-admit through cached Chaos contact without teleport, immutable candidate arm observations and selected native44 contact response. Trigger62 conversion, higher68 policy and physical event consumers remain open.",
+  "stage": "arena", "seed": 1, "duration": 1,
+  "player": {"at": "start"},
+  "rows": [
+    {"classname": "prop_physics", "name": "admission_a", "at": [5000,5000,3000], "keys": {"model": "models/scenery/physics/bottle/bottle.mdl", "spawnflags": "1"}},
+    {"classname": "prop_physics", "name": "admission_b", "at": [5001,5000,3000], "keys": {"model": "models/scenery/physics/bottle/bottle.mdl", "spawnflags": "1"}}
+  ],
+  "script": [
+    {"t": 0.05, "do": "entity_call", "target": "admission_a", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.05, "do": "entity_call", "target": "admission_b", "function": "SetCollisionGroup", "args": [4]},
+    {"t": 0.06, "do": "entity_call", "target": "admission_a", "function": "ObserveNativeAdmission", "args": [true]},
+    {"t": 0.1, "do": "fire", "target": "admission_a", "input": "Wake"},
+    {"t": 0.1, "do": "fire", "target": "admission_b", "input": "Wake"},
+    {"t": 0.2, "do": "entity_call", "target": "admission_a", "function": "NativeAdmission", "args": ["admission_b"]},
+    {"t": 0.22, "do": "entity_call", "target": "admission_b", "function": "SetCollisionGroup", "args": [5]},
+    {"t": 0.22, "do": "entity_call", "target": "admission_a", "function": "ObserveNativeAdmission", "args": [true]},
+    {"t": 0.23, "do": "fire", "target": "admission_a", "input": "Wake"},
+    {"t": 0.23, "do": "fire", "target": "admission_b", "input": "Wake"},
+    {"t": 0.27, "do": "entity_call", "target": "admission_a", "function": "NativeAdmission", "args": ["admission_b"]},
+    {"t": 0.3, "do": "entity_call", "target": "admission_a", "function": "ObserveNativeAdmission", "args": [false]}
+  ],
+  "expect": [
+    {"label": "real_group_reject", "who": "admission_a", "kind": "script", "match": "NativeAdmission done observed=1 allow=0 arm=21 contact=0", "by": 0.3},
+    {"label": "cached_group_readmit_response", "who": "admission_a", "kind": "script", "match": "NativeAdmission done observed=1 allow=1 arm=28 contact=1", "by": 0.4}
+  ]
+}
