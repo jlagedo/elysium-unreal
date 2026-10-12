@@ -437,7 +437,7 @@ namespace ElysiumTransitionState
 					TransitionStateSite(Data.Sites, TEXT("transition_row"), GRowsFn, 0x101a3c40u, TEXT("transfer"),
 						FString::Printf(TEXT("id=%d classname=%s arm=player rows=%d"), Row.Id, *Row.Classname, Rows));
 				}
-				// FUN_100f6ce0 (the post-restore flush over DAT_10703668's callbacks): unported here.
+				Destination.PurgeEntityRemovals(); //101a3c40: after each admitted player row.
 			}
 
 			// Pass 3: every other selected row with an entity.
@@ -510,7 +510,7 @@ namespace ElysiumTransitionState
 							Data.TransferredEntities.Add(E->Handle); // FUN_1011a580
 						}
 					}
-					// FUN_100f6ce0: unported here (see pass 2).
+					Destination.PurgeEntityRemovals(); //101a3c40: after each admitted ordinary row.
 				}
 				SeekRow(Row.Location + Row.Size); // the stream advanced past this row's data
 			}

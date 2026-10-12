@@ -846,3 +846,16 @@ are closed observations beside the existing query-shape word. Native ModelShadow
 checks selected cook, current/controller mechanics, actual232 target versus solved pose, public
 compilation callbacks and pre-release retirement. Integrated parent motion/cadence, P2, P3,
 generic type1 failure and remaining stale model metadata stay open; this record cannot close P1.
+
+
+`l0_physics_object_contract` is the joined physics-object-contract-1/-6 witness: real native
+SetObject/Swap overwrite/null/list membership, moving velocity and optional outputs, current
+body flags, hidden aliases, resolved-parent studio bodies, genuine studio3/no-binary and
+static/bbox controls. One host typed save/reset/reload transaction checks independently restored
+native fields before first think; borrowed225 proves retirement. The ModelPhysics family joins
+actual admitted malformed type1 native failure, current developer/map-string controls, pending
+queue/save state, clean/dirty saved pose cache, release-time carriers/lights and callback append
+order. Malformed classifier3 only tests classification; genuine no-binary remains the accepted
+model-shadow path. The sequential expectation list follows event chronology. This is integrated
+bounded P1 evidence, not full P1:36 metadata admissions, P2/P3/I2/Break and generic E2/D09 listener
+stores remain open. Native saved state uses disposable schema53/floor53.

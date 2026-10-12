@@ -5,6 +5,30 @@ parked work appended to L0 briefs. The [delivery map](delivery-map.tsv) is exhau
 level; mixed briefs retain their L0 portion and list their higher-layer consumers separately.
 No retail core function is removed from L0 merely because a later layer calls it.
 
+## Removal recipient reconciliation — 2026-10-12
+
+The creator packet implements selected base180 order and deferred native failure removal,
+not every recipient. Exact recovery: `docs/vtmb/entity_io.md` and the retained
+`E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/listener-primary.md`.
+
+- L2 shared act-store insertion102ca2a0 via101f8620 case7/type2 and L4 death102bf340 /
+  StartTask102a1910 own RemoveExternalActs102ca630/102ca460. Remove every matching owner
+  before base flags/native225; no callback or LawEventBus substitute. Pending hooks registered.
+- L4 navigation owns listener102ea600, registration102ea450. Exact entry writer remains
+  unrecovered. L4 Goal owns its actual this+450 listener, registration102cd650/removal102cdb70;
+  exact callback output is unrecovered, so no invented callback edge is registered.
+- L2 derived18010327790 must recover its cleanup/base call. Existing stub is not base parity.
+- PhysicsAnimlink delete proxy1014ec70 can queue another owner; construction1014ebd0 is known,
+  actual reached endpoint producer and L1/L4/D09 ownership remain unresolved. It is not a
+  categorical higher hook or an IVP mechanism prerequisite.
+- CNotify Add100f8780/target40/delete100f8a40 and Aim membership100f71c0/copy100f6b00/
+  delete100f69b0 remain L0 E2/D09 obligations. Constraint pair wiring is unrecovered.
+  Selected creator inputs produce neither flag; this does not establish global unreachability.
+
+Generic Kill100acf90 remains immediate and open E2. Physics save-handler10044a90 removes
+owner association metadata; epoch-resolved native save rows replace that mechanism without
+recreating its storage layout. Native func_brush223 producer remains unrecovered/open P1/P3.
+
 Before closing an affected L0 service, identify the actual caller/callee or named data field,
 verify/register the upward hook in `../hooks.tsv` when there is a runtime call, and attach this
 obligation to the recipient layer's story or explicit backlog. A data/content handoff need not

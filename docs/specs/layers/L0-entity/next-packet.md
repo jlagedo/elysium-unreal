@@ -1,26 +1,25 @@
-# Next bounded packet — P1 generic creation and remaining caller reconciliation
+# Next bounded packet — remaining P1 producer and metadata reconciliation
 
-Read goal.md/checkpoint.md and active delivery/service maps. Current flags receipt:
-E:/elysium-work/codex/l0-p1-observed-flags-20261011/acceptance-checkpoint.json.
-P1 remains active. Reuse accepted hidden/model-shadow/static/velocity/current word/native
-archive walks and witnesses; do not rewalk1002e0a0/10191510/installed flags/native save.
+Read goal.md/checkpoint.md and active delivery/service maps. Reuse accepted creator, body,
+material, shadow, velocity, flags, native archive and removal walks. Creator receipt:
+E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/acceptance-checkpoint.json.
+Do not repeat selected type1 failure/Oceanhouse/debug/null-body or Brush Hide recovery.
 
-Return a compact precode packet identifying the first actual missing P1 observable contract
-in generic type1 creation failure/debug/removal and its reached callers. Compare existing
-adapter arms with retained retail behavior; name observer, missing output/order/state and
-real same/lower producer. Reconcile other writer CPhysBox1004e500 only if reached P1 core
-requires its native producer; otherwise retain explicit later disposition. Reconcile36 core
-metadata entries against actual prepared paths/admission, not a whole-corpus refresh.
+P1 remains active. Identify the first missing production contract among other body-flag
+writers, CPhysBox1004e500 and36 remaining core metadata rows. Verify actual callers, prepared
+path/admission and native producer requirements before coding; no corpus-wide refresh.
+Native func_brush223 producer remains unrecovered: retain explicit P1/P3 disposition and
+recover only if needed by the selected contract. Break remains unclosed.10151c00 impact
+reader is later I2, currently logging; flag/archive tests do not prove impact gameplay.
 
-If generic arms already satisfy contracts, retain concrete evidence and proceed to the
-integrated P1 closing witness/remaining mapped requirements. No internal mechanism/layout/
-allocator/byte-exact prerequisite, arbitrary fallback or higher-layer gameplay. The10151c00
-impact consumer belongs to later I2 with its actual event/formulas; current flag tests do not
-close it. Native save/travel and lifetime remain required. Break remains unclosed.
+Selected QueueRemove/base180/drain/cache proof does not close E2: generic Kill100acf90
+remains immediate, CNotify/Aim/PhysicsAnimlink wiring unresolved, higher recipients pending.
+Full landmark/travel/restore and P2/P3 integration remain required. No IVP layout, topology,
+allocator or solver reconstruction. Unreal services preserve observed rules and sequencing.
 
-Name mapped rows, consumers/producers, frames/units/clocks/formulas/order/failure/lifetime,
-native archive, exact unknowns, allowed files and real positive/negative/lifecycle witnesses.
-Verify installed public APIs and actual fixture producer before assertions. Recover only
-missing facts. One fresh Sol High worker/run, fork none, no nested workers/staging/commit/push.
-Stop for main precode review before implementation. Freeze then main independent gates,
+Return a compact precode packet with mapped rows, real observers/producers/callers,
+units/frames/clocks/formulas/order/failure/save/lifetime, exact unknowns, allowed files,
+actual positive/negative/lifecycle witnesses and stop boundary. Verify installed public APIs
+and fixture production before assertions. One fresh Sol High worker/run, fork none,
+no nested agents/commit/push. Main review before implementation; freeze, independent gates,
 exact-path local commit/checkpoint before next run. No owner decision pending.

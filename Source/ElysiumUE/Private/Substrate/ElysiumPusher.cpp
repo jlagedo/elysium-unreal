@@ -1,6 +1,8 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
 #include "Substrate/ElysiumModelPhysics.h"
+#include "Substrate/ElysiumRetailConVars.h"
+#include "DrawDebugHelpers.h"
 #include "ElysiumBrushComponent.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumCollisionRules.h"
@@ -597,8 +599,10 @@ void FElysiumEntity::PhysicsParent(float FrameInterval)
 
 bool FElysiumEntity::InitBrushPhysicsShadow()
 {
-	if (!World || !Body || !Def || !bEdictAttached || IsRetailNotSolid()) return false;
+	if (!bEdictAttached) return false; //100a5ad0: rejected Setup preserves the previous object.
 	VPhysicsDestroyObject(); //InitSetup100a5ad0; Relink100b3b00 is profiling only
+	if (GetSolid() == 0) return false; //100a6150 tests solid0 only AFTER admitted Setup225.
+	if (!World || !Body || !Def) return false; //host creation inputs, not a retail failed object.
 	FElysiumPhysicsBodyRecipe Recipe;
 	Recipe.Kind = EElysiumPhysicsRecipeKind::Brush;
 	Recipe.BrushSolidity = static_cast<uint8>(Body->GetSolidity());
@@ -606,9 +610,39 @@ bool FElysiumEntity::InitBrushPhysicsShadow()
 	//PhysModelParseSolid1002e210 copies1046ecb4; a brush has no studio solid block.
 	for (const FElysiumConvexHull& Hull : Def->Hulls) Recipe.BrushHulls.Add(Hull.Vertices);
 	FString Error;
-	if (!ElysiumModelPhysics::CreateBrush(Body, World->PhysicsSurfaces(), Recipe, Error))
+	bool bNativeAttempted = false;
+	if (!ElysiumModelPhysics::CreateBrush(Body, World->PhysicsSurfaces(), Recipe, Error, &bNativeAttempted))
 	{
 		UE_LOG(LogTemp, Error, TEXT("%s brush shadow creation: %s"), *DebugString(), *Error);
+		//100a62b7: the source model classification owns this arm, never native availability
+		// or an error-string guess. Host input/deployment errors are not a failed retail object.
+		if (bNativeAttempted && World->ModelTableType(ModelIndex) == FElysiumEntityWorld::ModelTypeBrush)
+		{
+			const bool bDeveloper = ElysiumRetailConVars::DeveloperDiagnosticsEnabled();
+			if (bDeveloper)
+			{
+				const FVector DiagnosticAngles = GetAbsAngles();
+				const FVector DiagnosticOrigin = GetAbsOrigin();
+				const FString Text = FString::Printf(TEXT("%s: BAD COLLISION DATA"), *DebugString());
+				if (UWorld* NativeWorld = Body->GetWorld())
+				{
+					DrawDebugString(NativeWorld, DiagnosticOrigin, Text, nullptr, FColor::Red, 0.f);
+					const FQuat Rotation = ElysiumModelPhysics::SourceRotation(DiagnosticAngles);
+					DrawDebugBox(NativeWorld, DiagnosticOrigin + Rotation.RotateVector((CollMins + CollMaxs) * 1.27),
+						(CollMaxs - CollMins) * 1.27, Rotation, FColor::Red, false, 0.f);
+				}
+				World->EmitRetailSite(*this, TEXT("brush_shadow_diagnostic"), TEXT("VPhysicsInitShadow"), 0x100a6150u,
+					TEXT("text_then_bounds"), FString::Printf(TEXT("text=%s origin=%s angles=%s mins=%s maxs=%s"),
+						*Text, *DiagnosticOrigin.ToString(), *DiagnosticAngles.ToString(), *CollMins.ToString(), *CollMaxs.ToString()));
+			}
+			//Q_stristr100036d0(literal,current-map): empty needle returns null.
+			const FString& CurrentMap = World->MapName();
+			const bool bMapMatch = !CurrentMap.IsEmpty() && FString(TEXT("sm_oceanhouse_2")).Contains(CurrentMap, ESearchCase::IgnoreCase);
+			World->EmitRetailSite(*this, TEXT("brush_shadow_failure"), TEXT("VPhysicsInitShadow"), 0x100a6150u,
+				TEXT("native_null"), FString::Printf(TEXT("modeltype=1 developer=%d map_match=%d remove=%d"),
+					bDeveloper, bMapMatch, !bMapMatch));
+			if (!bMapMatch) QueueRemove(); //101cd940: latch/180/name/append, never immediate gameplay119.
+		}
 		return false;
 	}
 	void* Object = ElysiumModelPhysics::ActorIdentity(Body);

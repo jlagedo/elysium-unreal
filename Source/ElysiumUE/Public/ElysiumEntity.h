@@ -360,7 +360,7 @@ public:
 	void PhysicsTouchTriggers(const FVector* OldOriginCm = nullptr);
 	void PhysicsRelinkChildren(float Interval);
 	// `m_iEFlags` (+0x268), every bit but `EFL_DORMANT` (`0x2`, carried by `bEflDormant` above) and
-	// `EFL_KILLME` (`0x1`, carried by `bDead`): `0x800` abs transform dirty (`CalcAbsolutePosition`
+	// `EFL_KILLME` (`0x1`, carried by `bRemovalPending`): `0x800` abs transform dirty (`CalcAbsolutePosition`
 	// 0x100b1ac0 clears it), `0x1000` / `0x2000` abs velocity, `0x4000` surrounding bounds dirty and
 	// `0x10000` spatial partition (both ORed by `FUN_100dda20` 0x100dda20; `SetOrigin` 0x100b2be0 sets
 	// `0x10000`), `0x8000` partition handle dirty (`FUN_100ddd20` 0x100ddd20), `0x40000` (tested by
@@ -373,7 +373,11 @@ public:
 	uint32 EFlags = 0;
 	// The complete `m_iEFlags` as an inline read of `+0x268` sees it (the 47 typed in-function reads):
 	// the word with the two carried bits folded in. Slot 83 `GetEFlags` answers this and traces it.
-	uint32 EFlagsWord() const { return EFlags | (bEflDormant ? 0x2u : 0u) | (bDead ? 0x1u : 0u); }
+	uint32 EFlagsWord() const { return EFlags | (bEflDormant ? 0x2u : 0u) | (bRemovalPending ? 0x1u : 0u); }
+	//101cd8c0: kill latch precedes callback/name clear; released tombstones use bDead separately.
+	bool bRemovalPending = false;
+	// Host destructor dispatch latch; immediate gameplay Kill does not prove this ran.
+	bool bNpcDestructorCleanupDispatched = false;
 	// `m_touchStamp` (+0x1ac; `touchStamp` in the kernel field table, no datamap row): the untouch
 	// generation. `SetCheckUntouch(true)` 0x100b11d0 increments it (`100b1251`) before testing the
 	// pending bit; `PhysicsCheckForEntityUntouch` 0x1003d490 expires every touchlink whose stamp
@@ -501,6 +505,9 @@ public:
 	// Slot 119, virtual as retail's (`vt+0x1dc`): `CLight::Kill` `0x101306d0` turns the light off before
 	// the base body runs, and `CBaseEntity::InputKill` `0x100acef0` dispatches through the slot.
 	virtual void Kill();  // terminal: mark dead + go inert (world reaps the slot)
+	// Host destructor service for the deferred native release; never gameplay slot119 dispatch.
+	virtual void ReleaseForRemoval();
+	void QueueRemove(); //101cd940/101cd8c0, distinct from existing immediate Kill callers.
 	// `CBaseEntity::MakeDormant` 0x100a8060 (L0-r030): `m_iEFlags |= EFL_DORMANT`; `ThinkSet(0, 0, NULL)`;
 	// with an edict: `AddSolidFlags(FSOLID_NOT_SOLID)`, slot 93 `(0, 0)` (the move type cleared),
 	// `m_flNextThink = 0`, `m_fEffects |= EF_NODRAW (0x40)`, `Relink`. The port's non-solid + undrawn

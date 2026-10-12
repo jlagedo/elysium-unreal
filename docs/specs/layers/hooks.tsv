@@ -694,3 +694,6 @@ L3 player	L4 NPC	0x1034fa80	CHL2_Player::vfunc469	108	settled:engine_replaced	0x
 L3 player	L4 NPC	0x10350270	CHL2_Player::MaintainEyeDirection	108	ported	0x100b5b00	CAI_BaseNPC::FUN_100b5b00
 L3 player	L4 NPC	0x10351e10	CHL2_Player::vfunc470	108	settled:engine_replaced	0x10269aa0	Global::HasCondition
 L3 player	L4 NPC	0x10376d00	Global::FUN_10376d00	108	ported	0x101ccc80	Global::FUN_101ccc80
+L0 entity	L2 character	0x100a47d0	UpdateOnRemove shared act-store cleanup	108	pending:L2 recipient; selected L0 order executable	0x102ca630	RemoveExternalActs: insertion102ca2a0 via101f8620 case7/type2; remove all matching owner entries before flags/native225
+L0 entity	L4 NPC	0x100a47d0	UpdateOnRemove shared act-store cleanup	108	pending:L4 recipient; selected L0 order executable	0x102ca630	RemoveExternalActs: NPC death102bf340 and StartTask102a1910 producers; same shared store, no LawEventBus substitution
+L0 entity	L4 NPC	0x100f8700	Reverse global deletion listener dispatch	108	pending:L4 navigation recipient; exact entry writer unrecovered	0x102ea600	CNavPropertyDatabase owner record deletion; registration102ea450

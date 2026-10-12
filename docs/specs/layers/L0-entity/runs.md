@@ -967,3 +967,23 @@ E:/elysium-work/codex/l0-p1-observed-flags-20261011/acceptance-checkpoint.json.
 I2 real10151c00 angular impact reader still logging; no gameplay parity claim. Other writers/
 generic type1/callers/36metadata and P2/P3/full L0 closing gate open. No owner decision,
 accepted divergence or push. Next packet reconciles actual missing P1 creator/caller contract.
+
+### Generic creator/native lifecycle and restore-cache checkpoint — 2026-10-12 UTC
+
+Selected100a6150 brush success/native-null type1 arms now preserve developer-gated failure
+output,rotated bounds and exact Oceanhouse substring exception. Actual selected failure queues
+pending-before180,ordered cleanup,name clear and physics-barrier/live-count deferred release.
+Brush Hide/Unhide gates native shapes while preserving incarnation/controller/mechanics and
+actual query/motion rules. Schema53 stores full semantic EFlags/local/absolute/frame cache;
+strict whole Expected archive proves exact postrestore EFlags projection. No IVP clone.
+
+Independent build023253 passed; default208/208; native/save family25/25; affected arena15/15
+in one public command,two actual boots (arena and sm_hub_1 transition). Generator/policy
+receipts and exact commit are in E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/acceptance-checkpoint.json.
+Source freeze28paths and retained records verified;3461 packages/18GLBs unchanged,no imports.
+Existing warnings/experimental Python errors retained. Initial failed gates remain historical.
+
+P1 still open: other writers/CPhysBox,36coremetadata,unrecovered func_brush native producer.
+Generic Kill/CNotify/Aim/PhysicsAnimlink remain E2/D09; exact L2/L4 recipient handoffs pending.
+Full native travel/restore,P2/P3,I2 impact,Break and full L0 closing gate remain open.
+No owner decision,accepted divergence or push. Next packet reconciles actual remaining P1 inputs.

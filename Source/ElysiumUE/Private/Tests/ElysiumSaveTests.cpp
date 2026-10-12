@@ -16,6 +16,7 @@
 #include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
 #include "Substrate/ElysiumCameraTrack.h"
+#include "Substrate/ElysiumSaveRestoreGame.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
 #include "ElysiumContentPaths.h"
@@ -316,6 +317,7 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 	// The omission rule: only entities that differ from a fresh build of their own def are written.
 	TestTrue(TEXT("something was recorded"), First.Entities.Num() >= 3);
 	TestTrue(TEXT("but not more than the world holds"), First.Entities.Num() <= A.NumEntities());
+	const TArray<uint8> FirstDigest = ElysiumSaveDigest(First);
 
 	// --- Rebuild from the same defs, apply, re-freeze, compare digests -------------------------
 	FElysiumEntityWorld B(/*Owner*/ nullptr, /*GameState*/ nullptr);
@@ -356,10 +358,30 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 
 	FElysiumMapSnapshot Second;
 	B.Freeze(Second);
-	// §10's round trip is a digest comparison rather than a semantic diff, and it can be because
-	// §8 makes the walk order stable: entities by index, fields sorted by name.
-	TestEqual(TEXT("freeze -> rebuild -> apply -> freeze is byte-identical"),
-		ElysiumSaveDigest(Second), ElysiumSaveDigest(First));
+	FElysiumMapSnapshot Expected = First;
+	for (FElysiumEntityState& ExpectedRow : Expected.Entities)
+	{
+		const FElysiumEntity* RestoredEntity = B.Entities().IsValidIndex(ExpectedRow.Index)
+			? B.Entities()[ExpectedRow.Index].Get() : nullptr;
+		const FElysiumEntityState* RestoredRow = Second.Entities.FindByPredicate(
+			[&](const FElysiumEntityState& Row) { return Row.Index == ExpectedRow.Index; });
+		if (!TestNotNull(TEXT("each saved row has its restored owner"), RestoredEntity)
+			|| !TestNotNull(TEXT("each saved row is recaptured"), RestoredRow)) return false;
+		// 100aa140 clears only EFL_DIRTY_SPATIAL_PARTITION, then 100dda20 dirties bounds
+		// (0x14000) and the partition (0x8000) only for a nonzero actual edict index.
+		ExpectedRow.EFlags = (ExpectedRow.EFlags & ~0x8000u) | 0x14000u
+			| (RestoredEntity->EdictIndex() != 0 ? 0x8000u : 0u);
+		TestEqual(FString::Printf(TEXT("row%d has the exact restore bounds/edict flags"), ExpectedRow.Index),
+			RestoredRow->EFlags, ExpectedRow.EFlags);
+	}
+	// Re-encode the independently projected expected rows through the same block writer.
+	// The strict payload comparison covers every other entity/cache/leaf/queue and section word.
+	Expected.BlockStream.Reset();
+	ElysiumSaveRestore::EncodeMapBlocks(Expected, nullptr, nullptr);
+	TestEqual(TEXT("freeze -> rebuild -> apply -> freeze matches the complete retail restore projection"),
+		ElysiumSaveDigest(Second), ElysiumSaveDigest(Expected));
+	TestEqual(TEXT("forming the restore expectation leaves the original frozen payload unchanged"),
+		ElysiumSaveDigest(First), FirstDigest);
 
 	// --- Absent entities: what left with the player does not come back -------------------------
 	FElysiumMapSnapshot WithAbsent = First;
@@ -667,8 +689,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `NpcAmbientExecutorRetired` (0002 V3b) took the ambient executor's two timers out of the middle
 	// of the NPC's patrol block, which moved it again. `NpcMindOwnerRetired` (0002 V3d) took the
 	// body-owner byte out of the NPC's mind block, which moved it once more.
-	TestEqual(TEXT("the disposable floor retains current native game flags"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::PhysicsGameFlags);
+	TestEqual(TEXT("the disposable floor retains pending state and saved pose cache"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::EntityRemovalFlags);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -751,7 +773,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::PhysicsGameFlags);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::EntityRemovalFlags);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

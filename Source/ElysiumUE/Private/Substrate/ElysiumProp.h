@@ -29,6 +29,7 @@ class FElysiumProp : public FElysiumEntity
 {
 public:
 	virtual ~FElysiumProp() override;
+	void ReleaseForRemoval() override;
 	int32 Skin = 0;
 
 	// CDynamicProp's animation keyfields (datamap `0x1058d4f8`, 12 records at `0x1058d53c`). There is

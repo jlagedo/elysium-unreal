@@ -561,9 +561,8 @@ bool FElysiumEntity::ShouldCollide(int32 CollisionGroupArg, int32 ContentsMask) 
 bool FElysiumEntity::IsMarkedForDeletion()
 {
 	// `return this->m_iEFlags & 1;` — bit 0 of the entity-flags word at `+0x0268`, `EFL_KILLME`.
-	// This runtime spells "killed, and the world will reap the slot" as `FElysiumEntity::bDead`,
-	// which `Kill()` is the sole writer of; that IS the killme bit (the entity world's pending kill).
-	return IsDead();
+	// Pending removal remains registered until100f6ce0 releases it; bDead is a separate tombstone.
+	return (EFlagsWord() & 0x1u) != 0;
 }
 
 // slot 158 `bool IsAlive()` — 0x100b4dc0

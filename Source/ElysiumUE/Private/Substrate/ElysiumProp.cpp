@@ -230,6 +230,12 @@ FElysiumProp::~FElysiumProp()
 	DestroyBody(); // native service ownership survives a null or replaced current field until teardown.
 }
 
+void FElysiumProp::ReleaseForRemoval()
+{
+	DestroyBody(); // derived destructor retires owned carrier, including a detached current field.
+	FElysiumEntity::ReleaseForRemoval();
+}
+
 void FElysiumProp::OnRuntimeTransformChanged()
 {
 	FElysiumEntity::OnRuntimeTransformChanged();

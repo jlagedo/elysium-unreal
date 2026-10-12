@@ -1,57 +1,56 @@
 # L0 restart checkpoint
 
-Updated 2026-10-12 UTC by main. Full L0 gate open; Goal active. Read goal.md each continuation.
-Main Sol Medium reviews/gates/commits; one fresh Sol High worker per run, fork none, no nested
-workers, never push. No owner decision or accepted gameplay divergence.
+Updated2026-10-12 UTC by main. Full Goal ACTIVE; L0 closing gate open.
+Read goal.md at every continuation. Main Sol Medium owns review/gates/local commit/checkpoint;
+one fresh Sol High worker/run,fork none,no nested agents,never push. No owner decision.
 
 ## Accepted state
 
-This local commit contains current body game flags and PhysProp Damagetype/native archive
-checkpoint; parent af5d211f8f45c1cfd56a33f2e777731428625995 is accepted hidden-body dispatch.
-Exact commit/tree/blobs/gates: E:/elysium-work/codex/l0-p1-observed-flags-20261011/acceptance-checkpoint.json.
-Reuse implementation-freeze.json, freeze-summary.md, main-final-review.md,
-main-final-verification.json and main-gates.json there. Prior hidden/model-shadow/static/
-velocity/plan/sound acceptance remains valid; no recovery replay.
+Latest accepted commit is recorded in
+E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/acceptance-checkpoint.json.
+Previous accepted HEAD3c2857dfc639d19d07ffc24bae5ea2c86453b94d (body flags/archive),
+parent af5d211f hidden-body dispatch. Reuse their receipts and all accepted body/material/
+shadow/velocity/plan/sound evidence; no recovery replay.
 
-## Contract closed — current native game flags and authored PhysProp producer
+## Contract closed — selected creator/native lifecycle and restore-cache packet
 
-Retail1002e0a0 read/OR/write and installed26016d40/26016d50 semantic16bit word is actual
-incarnation state default0, guarded against null/foreign/stale bodies. Unknown bits survive;
-set truncates low16. Aliases share word; SetObject/Swap/clear leaves detached producers alive.
-Retirement removes state before borrowed225 callbacks/native release. No Chaos solver,
-collision/filter/wake change follows flag operations; native geometry/mechanics remain Unreal.
+100a6150 selected brush success/type1 actual native failure preserves developer diagnostics,
+rotated fallback bounds and exact Oceanhouse literal substring exception. Selected failure
+queues pending-before180,ordered cleanup,name clear and physics-barrier/live-count release.
+Full semantic EFlags/local/absolute/frame cache uses disposable schema53/floor53. Strict
+Expected full archive compares exact100aa140/100dda20 restore writes,without broad masks.
+Native Brush Hide/Unhide now gates actual shape participation retaining incarnation/controller/
+mechanics. Door witness proves authored query responses,Use/Pick rays,movement sweeps,real
+native crossing,logical parent/local/absolute pose,shadow target and solved pose. Crossing
+uses actual solver interval with unchanged tolerance. Distinct born-hidden func_brush fallback
+and native func_door fixtures avoid inferring a missing producer. Chaos owns engine services.
 
-Registered SAVE|KEY Damagetype default0 produces10191510 exact==1 OR1 before publication;
-0/2/-1/no-body controls and independent virtual GetDamageType189 remain distinct. Current
-word is independent of later key writes/recipe. Native Physics archive is a real observer:
-key0/current8001 survives typed bytes/reset decode, reload and transition before first think.
-Restore writes flags before subsequent profile/mechanics/reconnect. Independent restored
-field aliases, hidden first frames, count0/truncated row/failed restore/new SetModel/Kill/
-component/world teardown preserve failure/identity/lifetime. Disposable schema52/floor52,
-no migration. Stock witness maps do not author key1; positive test uses real registered key.
-
-Main build000242 passed; default202/202 (121clean,81warned),
-affected SavePayload/SaveSchema2/2; joined affected arena9/9 in one boot, first_unmet null.
-Authoritative reports:
-E:/elysium-work/reports/tests/20261012T000406.136916Z-elysium-session-elysium-substrate/index.json
-E:/elysium-work/reports/tests/20261012T000222.351235Z-elysium-arm-savepayload-elysium-substrat-e02a4a47/index.json
-E:/elysium-work/reports/arena/20261012T000450.294892Z/arena/index.json
-Worker focused19/19; generator and repository policy pass. Frozen15source/43retained records,
-3461 manifest/package identities,3443 unselected products,18GLBs and consumed catalogues
-independently unchanged; no imports. Existing startup errors/warnings retained.
+Renewed28-source freeze654138623a8921e1493b49226d389d27c49d2d22207406c5416556c8cd54897f
+independently verified with retained receipts. Main build023253 passed; default023300208/208
+(115clean93warned); joined native/save02334725/25(16clean9warned); arena02363015/15,
+two actual boots (arena and sm_hub_1 transition),all first_unmet null. Generator023953 and
+repository policy024010 passed.3461packages/18GLBs/manifest unchanged,no imports.
+Existing warnings/experimental Python errors retained. First failed default and diagnostic
+receipts remain evidence; superseded first freeze is retained. Exact report paths and final
+commit/tree are in acceptance-checkpoint.json. No live jobs; worker mutation stopped.
 
 ## Remaining milestone requirements → next witness
 
-P1 active: reconcile generic type1 failure/debug/removal and actual callers, other body-flag
-writers (including CPhysBox1004e500) and36 remaining core metadata rows. next-packet.md
-defines precode reconciliation; retain accepted creators/velocity/archive/lifetime evidence.
-10151c00 impact angular gameplay reader remains actual same-layer later I2, currently logging
-dispatch; native flag/save proof does not prove impact damage parity. Break unchanged/unclosed.
-NpcMaker stale Construct-time StartHidden comment/child omission remains queued to L4.
+P1 active: other native writers including CPhysBox1004e500,36 remaining coremetadata,
+actual prepared path/admission and producer requirements. Native func_brush223 producer is
+unrecovered/open P1/P3. next-packet.md selects compact precode reconciliation; reuse existing
+creator evidence,do not repeat type1/debug/Oceanhouse recovery. Break remains unclosed.
 
-Then E2/P2 query/filter/material/mutation/contact/removal and integrated P3 shadow motion,
-timing/pose publication/parent/bounds. Four scope briefs require disposition. Native persistence/
-travel required; retail save import/migration excluded. Full spec closing gate still requires
-all active L0/integration records in one arena, repeated boot orders, default+full arm zero
-failures/baseline preservation, justified owned audit rows, observable engine contracts,
-registered hooks and full mapped disposition. No full P1/D02/L0 or closing-gate claim.
+E2 generic Kill100acf90 still immediate; selected QueueRemove is not Kill input parity.
+CNotify target40/constraint pair and Aim10000 membership/delete remain L0 E2/D09 inputs.
+PhysicsAnimlink1014ec70 actual endpoint producer/ownership unresolved. Base180 partial;
+L2/L4 shared act-store and Nav hooks registered pending recipients,Goal exact callback
+unrecovered. See handoffs.md and listener-primary.md. Light Kill source comment describes
+retail deferred base behavior; current immediate base divergence remains explicitly open.
+Full native landmark/travel/restore,P2 query/filter/material and P3 integrated motion/timing/
+parent/bounds remain required.10151c00 impact reader remains logging/open I2. Four scope
+briefs require disposition; higher gameplay hooks remain owned by their layers.
+
+Full closing gate requires all active L0/integration records,required repeated boot orders,
+default+fullarm zero failures/baseline preservation,all justified owned audit rows,observable
+engine service contracts,registered hooks and full mapped disposition. No fullP1/D02/L0 claim.

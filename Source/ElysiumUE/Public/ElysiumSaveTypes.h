@@ -131,6 +131,7 @@ struct FElysiumSaveVersion
 		PhysicsInertiaState = 50, // selected current and original native inertia pairs/principal frames
 		PhysicsMaterialState = 51, // current semantic selection survives shadow removal
 		PhysicsGameFlags = 52, // current per-native semantic WORD, independent of authored Damagetype
+		EntityRemovalFlags = 53, // full saved EFlags, pending latch independent of released tombstone
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -165,7 +166,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = PhysicsGameFlags; // disposable saves: current native game flags
+	static constexpr int32 MinSupported = EntityRemovalFlags; // disposable saves, no migration
 
 	static const FGuid GUID;
 };
@@ -197,8 +198,15 @@ struct FElysiumEntityState
 	// the raw Source-space string and Construct applies every key that has a field — so it rides
 	// here, beside the flags.
 	FVector Origin = FVector::ZeroVector;
+	// CBaseEntity SAVE rows: absolute caches (+0x404/+0x410) and coordinate frame (+0x130).
+	// These are raw semantic cache values, not getters: saved EFlags controls lazy recomputation.
+	FVector AbsoluteOrigin = FVector::ZeroVector;
+	FVector AbsoluteAngles = FVector::ZeroVector;
+	float CoordinateFrame[12] = { 1,0,0,0, 0,1,0,0, 0,0,1,0 };
+	bool bCoordinateFrameValid = false; // host frame validity, independent of retail dirty800
 
 	bool  bDead = false;
+	uint32 EFlags = 0; //m_iEFlags FIELD_INTEGER SAVE, including pending1; transient queue unsaved.
 	bool  bHidden = false;
 	bool  bSpawnCalled = true;
 	// Saves are taken from an active map. Default true preserves that fact for older supported

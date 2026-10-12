@@ -525,7 +525,7 @@ void FElysiumEntity::SetSolidFlags(uint16 Word)
 // --- The flag word: slots 83 / 84 --------------------------------------------------------------
 
 // slot 83 0x100b4ef0 `int GetEFlags()`: `MOV EAX,[ECX+0x268]; RET` -- the whole word. The two bits this
-// port carries beside the word (`EFL_DORMANT` 0x2 in `bEflDormant`, `EFL_KILLME` 0x1 in `bDead`) are
+// port carries beside the word (`EFL_DORMANT`0x2 and pending `EFL_KILLME`0x1) are
 // folded in so the answer is the complete `m_iEFlags`.
 int32 FElysiumEntity::GetEFlags()
 {
@@ -540,15 +540,13 @@ int32 FElysiumEntity::GetEFlags()
 
 // slot 84 0x100b4f10 `void SetEFlags(int)`: `MOV EAX,[ESP+4]; MOV [ECX+0x268],EAX; RET 4` -- a whole-dword
 // replace, no mask, no OR, and no enqueue even with `0x1000000` in the argument. `EFL_DORMANT` lands in
-// `bEflDormant`. **Divergence (named):** `EFL_KILLME` is not written: `bDead` is the world's pending
-// kill (`UTIL_Remove 0x101cd940`'s port), and a bare bit cannot make the world reap the slot; no
-// entity-side caller in the corpus (`CServerNetworkProperty::vfunc3`, `FUN_10140330`, `FUN_10183470`)
-// passes a word with bit 0 set on a live entity.
+// `bEflDormant`; `EFL_KILLME` lands in the pending latch. Bare flag replacement never queues release.
 void FElysiumEntity::SetEFlags(int32 Word)
 {
 	const uint32 Unsigned = static_cast<uint32>(Word);
 	EFlags = Unsigned & ~0x3u;
 	bEflDormant = (Unsigned & 0x2u) != 0;
+	bRemovalPending = (Unsigned & 0x1u) != 0; //whole word replace does not enqueue,100b4f10.
 	if (World != nullptr)
 	{
 		World->EmitRetailSite(*this, TEXT("eflags_word"), TEXT("CBaseEntity::SetEFlags"), 0x100b4f14u, TEXT("write"),

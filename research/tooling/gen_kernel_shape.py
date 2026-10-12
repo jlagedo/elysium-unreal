@@ -426,6 +426,8 @@ SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
 # port return type where the lowering would lose it, the reason). A reference return the generator
 # lowers to `void*` is restored here, because the port has the value it refers to.
 CHAIN_HAND: dict[int, tuple[str, str]] = {
+    180: ("", "`CBaseEntity::UpdateOnRemove`100a47d0: registered removal callbacks, flags/global state, "
+              "225 then hierarchy detach and ground clear; ElysiumEntity.cpp"),
     174: ("", "`CBaseEntity::StartTouch` 0x100a49d0: live ParentHandle relay; ElysiumPusher.cpp"),
     175: ("", "`CBaseEntity::Touch` 0x100a4af0: installed callback then live ParentHandle relay; ElysiumPusher.cpp"),
     90: ("", "`CBaseEntity::IsTransparent` 0x100aa840: RenderMode !=0; all497 vampire.dll classes share this body"),
@@ -556,6 +558,7 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that
 # hold a body at the slot keep theirs as generated: slot -> the port owner.
 CHAIN_HAND_OWNER: dict[int, str] = {
+    180: "FElysiumEntity",
     104: "FElysiumCombatCharacter",
     142: "FElysiumCombatCharacter",
     390: "FElysiumCombatCharacter",

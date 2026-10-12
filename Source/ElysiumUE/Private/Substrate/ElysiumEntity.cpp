@@ -8,6 +8,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "ElysiumTransitionState.h"
 #include "ElysiumPhysicsPropComponent.h"
 #include "Substrate/ElysiumModelPhysics.h"
 #include "GameFramework/Actor.h"
@@ -338,6 +339,55 @@ void FElysiumEntity::ScriptUnhide()
 	OnDormancyChanged();
 }
 
+void FElysiumEntity::UpdateOnRemove()
+{
+	//100a47d0: listeners precede state writes and native225. The reached L0 touch
+	// observer uses the existing service. Notify/aim membership belongs to the remaining
+	// E2/constraint contracts; Physics owner association is projected by stable native handles.
+	if (World) World->UntouchListOnEntityDeleted(*this);
+	if (World && World->RemoveExternalActs) World->RemoveExternalActs(*this); //102ca630, higher recipient.
+	if (bEdictAttached) Flags |= 0x4000000; //FL_KILLME, distinct from EFL_KILLME.
+	if (!GlobalName.IsEmpty())
+	{
+		const FTCHARToUTF8 GlobalAnsi(*GlobalName);
+		if (auto* Record = ElysiumTransitionState::GlobalStateTable().Find(GlobalAnsi.Get()))
+			Record->State = ElysiumTransitionState::GlobalStateDead; //100577d0, existing rows only.
+	}
+	VPhysicsDestroyObject(); //225 occurs in callback before SetName(NULL)/append,100a47d0.
+	UnlinkFromMoveParent(); //1012c840 preserves the observed unlink/absolute-pose order.
+	FElysiumEntity* Child = World ? World->Resolve(MoveChild) : nullptr;
+	while (Child)
+	{
+		FElysiumEntity* NextChild = World->Resolve(Child->MovePeer); //1012c900 snapshots next first.
+		Child->ClearMoveLinks();
+		Child = NextChild;
+	}
+	MoveChild = FElysiumEntityHandle::Invalid();
+	//10099b00's engine prediction-registration removal is owned by Unreal's native lifetime.
+	SetGroundEntity(nullptr); //slot208 after hierarchy/prediction cleanup.
+}
+
+void FElysiumEntity::QueueRemove()
+{
+	if (bDead || bRemovalPending || !World) return;
+	FElysiumEntityWorld* const RemovalWorld = World;
+	const FElysiumEntityHandle RemovalHandle = Handle;
+	bRemovalPending = true; //101cd8de: latch before virtual180, including reentrant callbacks.
+	UpdateOnRemove();
+	// A callback may retire the host epoch. Never write through a stale identity after dispatch.
+	if (RemovalWorld->Resolve(RemovalHandle) != this) return;
+	RemovalWorld->RenameEntity(*this, FString()); //100a0420(NULL) precedes append.
+	RemovalWorld->EnqueueEntityRemoval(RemovalHandle);
+}
+
+void FElysiumEntity::ReleaseForRemoval()
+{
+	FElysiumEntity::Kill();
+	RetireReconstructedPhysics();
+	ElysiumModelPhysics::BindReference(this, nullptr);
+	ElysiumModelPhysics::ForgetGameData(*this);
+}
+
 void FElysiumEntity::Kill()
 {
 	VPhysicsDestroyObject(); //225 owns supplied actor even if another entity produced it.
@@ -369,6 +419,7 @@ void FElysiumEntity::Kill()
 	// CBaseCombatCharacter::UpdateOnRemove 0x10327790 removes one comfort
 	// entry before its handle is invalidated. Other entity classes have no entry.
 	if (FElysiumCombatCharacter* Character = AsCombatCharacter()) { Character->RemoveFromComfortList(); }
+	bRemovalPending = true; // preserve immediate Kill callers' observable kill bit.
 	bDead = true;
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)

@@ -582,7 +582,7 @@ namespace
 		Body->SetMassSpaceLocal(Frame); SetInertia(*Body, Tensor, Inverse);
 	}
 	bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
-		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError);
+		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError, bool* OutNativeAttempted = nullptr);
 }
 
 FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
@@ -1028,11 +1028,12 @@ bool ElysiumModelPhysics::GetContactPoint(void* Actor, void*& OtherActor, FStrin
 }
 
 bool ElysiumModelPhysics::CreateBrush(UElysiumBrushComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
-	const FElysiumPhysicsBodyRecipe& Recipe, FString& OutError)
+	const FElysiumPhysicsBodyRecipe& Recipe, FString& OutError, bool* OutNativeAttempted)
 {
+	if (OutNativeAttempted) *OutNativeAttempted = false;
 	if (Recipe.Kind != EElysiumPhysicsRecipeKind::Brush)
 	{ OutError = TEXT("brush creator requires an authored brush recipe"); return false; }
-	return CreatePhysicsRecipe(Component, Surfaces, Recipe, false, OutError);
+	return CreatePhysicsRecipe(Component, Surfaces, Recipe, false, OutError, OutNativeAttempted);
 }
 
 void ElysiumModelPhysics::RefreshContactOutputs(FElysiumEntityWorld& World)
@@ -1595,8 +1596,9 @@ bool ElysiumModelPhysics::CreateBbox(UStaticMeshComponent* Component, FElysiumPh
 namespace
 {
 bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
-	const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError)
+	const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError, bool* OutNativeAttempted)
 {
+	if (OutNativeAttempted) *OutNativeAttempted = false;
 	OutError.Reset();
 	ElysiumModelPhysics::Destroy(Component);
 	bool bSucceeded = false;
@@ -1688,6 +1690,7 @@ bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceP
 	Component->SetLinearDamping(Recipe.LinearDamping);
 	Component->SetAngularDamping(Recipe.AngularDamping);
 	Component->SetMassOverrideInKg(NAME_None, Mass, true);
+	if (OutNativeAttempted) *OutNativeAttempted = true; // admitted inputs reach actual native actor creation.
 	Component->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	Component->SetMobility(Recipe.bStatic ? EComponentMobility::Static : EComponentMobility::Movable);
 	Component->SetSimulatePhysics(!Recipe.bStatic);

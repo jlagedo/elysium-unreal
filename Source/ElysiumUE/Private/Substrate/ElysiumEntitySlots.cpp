@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 76 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 79 are defined by hand in the substrate,
-// and 49 are still stubs — 48 29c, 1 unassigned. 15 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 80 are defined by hand in the substrate,
+// and 48 are still stubs — 47 29c, 1 unassigned. 15 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -1269,11 +1269,9 @@ void FElysiumEntity::EndBlocked()
 
 // slot 180 0x100a47d0 (sdk) `void UpdateOnRemove()`
 //   layer 0, story 29c
-void FElysiumEntity::UpdateOnRemove()
-{
-	FireEntitySlot(TEXT("CBaseEntity::UpdateOnRemove"), TEXT("0x100a47d0"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::UpdateOnRemove`, written by hand in the substrate:
+// `CBaseEntity::UpdateOnRemove`100a47d0: registered removal callbacks, flags/global state, 225 then
+// hierarchy detach and ground clear; ElysiumEntity.cpp. Declared here, defined there.
 
 // slot 181 0x100ada20 (sdk) `void Teleport(Vector*, QAngle*, Vector*)`
 //   layer 0, story 29c
@@ -2353,7 +2351,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::EndBlocked),
 				[](FElysiumEntity& Receiver) -> int64 { Receiver.EndBlocked(); return 0; } },
 			{ 180, TEXT("0x100a47d0"), TEXT("CBaseEntity"), TEXT("UpdateOnRemove"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::UpdateOnRemove),
 				nullptr },
 			{ 181, TEXT("0x100ada20"), TEXT("CBaseEntity"), TEXT("Teleport"),

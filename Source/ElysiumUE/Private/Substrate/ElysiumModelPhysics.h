@@ -22,7 +22,7 @@ namespace ElysiumModelPhysics
 	void RetireWorldActor(UElysiumWorldCollisionComponent* Component);
 	void RebindWorldActor(UElysiumWorldCollisionComponent* Component);
 	bool CreateBrush(UElysiumBrushComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
-		const FElysiumPhysicsBodyRecipe& Recipe, FString& OutError);
+		const FElysiumPhysicsBodyRecipe& Recipe, FString& OutError, bool* OutNativeAttempted = nullptr);
 	bool GetContactPoint(void* Actor, void*& OtherActor, FString* Provenance = nullptr); //object44; optional GT diagnostic only
 	void RefreshContactOutputs(FElysiumEntityWorld& World); //safe completed-native-frame snapshot
 	FElysiumEntity* GameDataForObject(void* Actor); //object6 creation-owned serial game data

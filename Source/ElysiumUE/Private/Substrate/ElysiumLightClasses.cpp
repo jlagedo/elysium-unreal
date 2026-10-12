@@ -442,12 +442,24 @@ public:
 
 	virtual ~FElysiumLightDynamic() override
 	{
+		ReleaseLight();
+	}
+
+	void ReleaseForRemoval() override
+	{
+		ReleaseLight();
+		FElysiumEntity::ReleaseForRemoval();
+	}
+
+	void ReleaseLight()
+	{
 		if (Light.IsValid())
 		{
 			if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 			{
 				Embodiment->DestroyDynamicLight(Light.Get());
 			}
+			Light.Reset();
 		}
 	}
 

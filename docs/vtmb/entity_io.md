@@ -3609,3 +3609,49 @@ schema52/floor52 restores it before final hidden reconnect and first think, incl
 reload and transition. A saved key0/current0x8001 and current aliases are deliberate witnesses of
 that independence. The real `10151c00` bit1 angular impact reader remains unimplemented I2 in
 this same layer; see the bounded current-native game flags recovery in physics-interaction.md.
+
+## Required creator removal producer and explicit recipient boundary (2026-10-12)
+
+This supersedes the older removal prerequisite's statements that225/Swap remain unimplemented.
+Accepted native body receipts provide225, Swap, shadow/reference/incarnation retirement. Primary
+100a47d0 order is reverse registered entity listeners100f8700, acts102ca630, edict flag4000000,
+existing global-row state2, virtual225, parent unlink1012c840, children1012c900, engine prediction
+registration10099b00 and ground slot208. Acts occur BEFORE flags/native/hierarchy/ground, despite
+an earlier prose ordering. Base225 occurs at queue-time callback, not first at destructor release.
+ClearMoveLinks clears parent/peer BEFORE absolute angle/origin getters and their local setters.
+Unreal supplies engine prediction/resource services; no Source predictable-list allocator clone.
+
+Registered recipient identities from100f8fb0 are CNotifyList_at4 at10703638, touched manager
+107036b0 and CAimTargetManager10703650. Physics10044020 registers handler+8 before native manager49;
+Nav102ea450 registers Nav+8. CAI_GoalEntity102cd650 registers its own+0x450, not CAimTargetManager.
+100f8700 is a reverse entity-listener walk, not a simulation vector. Existing touched-manager
+UntouchListOnEntityDeleted preserves the reached touch observer. This run does not close generic
+base180, E2 removal-cleanup1/2 or D09 by giving all other listeners an empty higher hook.
+
+CNotifyList deletion100f8a40 first calls event1 through100f8af0, then100f8a80 removes all observer
+or target pairs using swap-last. Add100f8780 sets target EFlags40 and stores(observer,target).
+All497 vampire.dll classes at slot183 were inspected: only six constraint classes override
+base100ad910, at1002b680; that body ignores event1 (onlyevent0 acts). Pair cleanup is still an L0
+constraint-store obligation. Exact reached constraint pair wiring remains unrecovered here; no
+claim of unreachable code follows from missing indexed virtual callers. Selected failed brush
+has no notification pairs/40 producer. Keep E2/D09 producer/cleanup closure separate.
+
+CAimTargetManager deletion100f69b0 checks Flags10000 and removes first matching membership by
+swap-last. Actual flag-transition producer100f71c0 rejects slot116 then acts only on changed10000;
+reader100f6b00 copies the bounded member list. Indexed reader callers are absent, which alone is
+not proof of unreachability. Current selected native L0 creators never produce10000; this cache's
+actual gameplay reader/reached producer ownership remains unrecovered, explicitly E2 open.
+It is not a higher navigation/goal hook. Physics listener10044a90 releases an owner-to-saved-body
+association list/map entry without destroying native bodies. The host uses epoch-resolved rows
+rather than persistent owner pointers; released rows do not reconstruct, and native225/release
+clear aliases/game data. Pending and independent restored-field witnesses prove this selected
+owner invalidation projection, without cloning the Source RB-tree or temporary association list.
+
+Higher act-store cleanup102ca630 removes every matching owner+20 entry with102ca460 swap-last
+and repeat-check, no callback. Its actual producers are102ca2a0 reached by L2 trait/combat action
+101f8620(case7,type2) and L4 NPC death102bf340 and StartTask102a1910. The address-named
+RemoveExternalActs seam belongs to those higher program stores; approximate LawEventBus is not
+that store. Higher registered Nav/Goal recipients remain named handoffs. PhysicsAnimlink proxy
+registration1014ebd0/deletion1014ec70 has distinct endpoint-removal behavior; its producer/owner
+disposition remains unresolved here, not a categorical higher hook. See retained listener-primary.md and final hook proposal
+in E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/. Main registers exact hook metadata.

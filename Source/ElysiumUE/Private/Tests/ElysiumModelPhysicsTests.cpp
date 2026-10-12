@@ -3,6 +3,9 @@
 #include "ElysiumPlayerWorldFixture.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumMapEntities.h"
+#include "Substrate/ElysiumRetailConVars.h"
+#include "HAL/IConsoleManager.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumMapPlaces.h"
 #include "ElysiumModelCatalogues.h"
@@ -13,6 +16,7 @@
 #include "Substrate/ElysiumModelPhysics.h"
 #include "Substrate/ElysiumPhysProp.h"
 #include "Substrate/ElysiumProp.h"
+#include "Substrate/ElysiumNpc.h"
 #include "ElysiumCollisionChannels.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Visual/ElysiumPreparedPropModels.h"
@@ -2677,6 +2681,7 @@ bool FElysiumModelPhysicsHiddenPropBodyTest::RunTest(const FString&)
  auto ShadowDef=StaticDef; ShadowDef.TargetName=TEXT("hidden_shadow"); ShadowDef.Keys.Add(TEXT("parentname"),TEXT("hidden_parent")); ShadowDef.Origin=FVector(24000,5000,3000); Defs.Defs.Add(ShadowDef);
  FElysiumEntityDef BrushDef; BrushDef.Classname=TEXT("func_brush"); BrushDef.TargetName=TEXT("hidden_brush"); BrushDef.Model=1; BrushDef.Keys.Add(TEXT("model"),TEXT("*1")); BrushDef.bStartHidden=true; BrushDef.Origin=FVector(27000,5000,3000);
  FElysiumConvexHull BrushHull; for(float X:{-20.f,20.f})for(float Y:{-20.f,20.f})for(float Z:{-20.f,20.f})BrushHull.Vertices.Add(FVector(X,Y,Z)); BrushDef.Hulls.Add(BrushHull); Defs.Defs.Add(BrushDef);
+ auto BornHiddenDoorDef=BrushDef; BornHiddenDoorDef.Classname=TEXT("func_door"); BornHiddenDoorDef.TargetName=TEXT("born_hidden_door"); BornHiddenDoorDef.Model=3; BornHiddenDoorDef.Keys.Add(TEXT("model"),TEXT("*3")); BornHiddenDoorDef.Origin=FVector(28000,5000,3000); Defs.Defs.Add(BornHiddenDoorDef);
  auto DestinationDefs=Defs; auto TravelDefs=Defs;
  FElysiumEntityWorld World(Map,nullptr,Services); World.Load(MoveTemp(Defs));
  for(const TCHAR* Name:{TEXT("hidden_static"),TEXT("hidden_shadow")})
@@ -2687,7 +2692,32 @@ bool FElysiumModelPhysicsHiddenPropBodyTest::RunTest(const FString&)
  }
  auto* HiddenBrush=World.FindByName(TEXT("hidden_brush"));
  if (!TestNotNull(TEXT("born-hidden brush body built before shared hidden dispatch"),HiddenBrush ? HiddenBrush->Body : nullptr)) return false;
- TestTrue(TEXT("born-hidden brush retains postSpawn non-solid words and actual collision gate"),HiddenBrush->bHidden&&HiddenBrush->bSavedPhysicalWordsAvailable&&HiddenBrush->Body->GetCollisionEnabled()==ECollisionEnabled::NoCollision);
+ int32 BornHiddenBrushShapes=0, BornHiddenBrushActiveShapes=0;
+ if (auto* Native=ElysiumModelPhysics::Identity(HiddenBrush->Body)) FPhysicsCommand::ExecuteRead(Native->GetPhysicsActor(),[&](const FPhysicsActorHandle&)
+ {
+  TArray<FPhysicsShapeHandle> Shapes; Native->GetAllShapes_AssumesLocked(Shapes); BornHiddenBrushShapes=Shapes.Num();
+  for (const auto& Shape:Shapes) if (FPhysicsInterface::IsQueryShape(Shape)||FPhysicsInterface::IsSimulationShape(Shape)) ++BornHiddenBrushActiveShapes;
+ });
+ // This existing func_brush fixture inherits base223/no native recipe. Preserve its query-only
+ // fallback gate; the distinct door below reaches the admitted P1 shadow producer.
+ TestTrue(TEXT("born-hidden nonrecipe func_brush retains its original collision and hidden-word gate"),
+  HiddenBrush->bHidden&&HiddenBrush->bSavedPhysicalWordsAvailable&&HiddenBrush->Body->GetCollisionEnabled()==ECollisionEnabled::NoCollision
+  &&!ElysiumModelPhysics::RecipeFor(ElysiumModelPhysics::ActorIdentity(HiddenBrush->Body))&&BornHiddenBrushActiveShapes==0);
+ FHitResult BornHiddenBrushHit;
+ TestFalse(TEXT("born-hidden nonrecipe func_brush remains absent from the real use query"),Fixture.TestWorld.GetTestWorld()->LineTraceSingleByChannel(
+  BornHiddenBrushHit,BrushDef.Origin+FVector(0,0,60),BrushDef.Origin-FVector(0,0,60),ELYSIUM_USE_CHANNEL));
+ auto* BornHiddenDoor=World.FindByName(TEXT("born_hidden_door"));
+ FElysiumSavedPhysicsBody BornHiddenDoorNative;
+ int32 BornHiddenDoorShapes=0, BornHiddenDoorActiveShapes=0;
+ if (auto* Native=BornHiddenDoor ? ElysiumModelPhysics::Identity(BornHiddenDoor->Body) : nullptr) FPhysicsCommand::ExecuteRead(Native->GetPhysicsActor(),[&](const FPhysicsActorHandle&)
+ {
+  TArray<FPhysicsShapeHandle> Shapes; Native->GetAllShapes_AssumesLocked(Shapes); BornHiddenDoorShapes=Shapes.Num();
+  for (const auto& Shape:Shapes) if (FPhysicsInterface::IsQueryShape(Shape)||FPhysicsInterface::IsSimulationShape(Shape)) ++BornHiddenDoorActiveShapes;
+ });
+ TestTrue(TEXT("born-hidden actual door preserves admitted native owner/controller with every shape gated"),
+  BornHiddenDoor&&BornHiddenDoor->bHidden&&BornHiddenDoor->bSavedPhysicalWordsAvailable&&BornHiddenDoor->GetSolid()==0&&(BornHiddenDoor->GetSolidFlags()&4u)!=0
+  &&ElysiumModelPhysics::Capture(BornHiddenDoor->VPhysicsGetObject(),BornHiddenDoorNative)&&BornHiddenDoorNative.Recipe.Kind==EElysiumPhysicsRecipeKind::Brush
+  &&BornHiddenDoorNative.Shadow.bInstalled&&BornHiddenDoorShapes==1&&BornHiddenDoorActiveShapes==0);
  auto* Plate=static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("plus_food")));
  auto* Chair=static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("chair")));
  auto* PropAlias=static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("prop_alias")));
@@ -3002,6 +3032,320 @@ bool FElysiumModelPhysicsBodyGameFlagsTest::RunTest(const FString&)
 	if (!TestTrue(TEXT("actual transition applies current flag bytes before activation"),Travel.ApplySnapshot(Persisted,0.,true)>=0)||!CheckRestored(Travel)) return false;
 	Travel.Teardown();
 	AddInfo(FString::Printf(TEXT("body-game-flags: registered_key1=1 key0_current8001=1 native_width16=1 aliases=1 archive_bytes=%d reload=1 transition=1 retirement=1 impact_I2_open=1"),Bytes.Num()));
+	return true;
+}
+namespace ElysiumRemovalTest
+{
+	TArray<int32> Released;
+	TMap<FString,int32> DestructorCleanupCalls;
+	class FDestructorProbe final : public FElysiumNpc
+	{
+	public:
+		void Spawn() override {} // only the existing destructor cleanup recipient is exercised.
+		void UpdateOnRemove() override {} // legitimate higher override omits base removal.
+		void Slot601(FElysiumEntity*) override { ++DestructorCleanupCalls.FindOrAdd(Def->TargetName); }
+	};
+	TUniquePtr<FElysiumEntity> MakeDestructorProbe() { return MakeUnique<FDestructorProbe>(); }
+	FElysiumClassRegistrar DestructorRegistrar(TEXT("elysium_test_destructor_remove"), ElysiumBaseClassName(), &MakeDestructorProbe, [](FElysiumClassDesc&) {});
+	class FRetainingOverride final : public FElysiumEntity
+	{
+	public:
+		int32 RemovalCalls = 0;
+		void UpdateOnRemove() override { ++RemovalCalls; QueueRemove(); } // legitimate override omits base225.
+		void OnOwnedEntityTerminated(FElysiumEntity& Removed, EElysiumOwnedEntityTermination) override
+		{
+			Released.Add(Removed.Handle.Index);
+			if (FElysiumEntity* Tail = World->FindByName(TEXT("tail"))) Tail->QueueRemove();
+		}
+	};
+	TUniquePtr<FElysiumEntity> MakeRetainingOverride() { return MakeUnique<FRetainingOverride>(); }
+	FElysiumClassRegistrar Registrar(TEXT("elysium_test_retaining_remove"), ElysiumBaseClassName(), &MakeRetainingOverride, [](FElysiumClassDesc&) {});
+	class FSpawnProbe final : public FElysiumEntity
+	{
+	public:
+		int32 PostCalls=0, ActivateCalls=0;
+		void Spawn() override
+		{
+			if(Def->Keys.Contains(TEXT("bare")))SetEFlags(EFlagsWord()|1);
+			else if(Def->Keys.Contains(TEXT("queued")))QueueRemove();
+			else if(Def->Keys.Contains(TEXT("stale")))FElysiumEntity::Kill();
+		}
+		void PostSpawn() override { ++PostCalls; }
+		void Activate() override { ++ActivateCalls; }
+	};
+	TUniquePtr<FElysiumEntity> MakeSpawnProbe() { return MakeUnique<FSpawnProbe>(); }
+	FElysiumClassRegistrar SpawnRegistrar(TEXT("elysium_test_removal_spawn"), ElysiumBaseClassName(), &MakeSpawnProbe, [](FElysiumClassDesc&) {});
+	FElysiumEntityDef Brush(const TCHAR* Name)
+	{
+		FElysiumEntityDef Row; Row.Classname = TEXT("func_door"); Row.TargetName = Name;
+		Row.Model = 1; Row.Keys.Add(TEXT("model"), TEXT("*1")); Row.Origin = FVector(5000,5000,3000);
+		FElysiumConvexHull Hull; for(float X:{-20.f,20.f})for(float Y:{-20.f,20.f})for(float Z:{-20.f,20.f})Hull.Vertices.Add(FVector(X,Y,Z));
+		Row.Hulls.Add(Hull); return Row;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPendingRemovalTest, "Elysium.Substrate.ModelPhysics.PendingRemoval",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumPendingRemovalTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred(); FElysiumWorldServices Services; Services.Embodiment = Map;
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("pending_removal");
+	Defs.Defs.Add(ElysiumRemovalTest::Brush(TEXT("base"))); Defs.Defs.Add(ElysiumRemovalTest::Brush(TEXT("producer")));
+	FElysiumEntityDef Override; Override.Classname = TEXT("elysium_test_retaining_remove"); Override.TargetName = TEXT("retaining"); Defs.Defs.Add(Override);
+	Override.TargetName=TEXT("release_observer"); Defs.Defs.Add(Override);
+	FElysiumEntityDef TailDef; TailDef.Classname=TEXT("info_target"); TailDef.TargetName=TEXT("tail"); Defs.Defs.Add(TailDef);
+	FElysiumEntityWorld World(Map,nullptr,Services); World.Load(FElysiumEntityDefs(Defs));
+	auto* Base=World.FindByName(TEXT("base")); auto* Producer=World.FindByName(TEXT("producer"));
+	auto* Retaining=static_cast<ElysiumRemovalTest::FRetainingOverride*>(World.FindByName(TEXT("retaining")));
+	if (!Base||!Producer||!Retaining||!Base->VPhysicsGetObject()||!Producer->VPhysicsGetObject()) return false;
+	const auto BaseHandle=Base->Handle, RetainingHandle=Retaining->Handle;
+	auto* Observer=World.FindByName(TEXT("release_observer")); auto* Tail=World.FindByName(TEXT("tail"));
+	if (!Observer||!Tail) return false;
+	const auto TailHandle=Tail->Handle;
+	for(auto* Owned:{Base,static_cast<FElysiumEntity*>(Retaining),Tail})Owned->OwnerEntity=Observer->Handle;
+	ElysiumRemovalTest::Released.Reset();
+	const auto BaseToken=ElysiumModelPhysics::CaptureIdentity(Base->VPhysicsGetObject());
+	const auto RetainingToken=ElysiumModelPhysics::CaptureIdentity(Producer->VPhysicsGetObject());
+	Retaining->VPhysicsSetObject(RetainingToken.Actor);
+	int32 CallbackCount=0;
+	World.RemoveExternalActs=[&](FElysiumEntity& Removing)
+	{
+		if (&Removing!=Base) return;
+		++CallbackCount;
+		TestTrue(TEXT("180 observes latched registered owner before native225"),Removing.IsMarkedForDeletion() && World.Resolve(BaseHandle)==Base && ElysiumModelPhysics::IsCurrentOutput(BaseToken));
+		TestEqual(TEXT("callback precedes name clear and queue append"),Removing.TargetName,FString(TEXT("base")));
+		TestEqual(TEXT("queue is not yet appended during180"),World.PendingEntityRemovalCount(),0);
+		Removing.QueueRemove();
+	};
+	Base->QueueRemove(); Base->QueueRemove();
+	TestEqual(TEXT("reentry and repeat removal invoke180 once"),CallbackCount,1);
+	TestTrue(TEXT("base180 retires native but retains registered pending identity"),World.Resolve(BaseHandle)==Base && !Base->IsDead() && !ElysiumModelPhysics::IsCurrentOutput(BaseToken));
+	TestTrue(TEXT("base name clears before queue append"),Base->TargetName.IsEmpty() && World.PendingEntityRemovalCount()==1);
+	Retaining->QueueRemove();
+	TestEqual(TEXT("override180 reentry invokes it once"),Retaining->RemovalCalls,1);
+	TestTrue(TEXT("legitimate override retains native current alias until release"),World.Resolve(RetainingHandle)==Retaining && ElysiumModelPhysics::IsCurrentOutput(RetainingToken));
+	FElysiumMapSnapshot Snapshot; World.Freeze(Snapshot);
+	const auto* PendingState=Snapshot.Entities.FindByPredicate([&](const FElysiumEntityState& Row){return Row.Index==RetainingHandle.Index;});
+	if (!TestTrue(TEXT("native capture admits registered pending owner/latch/name"),PendingState && !PendingState->bDead && (PendingState->EFlags&1) && PendingState->TargetName.IsEmpty())) return false;
+	const auto* PendingBody=Snapshot.PhysicsBodies.FindByPredicate([&](const FElysiumSavedPhysicsBody& Row){return Row.EntityIndex==RetainingHandle.Index;});
+	if (!TestTrue(TEXT("native pending capture preserves actual current body"),PendingBody && PendingBody->bHasObject)) return false;
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Saving(Writer,FElysiumSaveVersion::Latest); Saving<<Snapshot;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Loading(Reader,FElysiumSaveVersion::Latest); Loading<<Persisted;
+	if (Reader.IsError()) return false;
+	World.PurgeEntityRemovals();
+	TestTrue(TEXT("release callback appends tail and live count drains it in the same insertion-order pass"),ElysiumRemovalTest::Released==TArray<int32>({BaseHandle.Index,RetainingHandle.Index,TailHandle.Index}) && !World.Resolve(TailHandle));
+	TestTrue(TEXT("release invalidates pending handles and retained native alias"),!World.Resolve(BaseHandle)&&!World.Resolve(RetainingHandle)&&!ElysiumModelPhysics::IsCurrentOutput(RetainingToken));
+	TestEqual(TEXT("purge clears queue after live-count walk"),World.PendingEntityRemovalCount(),0);
+	World.Teardown(); Persisted.PhysicsBodies.Reset();
+	FElysiumEntityWorld Reload(Map,nullptr,Services); Reload.Load(FElysiumEntityDefs(Defs));
+	if (!TestTrue(TEXT("typed current native restore"),Reload.ApplySnapshot(Persisted)>=0)) return false;
+	auto* Restored=Reload.Resolve(FElysiumEntityHandle(RetainingHandle.Index,Reload.GetEpoch()));
+	if (!TestTrue(TEXT("restore preserves pending latch without released tombstone"),Restored && Restored->IsMarkedForDeletion() && !Restored->IsDead())) return false;
+	TestTrue(TEXT("restore has no synthetic callback or queue replay"),Reload.PendingEntityRemovalCount()==0 && Restored->TargetName.IsEmpty() && Restored->VPhysicsGetObject());
+	Reload.PurgeEntityRemovals(); TestTrue(TEXT("unqueued saved latch survives unrelated empty purge"),Reload.Resolve(Restored->Handle)==Restored);
+	Reload.Teardown(); AddInfo(FString::Printf(TEXT("pending-removal native: base180225=1 override180retains=1 latch-before-callback=1 name-before-append=1 typed_bytes=%d unqueued_restore=1"),Bytes.Num())); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBrushFailureProbeTest, "Elysium.Substrate.ModelPhysics.BrushFailureProbe",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumBrushFailureProbeTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+	auto* Owner=Fixture.World->SpawnActor<AActor>(); auto* Brush=NewObject<UElysiumBrushComponent>(Owner);
+	Brush->RegisterComponent(); Owner->AddInstanceComponent(Brush);
+	FElysiumPhysicsSurfaceProps Surfaces; Surfaces.ParseSurfaceData(TEXT("probe"),TEXT("default { friction 0.8 elasticity 0 density 1000 }"));
+	FElysiumPhysicsBodyRecipe Recipe; Recipe.Kind=EElysiumPhysicsRecipeKind::Brush;
+	Recipe.BrushHulls.Add(ElysiumRemovalTest::Brush(TEXT("cube")).Hulls[0].Vertices);
+	bool Attempted=false; FString Error;
+	if (!TestTrue(TEXT("positive admitted real native brush creation"),ElysiumModelPhysics::CreateBrush(Brush,Surfaces,Recipe,Error,&Attempted)) || !Attempted) return false;
+	Recipe.BrushHulls[0]={FVector(0,0,0),FVector(10,0,0),FVector(20,0,0),FVector(30,0,0)};
+	const bool Created=ElysiumModelPhysics::CreateBrush(Brush,Surfaces,Recipe,Error,&Attempted);
+	AddInfo(FString::Printf(TEXT("brush-failure candidate: finite_collinear4=1 native_attempted=%d created=%d actor=%d error=%s"),Attempted,Created,Brush->BodyInstance.IsValidBodyInstance(),*Error));
+	ElysiumModelPhysics::Destroy(Brush); Brush->DestroyComponent(); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRemovalSpawnTest, "Elysium.Substrate.ModelPhysics.RemovalSpawn",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumRemovalSpawnTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if(!Fixture.CreateWorld(*this))return false;
+	auto* Map=Fixture.SpawnMapActorDeferred(); FElysiumEntityWorld World(Map,nullptr);
+	FElysiumEntityDefs Defs; Defs.MapName=TEXT("removal_spawn"); World.Load(MoveTemp(Defs)); World.Activate(0.);
+	FElysiumEntityDef OtherDef; OtherDef.Classname=TEXT("info_target"); OtherDef.TargetName=TEXT("unrelated");
+	const auto Other=World.CreateRuntimeEntityNoSpawn(MoveTemp(OtherDef)); World.Resolve(Other)->QueueRemove();
+	for(const TCHAR* Kind:{TEXT("bare"),TEXT("queued"),TEXT("stale")})
+	{
+		FElysiumEntityDef Def; Def.Classname=TEXT("elysium_test_removal_spawn"); Def.TargetName=Kind; Def.Keys.Add(Kind,TEXT("1"));
+		const auto Handle=World.CreateRuntimeEntityNoSpawn(MoveTemp(Def)); auto* Probe=static_cast<ElysiumRemovalTest::FSpawnProbe*>(World.Resolve(Handle));
+		World.CallEntitySpawn(*Probe);
+		TestTrue(TEXT("negative101d1280 skips PostSpawn and immediate runtime activation"),Probe->PostCalls==0&&Probe->ActivateCalls==0);
+		if(FString(Kind)==TEXT("bare"))
+			TestTrue(TEXT("bare pending116 rejects Spawn without synthetic queue; unrelated queue drains"),World.Resolve(Handle)==Probe&&Probe->IsMarkedForDeletion()&&!Probe->IsDead()&&World.PendingEntityRemovalCount()==0&&!World.Resolve(Other));
+		else TestNull(TEXT("queued and stale identity negativeSpawn owners no longer resolve"),World.Resolve(Handle));
+	}
+	World.Teardown(); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBrushCreatorFailureTest, "Elysium.Substrate.ModelPhysics.BrushCreatorFailure",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumBrushCreatorFailureTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if(!Fixture.CreateWorld(*this))return false;
+	auto* Map=Fixture.SpawnMapActorDeferred(); FElysiumWorldServices Services; Services.Embodiment=Map;
+	FElysiumEntityDefs Core;
+	if(!TestTrue(TEXT("actual deployed core entity producer loads"),ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"),Core)!=EElysiumEntityDefSource::None))return false;
+	const auto* CoreDoor=Core.Defs.FindByPredicate([](const FElysiumEntityDef& Row){return Row.Classname==TEXT("func_door")&&Row.Model>0&&!Row.Hulls.IsEmpty();});
+	if(!TestNotNull(TEXT("authentic core door has authored collision admission"),CoreDoor))return false;
+	FElysiumEntityDefs Positive; Positive.MapName=TEXT("sp_tutorial_1"); Positive.Defs.Add(*CoreDoor);
+	FElysiumEntityWorld CoreWorld(Map,nullptr,Services); CoreWorld.Load(MoveTemp(Positive));
+	auto* Door=CoreWorld.Resolve(FElysiumEntityHandle(0,CoreWorld.GetEpoch()));
+	if(!TestTrue(TEXT("authentic core door real native/controller success"),Door&&Door->VPhysicsGetObject()&&ElysiumModelPhysics::ShadowFor(Door->VPhysicsGetObject())&&CoreWorld.PhysicsShadows().Contains(Door->Handle)))return false;
+	const auto Initial=ElysiumModelPhysics::CaptureIdentity(Door->VPhysicsGetObject());
+	Door->bEdictAttached=false; TestFalse(TEXT("missing edict rejects Setup"),Door->InitBrushPhysicsShadow());
+	TestTrue(TEXT("missing edict preserves old native field"),ElysiumModelPhysics::IsCurrentOutput(Initial));
+	Door->bEdictAttached=true; Door->SetSolid(0); TestFalse(TEXT("admitted solid0 stops after Setup"),Door->InitBrushPhysicsShadow());
+	TestTrue(TEXT("solid0 retires old field before return without removal"),!ElysiumModelPhysics::IsCurrentOutput(Initial)&&!Door->IsMarkedForDeletion());
+	AddInfo(FString::Printf(TEXT("authentic-core-door: map=sp_tutorial_1 name=%s model=%d hulls=%d native_shadow=1"),*CoreDoor->TargetName,CoreDoor->Model,CoreDoor->Hulls.Num()));
+	CoreWorld.Teardown();
+	ElysiumRetailConVars::DeveloperDiagnosticsEnabled();
+	IConsoleManager& Console=IConsoleManager::Get(); IConsoleVariable* Developer=Console.FindConsoleVariable(TEXT("developer"));
+	if(!Developer)return false;
+	const int32 PreviousLevel=Developer->GetInt();
+	ON_SCOPE_EXIT { if(IConsoleVariable* Current=Console.FindConsoleVariable(TEXT("developer")))Current->Set(PreviousLevel,ECVF_SetByCode); };
+	struct FCase { const TCHAR* MapName; int32 Level; bool Match; bool Studio; };
+	const FCase Cases[]={{TEXT("ordinary"),0,false,false},{TEXT("ordinary"),2,false,false},{TEXT("SM_OCEAN"),1,true,false},{TEXT("sm_oceanhouse_2"),-1,true,false},{TEXT("sm_oceanhouse_2_extra"),0,false,false},{TEXT(""),0,false,false},{TEXT("studio_negative"),1,false,true}};
+	for(const FCase& Case:Cases)
+	{
+		Developer->Set(Case.Level,ECVF_SetByCode);
+		FElysiumEntityDefs Defs; Defs.MapName=Case.MapName; Defs.Defs.Add(ElysiumRemovalTest::Brush(TEXT("failed")));
+		FElysiumEntityWorld World(Map,nullptr,Services); World.Load(MoveTemp(Defs));
+		auto* Entity=World.FindByName(TEXT("failed")); if(!Entity||!Entity->VPhysicsGetObject())return false;
+		const auto Identity=Entity->Handle; const auto Previous=ElysiumModelPhysics::CaptureIdentity(Entity->VPhysicsGetObject());
+		// Explicitly malformed synthetic authored fixture; no stock-map corruption claim.
+		const_cast<FElysiumEntityDef*>(Entity->Def)->Hulls[0].Vertices={FVector(0,0,0),FVector(10,0,0),FVector(20,0,0),FVector(30,0,0)};
+		if(Case.Studio)Entity->SetRuntimeModel(TEXT("models/scenery/structural/society/chair.mdl"));
+		int32 Diagnostics=0, Failures=0;
+		World.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+		{
+			if(Event.Text.Contains(TEXT("brush_shadow_diagnostic")))++Diagnostics;
+			if(Event.Text.Contains(TEXT("brush_shadow_failure")))++Failures;
+		});
+		AddExpectedError(TEXT("brush shadow creation: Chaos body creation failed"),EAutomationExpectedErrorFlags::Contains,1);
+		TestFalse(TEXT("proven admitted native-null shared creator"),Entity->InitBrushPhysicsShadow());
+		TestTrue(TEXT("Setup225 retires previous incarnation before actual creation failure"),!ElysiumModelPhysics::IsCurrentOutput(Previous));
+		TestEqual(TEXT("type1 current developer controls diagnostic only"),Diagnostics,(!Case.Studio&&Case.Level>0)?1:0);
+		TestEqual(TEXT("model classification exactly1 admits failure arm"),Failures,Case.Studio?0:1);
+		const bool Remove=!Case.Studio&&!Case.Match;
+		TestTrue(TEXT("literal/current map direction, empty and studio controls match removal"),Entity->IsMarkedForDeletion()==Remove && World.PendingEntityRemovalCount()==(Remove?1:0));
+		TestTrue(TEXT("shared creator defers handle release while name follows removal"),World.Resolve(Identity)==Entity && Entity->TargetName.IsEmpty()==Remove);
+		World.PurgeEntityRemovals(); TestTrue(TEXT("actual purge invalidates only queued owner"),(World.Resolve(Identity)==nullptr)==Remove);
+		World.SetAiTraceSink(nullptr); World.Teardown();
+	}
+	// Public current registry object predicate: an actual command never enables diagnostics.
+	Console.UnregisterConsoleObject(TEXT("developer"),false);
+	IConsoleCommand* Command=Console.RegisterConsoleCommand(TEXT("developer"),TEXT("creator command negative control"),FConsoleCommandDelegate::CreateLambda([]{}));
+	TestFalse(TEXT("actual developer command fails !IsCommand predicate"),ElysiumRetailConVars::DeveloperDiagnosticsEnabled());
+	Console.UnregisterConsoleObject(Command,false); Developer=Console.RegisterConsoleVariable(TEXT("developer"),PreviousLevel,TEXT("Retail developer diagnostics level."));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativePoseCacheRestoreTest, "Elysium.Substrate.ModelPhysics.NativePoseCacheRestore",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumNativePoseCacheRestoreTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if(!Fixture.CreateWorld(*this))return false;
+	auto* Map=Fixture.SpawnMapActorDeferred(); FElysiumWorldServices Services; Services.Embodiment=Map;
+	FElysiumEntityDefs Defs; Defs.MapName=TEXT("native_pose_cache_restore");
+	auto ParentDef=ElysiumRemovalTest::Brush(TEXT("cache_parent")); ParentDef.Keys.Add(TEXT("angles"),TEXT("10 370 20")); Defs.Defs.Add(ParentDef);
+	for(const TCHAR* Name:{TEXT("cache_clean"),TEXT("cache_dirty")})
+	{
+		auto ChildDef=ElysiumRemovalTest::Brush(Name); ChildDef.Origin+=FVector(120,30,50);
+		ChildDef.Keys.Add(TEXT("parentname"),TEXT("cache_parent")); ChildDef.Keys.Add(TEXT("angles"),TEXT("15 725 35")); Defs.Defs.Add(ChildDef);
+	}
+	FElysiumEntityWorld Source(Map,nullptr,Services); Source.Load(FElysiumEntityDefs(Defs));
+	auto* Clean=Source.FindByName(TEXT("cache_clean")); auto* Dirty=Source.FindByName(TEXT("cache_dirty"));
+	if(!TestTrue(TEXT("cache controls use real parented native shadows"),Clean&&Dirty&&Clean->VPhysicsGetObject()&&Dirty->VPhysicsGetObject()&&Clean->bParentLocalPose&&Dirty->bParentLocalPose))return false;
+	Clean->GetAbsOrigin(); Clean->GetAbsAngles(); Dirty->GetAbsOrigin(); Dirty->GetAbsAngles();
+	Dirty->SetOrigin(Dirty->GetOrigin()+FVector(11,23,37)); Dirty->SetAngles(FRotator(23,745,47));
+	Clean->SetEFlags(Clean->EFlagsWord()&~0x1c000u); Dirty->SetEFlags(Dirty->EFlagsWord()&~0x1c000u); // explicit saved clean bounds/partition control.
+	const uint32 CleanFlags=Clean->EFlagsWord(), DirtyFlags=Dirty->EFlagsWord();
+	const FVector CleanAbsolute=Clean->Origin, CleanAngles=Clean->Angles, DirtyAbsolute=Dirty->Origin, DirtyAngles=Dirty->Angles;
+	const FVector DirtyLocal=Dirty->GetOrigin(), DirtyLocalAngles=Dirty->GetAngles();
+	FVector ExpectedDirtyOrigin,ExpectedDirtyAngles; Dirty->ComputeAbsolutePose(ExpectedDirtyOrigin,ExpectedDirtyAngles);
+	float CleanFrame[12],DirtyFrame[12]; for(int32 Index=0;Index<12;++Index){CleanFrame[Index]=Clean->CoordinateFrame[Index];DirtyFrame[Index]=Dirty->CoordinateFrame[Index];}
+	TestTrue(TEXT("control saved words distinguish clean and dirty absolute caches"),!(CleanFlags&0x800u)&&(DirtyFlags&0x800u)&&!DirtyAbsolute.Equals(ExpectedDirtyOrigin,.001));
+	const int32 CleanIndex=Clean->Handle.Index,DirtyIndex=Dirty->Handle.Index;
+	FElysiumMapSnapshot Snapshot; Source.Freeze(Snapshot);
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes,true); FElysiumSaveArchive Saving(Writer,FElysiumSaveVersion::Latest); Saving<<Snapshot;
+	FElysiumMapSnapshot Persisted; FMemoryReader Reader(Bytes,true); FElysiumSaveArchive Loading(Reader,FElysiumSaveVersion::Latest); Loading<<Persisted;
+	if(!TestFalse(TEXT("typed native pose-cache bytes decode"),Writer.IsError()||Reader.IsError()))return false;
+	Source.Teardown(); Persisted.PhysicsBodies.Reset();
+	FElysiumEntityWorld Destination(Map,nullptr,Services); Destination.Load(FElysiumEntityDefs(Defs));
+	bool Observed=false;
+	Destination.OnSnapshotDecoded=[&]()
+	{
+		Observed=true; Clean=Destination.Resolve(FElysiumEntityHandle(CleanIndex,Destination.GetEpoch())); Dirty=Destination.Resolve(FElysiumEntityHandle(DirtyIndex,Destination.GetEpoch()));
+		if(!Clean||!Dirty){AddError(TEXT("cache identities missing before OnRestore"));return;}
+		TestEqual(TEXT("clean saved cache survives actual restore bounds/partition invalidation"),Clean->EFlagsWord(),(CleanFlags&~0x8000u)|0x14000u|(Clean->EdictIndex()!=0?0x8000u:0u));
+		TestEqual(TEXT("dirty saved cache survives actual restore bounds/partition invalidation"),Dirty->EFlagsWord(),(DirtyFlags&~0x8000u)|0x14000u|(Dirty->EdictIndex()!=0?0x8000u:0u));
+		TestTrue(TEXT("raw clean and stale dirty absolute caches restore before any getter"),Clean->Origin==CleanAbsolute&&Clean->Angles==CleanAngles&&Dirty->Origin==DirtyAbsolute&&Dirty->Angles==DirtyAngles);
+		for(int32 Index=0;Index<12;++Index){TestEqual(TEXT("clean saved affine frame word"),Clean->CoordinateFrame[Index],CleanFrame[Index]);TestEqual(TEXT("dirty saved affine frame word"),Dirty->CoordinateFrame[Index],DirtyFrame[Index]);}
+		TestTrue(TEXT("dirty local inputs and full Euler restore independently"),Dirty->GetOrigin()==DirtyLocal&&Dirty->GetAngles()==DirtyLocalAngles);
+		TestTrue(TEXT("clean absolute readers preserve saved cache"),Clean->GetAbsOrigin()==CleanAbsolute&&Clean->GetAbsAngles()==CleanAngles&&!(Clean->EFlagsWord()&0x800u));
+		TestTrue(TEXT("dirty real absolute reader recomputes inherited pose and clears800"),Dirty->GetAbsOrigin().Equals(ExpectedDirtyOrigin,.002)&&Dirty->GetAbsAngles().Equals(ExpectedDirtyAngles,.001)&&!(Dirty->EFlagsWord()&0x800u));
+	};
+	TestTrue(TEXT("real native cache restore completes"),Destination.ApplySnapshot(Persisted)>=0&&Observed);
+	Destination.OnSnapshotDecoded=nullptr; Destination.Teardown();
+	AddInfo(FString::Printf(TEXT("native-cache restore: clean=1 dirty=1 raw_frame12=1 full_euler=1 lazy_reader=1 typed_bytes=%d"),Bytes.Num()));return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRemovalResourceLifetimeTest, "Elysium.Substrate.ModelPhysics.RemovalResourceLifetime",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumRemovalResourceLifetimeTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if(!Fixture.CreateWorld(*this))return false;
+	Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+	auto* Map=Fixture.SpawnMapActorDeferred(); Map->bStageOnly=true; Map->bStageWithoutCatalogue=true; Map->FinishSpawning(FTransform::Identity);
+	for(int32 Frame=0;Frame<20&&!Map->IsRuntimeActive();++Frame)Fixture.TestWorld.TickTestWorld(.02f);
+	if(!TestTrue(TEXT("resource witness has real active map/light rig host"),Map->IsRuntimeActive()))return false;
+	FString Error;
+	FElysiumEntityDefs Defs; Defs.MapName=TEXT("removal_resource_lifetime");
+	for(const TCHAR* Name:{TEXT("detached"),TEXT("replaced")})
+	{
+		auto Row=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/vehicles/OmniShpere/CopCar.mdl"),Name);
+		Row.Classname=TEXT("prop_dynamic"); Row.Origin=FVector(5000,5000,3000);Row.Keys.Add(TEXT("solid"),TEXT("6"));Row.Keys.Add(TEXT("spawnflags"),TEXT("0"));Defs.Defs.Add(Row);
+	}
+	Defs.Defs.Add(ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"),TEXT("replacement")));
+	FElysiumEntityDef LightDef;LightDef.Classname=TEXT("light_dynamic");LightDef.TargetName=TEXT("light");Defs.Defs.Add(LightDef);
+	for(const TCHAR* Name:{TEXT("immediate_npc"),TEXT("queued_npc")}){FElysiumEntityDef NpcDef;NpcDef.Classname=TEXT("elysium_test_destructor_remove");NpcDef.TargetName=Name;Defs.Defs.Add(NpcDef);}
+	FElysiumStageSeat Seat;Seat.FeetCm=FVector(-1000,0,1000);
+	if(!Map->RebuildStageWorld(MoveTemp(Defs),{},Seat,Error)){AddError(Error);return false;}
+	for(int32 Frame=0;Frame<20&&!Map->IsRuntimeActive();++Frame)Fixture.TestWorld.TickTestWorld(.02f);
+	if(!Map->IsRuntimeActive()||!Map->GetEntityWorld())return false;
+	FElysiumEntityWorld& World=*Map->GetEntityWorld();
+	auto* Detached=World.FindByName(TEXT("detached"));auto* Replaced=World.FindByName(TEXT("replaced"));auto* Replacement=World.FindByName(TEXT("replacement"));auto* Light=World.FindByName(TEXT("light"));
+	if(!TestTrue(TEXT("real static owned and replacement native producers"),Detached&&Replaced&&Replacement&&Detached->VPhysicsGetObject()&&Replaced->VPhysicsGetObject()&&Replacement->VPhysicsGetObject()))return false;
+	const auto DetachedToken=ElysiumModelPhysics::CaptureIdentity(Detached->VPhysicsGetObject()),ReplacedToken=ElysiumModelPhysics::CaptureIdentity(Replaced->VPhysicsGetObject()),ReplacementToken=ElysiumModelPhysics::CaptureIdentity(Replacement->VPhysicsGetObject());
+	USceneComponent* LightComponent=Light?Light->GetAttachChild():nullptr;
+	if(!TestTrue(TEXT("real dynamic light component exists"),LightComponent&&LightComponent->IsRegistered()))return false;
+	Detached->VPhysicsSetObject(nullptr);Replaced->VPhysicsSetObject(ReplacementToken.Actor);
+	const auto DetachedHandle=Detached->Handle,ReplacedHandle=Replaced->Handle,LightHandle=Light->Handle;
+	Detached->QueueRemove();Replaced->QueueRemove();Light->QueueRemove();
+	TestTrue(TEXT("queue-time base225 retires current replacement but retains both detached owned carriers"),!ElysiumModelPhysics::IsCurrentOutput(ReplacementToken)&&ElysiumModelPhysics::IsCurrentOutput(DetachedToken)&&ElysiumModelPhysics::IsCurrentOutput(ReplacedToken));
+	TestTrue(TEXT("owned native game data and dynamic light survive until release"),ElysiumModelPhysics::GameDataForObject(DetachedToken.Actor)==Detached&&ElysiumModelPhysics::GameDataForObject(ReplacedToken.Actor)==Replaced&&LightComponent->IsRegistered()&&World.Resolve(LightHandle)==Light);
+	World.PurgeEntityRemovals();
+	TestTrue(TEXT("derived release retires detached/replaced owned resources and native game data"),!ElysiumModelPhysics::IsCurrentOutput(DetachedToken)&&!ElysiumModelPhysics::IsCurrentOutput(ReplacedToken)&&!ElysiumModelPhysics::GameDataForObject(DetachedToken.Actor)&&!ElysiumModelPhysics::GameDataForObject(ReplacedToken.Actor));
+	TestTrue(TEXT("dynamic light release destroys native component and invalidates all owner handles"),!LightComponent->IsRegistered()&&!World.Resolve(DetachedHandle)&&!World.Resolve(ReplacedHandle)&&!World.Resolve(LightHandle));
+	auto* Immediate=World.FindByName(TEXT("immediate_npc"));auto* Queued=World.FindByName(TEXT("queued_npc"));
+	if(!Immediate||!Queued)return false;
+	ElysiumRemovalTest::DestructorCleanupCalls.Reset();Immediate->AsNpc()->AttackCoordinator=1;Queued->AsNpc()->AttackCoordinator=1;
+	Immediate->FElysiumEntity::Kill();
+	TestFalse(TEXT("old immediate Kill is not proof of destructor cleanup"),Immediate->bNpcDestructorCleanupDispatched);
+	Queued->QueueRemove();World.PurgeEntityRemovals();
+	TestTrue(TEXT("queued release invokes existing Troika destructor recipient once"),Queued->bNpcDestructorCleanupDispatched&&ElysiumRemovalTest::DestructorCleanupCalls.FindRef(TEXT("queued_npc"))==1);
+	World.Teardown();
+	TestTrue(TEXT("teardown dispatches immediate-Kill cleanup once and does not redispatch queued release"),ElysiumRemovalTest::DestructorCleanupCalls.FindRef(TEXT("immediate_npc"))==1&&ElysiumRemovalTest::DestructorCleanupCalls.FindRef(TEXT("queued_npc"))==1);
 	return true;
 }
 #endif

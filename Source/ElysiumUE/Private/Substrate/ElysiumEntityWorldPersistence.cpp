@@ -24,6 +24,10 @@ FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) c
 	S.TargetName = E.TargetName;
 	S.bRuntime = E.Handle.Index >= Defs.Defs.Num();
 	S.bDead = E.bDead;
+	S.EFlags = E.EFlagsWord(); //SAVE flags retain pending1 separately from release.
+	S.AbsoluteOrigin = E.Origin; S.AbsoluteAngles = E.Angles;
+	for (int32 FrameIndex = 0; FrameIndex < 12; ++FrameIndex) S.CoordinateFrame[FrameIndex] = E.CoordinateFrame[FrameIndex];
+	S.bCoordinateFrameValid = E.bCoordinateFrameValid;
 	S.bHidden = E.bHidden;
 	S.bSpawnCalled = E.bSpawnCalled;
 	S.bActivateCalled = E.bActivateCalled;
@@ -43,7 +47,7 @@ FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) c
 	// Native bodies retain a separate local word (+0x41c) even without a parent.
 	// POSITION SAVE carries that input, not the solved/absolute compatibility cache.
 	// Move-parent graph reconstruction and the solved body are independent inputs.
-	S.Origin = E.bNativeLocalPose ? E.LocalOriginWord() : E.Origin;
+	S.Origin = E.LocalOriginWord();
 
 	// The field walk, in the registry's sorted order so two captures of one state agree byte
 	// for byte (§8).
@@ -57,7 +61,7 @@ FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) c
 				if (Acc->Get)
 				{
 					FElysiumVariant Value = Acc->Get(E); // 0x101a0a80, same type-aware path for every carried row
-					if (FieldName == FName(TEXT("angles")) && E.bNativeLocalPose)
+					if (FieldName == FName(TEXT("angles")))
 						Value = FElysiumVariant::Vector(E.LocalAnglesWord()); // datamap +0x428, full Source Euler
 					if (Acc->PersistenceType == EElysiumPersistenceType::Time)
 					{
@@ -449,7 +453,7 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 				? FElysiumVariant::Float(static_cast<float>(FElysiumSaveArchive::DecodeTime(F.Value.ToFloat(), RestoreBase, Acc->TimePolicy)))
 				: F.Value; // 0x101a2a30; FLOAT stays raw
 			Acc->Set(*E, Value);
-			if (F.Key == FName(TEXT("angles")) && E->bNativeLocalPose)
+			if (F.Key == FName(TEXT("angles")) && (E->bNativeLocalPose || E->bParentLocalPose))
 				E->LocalAngles = Value.ToVector(); // raw restored local word, no live slot64 callbacks
 		}
 	}
@@ -465,10 +469,9 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 	{
 		E->Origin = S.Origin; // POSITION SAVE, 0x100aa140; physical reconnect follows post-restore
 	}
-	if (E->bNativeLocalPose)
+	if (E->bNativeLocalPose || E->bParentLocalPose)
 	{
 		E->LocalOrigin = S.Origin; // +0x41c; native solved pose restores independently in Physics
-		E->InvalidateTransform(0x10800u, 0u); // lazy absolute cache must use the restored local inputs
 	}
 
 	E->bSpawnCalled = S.bSpawnCalled;
@@ -531,6 +534,16 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 	}
 
 	E->bHidden = S.bHidden; E->bDead = S.bDead; // all words first, 0x101a2e40
+	//100aa140 restores registered cache words, then clears only partition dirty8000.
+	// Do not call absolute getters or invent dirty800: a dirty saved frame remains stale
+	// until its actual reader; a clean saved frame already contains the saved absolute pose.
+	E->Origin = S.AbsoluteOrigin; E->Angles = S.AbsoluteAngles;
+	for (int32 FrameIndex = 0; FrameIndex < 12; ++FrameIndex) E->CoordinateFrame[FrameIndex] = S.CoordinateFrame[FrameIndex];
+	E->CoordinateFrame[12] = E->CoordinateFrame[13] = E->CoordinateFrame[14] = 0.f;
+	E->CoordinateFrame[15] = 1.f;
+	E->bCoordinateFrameValid = S.bCoordinateFrameValid;
+	E->SetEFlags(static_cast<int32>(S.EFlags & ~0x8000u)); //100aa140 clears only partition-handle dirty.
+	E->MarkCollisionBoundsDirty(); //100aa140->100dda20:14000 then actual edict-gated partition8000.
 	return bLeafDecoded; // hook dispatch belongs to the world fence
 
 }

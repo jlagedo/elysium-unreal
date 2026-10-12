@@ -176,7 +176,15 @@ void UElysiumBrushComponent::ApplySolidity(EElysiumBrushSolidity Solidity)
 
 void UElysiumBrushComponent::SetDormant(bool bDormant)
 {
-	if (bDormant)
+	const auto* NativeRecipe = ElysiumModelPhysics::RecipeFor(ElysiumModelPhysics::ActorIdentity(this));
+	if (NativeRecipe && NativeRecipe->Kind == EElysiumPhysicsRecipeKind::Brush)
+	{
+		// ScriptHide100a8710/Unhide100a8990 alter participation, not225 lifetime.
+		// UE SetCollisionEnabled changes physics mode and recreates the actor, retiring
+		// aliases and its shadow. Gate actual native shapes without changing mechanics.
+		ElysiumModelPhysics::GateStaticModelCollision(this, !bDormant);
+	}
+	else if (bDormant)
 	{
 		SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		SetGenerateOverlapEvents(false);

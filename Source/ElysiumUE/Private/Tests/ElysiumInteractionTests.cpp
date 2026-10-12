@@ -11,6 +11,8 @@
 #include "ElysiumAudioLatency.h"
 #include "ElysiumBinds.h"
 #include "ElysiumBrushComponent.h"
+#include "ElysiumCollisionChannels.h"
+#include "Map/ElysiumRetailMaskRecipe.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraRig.h"
@@ -21,6 +23,7 @@
 #include "ElysiumContentPaths.h"
 #include "Debug/ElysiumChannelRecorder.h"
 #include "Debug/ElysiumConsole.h"
+#include "Debug/ElysiumPick.h"
 #include "Debug/ElysiumLogTap.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumDecals.h"
@@ -112,6 +115,9 @@
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Engine/World.h"
+#include "Physics/PhysicsInterfaceCore.h"
+#include "Physics/Experimental/PhysScene_Chaos.h"
+#include "PBDRigidsSolver.h"
 #include "Engine/GameInstance.h"
 #include "Camera/CameraActor.h"
 #include "GameFramework/PlayerController.h"
@@ -979,7 +985,9 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
-	auto AdvanceMoverFrames = [&TestWorld](FElysiumEntityWorld& FrameWorld, double Until)
+	UBoxComponent* CrossingProbe = nullptr;
+	bool bCrossingProbeIntersectedDoor = false;
+	auto AdvanceMoverFrames = [&TestWorld, &CrossingProbe, &bCrossingProbeIntersectedDoor](FElysiumEntityWorld& FrameWorld, double Until)
 	{
 		while (FrameWorld.NowSeconds() < Until)
 		{
@@ -988,6 +996,12 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 			ElysiumModelPhysics::PreparePhysicsFrame(*TestWorld.GetTestWorld(), static_cast<float>(FrameWorld.FrameSeconds()), 1.f, true);
 			TestWorld.TickTestWorld(static_cast<float>(FrameWorld.FrameSeconds()));
 			FrameWorld.FinishNativePhysicsFrame();
+			if (CrossingProbe)
+			{
+				const FElysiumEntity* MovingDoor = FrameWorld.FindByName(TEXT("lift_door"));
+				if (MovingDoor && MovingDoor->Body)
+					bCrossingProbeIntersectedDoor |= CrossingProbe->Bounds.GetBox().Intersect(MovingDoor->Body->Bounds.GetBox());
+			}
 		}
 	};
 
@@ -1009,10 +1023,47 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 		LiveDoor->Body && LiveDoor->Body->GetVisual()
 		&& LiveDoor->Body->GetVisual()->GetAttachParent() == LiveDoor->Body
 		&& LiveDoor->Body->GetVisual()->GetRelativeTransform().Equals(FTransform::Identity));
-	TestEqual(TEXT("PASSABLE door keeps its dedicated traceable profile"),
-		LiveDoor->Body->GetCollisionProfileName(), FName(TEXT("ElysiumBrushPassable")));
-	TestTrue(TEXT("parentname attaches the door to the elevator body"),
-		LiveDoor->Body->GetAttachParent() == LiveElevator->Body);
+	// 100a6150 admits solid6 even with FSOLID_NOT_SOLID4. Starting the actual Chaos
+	// shadow detaches the simulated component (public SetSimulatePhysics contract);
+	// retail parenting is the logical graph and its native 45/46 target, not UE attachment.
+	TestTrue(TEXT("parentname preserves the door's actual move parent and local offset"),
+		World.Resolve(LiveDoor->MoveParent) == LiveElevator
+		&& LiveDoor->LocalOriginWord().Equals(FVector(50.f, 0.f, 0.f), .1f));
+	auto CheckPassableDoor = [this, EngineWorld, LiveDoor](const TCHAR* Phase)
+	{
+		// Exactly the channels authored by ElysiumBrushPassable in DefaultEngine.ini.
+		for (ECollisionChannel Channel : { ECC_WorldStatic, ECC_WorldDynamic, ECC_Pawn,
+			ECC_Visibility, ECC_Camera, ECC_PhysicsBody, ECC_Vehicle, ECC_Destructible,
+			ElysiumCollision::PlayerChannel, ElysiumCollision::SightChannel })
+			TestEqual(FString::Printf(TEXT("%s PASSABLE ignores authored channel%d"), Phase, static_cast<int32>(Channel)),
+				LiveDoor->Body->GetCollisionResponseToChannel(Channel), ECR_Ignore);
+		TestEqual(FString::Printf(TEXT("%s PASSABLE retains the mover query mask"), Phase),
+			LiveDoor->Body->BodyInstance.GetMaskFilter(), ElysiumRetailMask::MoverMaskBit);
+		const FVector Center = LiveDoor->Body->GetComponentLocation();
+		const FVector Start = Center + FVector(0., 0., 60.);
+		const FVector End = Center - FVector(0., 0., 60.);
+		for (ECollisionChannel Channel : { ELYSIUM_USE_CHANNEL, ELYSIUM_PICK_CHANNEL })
+		{
+			TestEqual(FString::Printf(TEXT("%s PASSABLE remains addressable on channel%d"), Phase, static_cast<int32>(Channel)),
+				LiveDoor->Body->GetCollisionResponseToChannel(Channel), ECR_Block);
+			FHitResult Hit;
+			TestTrue(FString::Printf(TEXT("%s real address ray hits the admitted door convex%d"), Phase, static_cast<int32>(Channel)),
+				EngineWorld->LineTraceSingleByChannel(Hit, Start, End, Channel) && Hit.GetComponent() == LiveDoor->Body);
+		}
+		for (ECollisionChannel Channel : { ElysiumCollision::PlayerChannel, ECC_Pawn, ECC_PhysicsBody })
+		{
+			FHitResult Hit;
+			TestFalse(FString::Printf(TEXT("%s real movement hull passes through the door%d"), Phase, static_cast<int32>(Channel)),
+				EngineWorld->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, Channel, FCollisionShape::MakeBox(FVector(5.))));
+		}
+	};
+	CheckPassableDoor(TEXT("initial"));
+	FElysiumSavedPhysicsBody InitialDoorNative;
+	TestTrue(TEXT("PASSABLE door owns an actual native shadow at its exported pose"),
+		ElysiumModelPhysics::Capture(LiveDoor->VPhysicsGetObject(), InitialDoorNative)
+		&& InitialDoorNative.Shadow.bInstalled
+		&& World.PhysicsShadows().Contains(LiveDoor->Handle)
+		&& InitialDoorNative.Pose.GetLocation().Equals(LiveDoor->GetAbsOrigin(), .1f));
 	TestTrue(TEXT("parentname attaches the cabin button visual to the elevator body"),
 		LiveButton->GetAttachBody()
 		&& LiveButton->GetAttachBody()->GetAttachParent() == LiveElevator->Body);
@@ -1085,7 +1136,35 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 		LiveElevator->VPhysicsGetObject() && ElysiumModelPhysics::RecipeFor(LiveElevator->VPhysicsGetObject())
 		&& ElysiumModelPhysics::RecipeFor(LiveElevator->VPhysicsGetObject())->Kind == EElysiumPhysicsRecipeKind::Brush
 		&& ElysiumModelPhysics::ShadowFor(LiveElevator->VPhysicsGetObject()));
+	Chaos::FPBDRigidsSolver* DoorSolver = EngineWorld->GetPhysicsScene()->GetSolver();
+	const double CrossingSolverStart = DoorSolver->GetSolverTime();
+	// A separate real dynamic actor must cross the native convex, not merely miss it.
+	AActor* ProbeOwner = EngineWorld->SpawnActor<AActor>();
+	CrossingProbe = NewObject<UBoxComponent>(ProbeOwner, TEXT("PassableCrossingProbe"));
+	ProbeOwner->SetRootComponent(CrossingProbe);
+	ProbeOwner->AddInstanceComponent(CrossingProbe);
+	CrossingProbe->SetBoxExtent(FVector(5.));
+	CrossingProbe->SetCollisionProfileName(TEXT("PhysicsActor"));
+	CrossingProbe->SetLinearDamping(0.f);
+	CrossingProbe->SetAngularDamping(0.f);
+	CrossingProbe->SetEnableGravity(false);
+	CrossingProbe->SetWorldLocation(LiveDoor->GetAbsOrigin() + FVector(0., 0., 60.));
+	CrossingProbe->RegisterComponent();
+	CrossingProbe->SetSimulatePhysics(true);
+	CrossingProbe->SetPhysicsLinearVelocity(FVector(0., 0., -200.));
+	TestTrue(TEXT("crossing control is an awake real native dynamic actor above the door"),
+		CrossingProbe->IsSimulatingPhysics() && CrossingProbe->BodyInstance.IsValidBodyInstance()
+		&& CrossingProbe->BodyInstance.IsInstanceAwake()
+		&& CrossingProbe->Bounds.GetBox().Min.Z > LiveDoor->Body->Bounds.GetBox().Max.Z);
 	AdvanceMoverFrames(World, 0.5);
+	const double CrossingSolverElapsed = DoorSolver->GetSolverTime() - CrossingSolverStart;
+	TestTrue(TEXT("real physics actor intersects then traverses the moving PASSABLE native convex"),
+		bCrossingProbeIntersectedDoor
+		&& CrossingProbe->Bounds.GetBox().Max.Z < LiveDoor->Body->Bounds.GetBox().Min.Z
+		&& CrossingProbe->GetComponentLocation().Equals(FVector(50., 0., 60. - 200. * CrossingSolverElapsed), .1f)
+		&& CrossingProbe->GetPhysicsLinearVelocity().Equals(FVector(0., 0., -200.), .1f));
+	CrossingProbe = nullptr;
+	ProbeOwner->Destroy();
 	TestTrue(TEXT("elevator advances at constant speed"),
 		FMath::IsNearlyEqual(LiveElevator->GetAbsOrigin().Z, 127.f, 1.f));
 	const FElysiumPhysicsShadowState* HalfTarget = ElysiumModelPhysics::ShadowFor(LiveElevator->VPhysicsGetObject());
@@ -1094,6 +1173,13 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	TestTrue(TEXT("parented door stays aligned while elevator moves"),
 		FMath::IsNearlyEqual(LiveDoor->GetAbsOrigin().Z, 127.f, 1.f)
 		&& FMath::IsNearlyEqual(LiveDoor->Body->GetComponentLocation().Z, LiveElevator->Body->GetComponentLocation().Z, 1.f));
+	FElysiumSavedPhysicsBody MovingDoorNative;
+	TestTrue(TEXT("parented PASSABLE door submits its logical pose to its own shadow and solves there"),
+		ElysiumModelPhysics::Capture(LiveDoor->VPhysicsGetObject(), MovingDoorNative)
+		&& MovingDoorNative.Shadow.bInstalled
+		&& MovingDoorNative.Shadow.Target.GetLocation().Equals(LiveDoor->GetAbsOrigin(), .01f)
+		&& MovingDoorNative.Pose.GetLocation().Equals(LiveDoor->GetAbsOrigin(), 1.f)
+		&& LiveDoor->LocalOriginWord().Equals(FVector(50.f, 0.f, 0.f), .1f));
 	TestTrue(TEXT("parented cabin button stays aligned while elevator moves"),
 		LiveButton->GetAttachBody()
 		&& FMath::IsNearlyEqual(LiveButton->GetAttachBody()->GetComponentLocation().Z, LiveElevator->Body->GetComponentLocation().Z, 1.f));
@@ -1119,16 +1205,59 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	TestEqual(TEXT("mid-move retarget was ignored"),
 		CounterValue(World.FindByName(TEXT("move_start"))), 1.f);
 
+	FElysiumSavedPhysicsBody BeforeHiddenDoorNative;
+	const auto BeforeHiddenDoorIdentity = ElysiumModelPhysics::CaptureIdentity(LiveDoor->VPhysicsGetObject());
+	TestTrue(TEXT("door has native mechanics to preserve across ScriptHide"),
+		ElysiumModelPhysics::Capture(LiveDoor->VPhysicsGetObject(), BeforeHiddenDoorNative));
 	World.AcceptInput(TEXT("lift_door"), FName(TEXT("ScriptHide")), FElysiumVariant::Void(),
 		LiveDoor->Handle, LiveDoor->Handle);
-	TestEqual(TEXT("hidden mover drops collision"), LiveDoor->Body->GetCollisionEnabled(),
-		ECollisionEnabled::NoCollision);
 	TestFalse(TEXT("hidden mover hides its attached visual"), LiveDoor->Body->GetVisual()->IsVisible());
+	auto DescribeDoorNative = [LiveDoor]()
+	{
+		FString ShapeFlags;
+		FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(LiveDoor->Body);
+		if (NativeBody) FPhysicsCommand::ExecuteRead(NativeBody->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
+		{
+			TArray<FPhysicsShapeHandle> Shapes;
+			NativeBody->GetAllShapes_AssumesLocked(Shapes);
+			for (const auto& Shape : Shapes) ShapeFlags += FString::Printf(TEXT("q%d/s%d;"), FPhysicsInterface::IsQueryShape(Shape), FPhysicsInterface::IsSimulationShape(Shape));
+		});
+		return ShapeFlags;
+	};
+	FElysiumSavedPhysicsBody HiddenDoorNative;
+	TestTrue(TEXT("hidden mover gates native geometry without retiring its actor/controller/mechanics"),
+		ElysiumModelPhysics::IsCurrentOutput(BeforeHiddenDoorIdentity)
+		&& ElysiumModelPhysics::Capture(LiveDoor->VPhysicsGetObject(), HiddenDoorNative)
+		&& DescribeDoorNative() == TEXT("q0/s0;")
+		&& HiddenDoorNative.Shadow.bInstalled
+		&& HiddenDoorNative.bAsleep == BeforeHiddenDoorNative.bAsleep
+		&& HiddenDoorNative.CurrentMassKg == BeforeHiddenDoorNative.CurrentMassKg
+		&& HiddenDoorNative.CurrentInertia == BeforeHiddenDoorNative.CurrentInertia
+		&& HiddenDoorNative.LinearVelocity == BeforeHiddenDoorNative.LinearVelocity
+		&& HiddenDoorNative.AngularVelocityRadians == BeforeHiddenDoorNative.AngularVelocityRadians
+		&& HiddenDoorNative.Shadow.Target.Equals(BeforeHiddenDoorNative.Shadow.Target, 0.f));
+	for (ECollisionChannel Channel : { ELYSIUM_USE_CHANNEL, ELYSIUM_PICK_CHANNEL })
+	{
+		FHitResult Hit;
+		const FVector Center = LiveDoor->GetAbsOrigin();
+		TestFalse(TEXT("hidden mover is absent from real address queries"), EngineWorld->LineTraceSingleByChannel(
+			Hit, Center + FVector(0., 0., 60.), Center - FVector(0., 0., 60.), Channel));
+	}
 	World.AcceptInput(TEXT("lift_door"), FName(TEXT("ScriptUnhide")), FElysiumVariant::Void(),
 		LiveDoor->Handle, LiveDoor->Handle);
-	TestEqual(TEXT("unhidden PASSABLE mover restores its profile"),
-		LiveDoor->Body->GetCollisionProfileName(), FName(TEXT("ElysiumBrushPassable")));
+	CheckPassableDoor(TEXT("unhidden"));
 	TestTrue(TEXT("unhidden mover restores its attached visual"), LiveDoor->Body->GetVisual()->IsVisible());
+	TestTrue(TEXT("unhidden mover restores native eligibility on the original incarnation"),
+		ElysiumModelPhysics::IsCurrentOutput(BeforeHiddenDoorIdentity) && DescribeDoorNative() == TEXT("q1/s1;"));
+	AdvanceMoverFrames(World, 1.1 + 1. / 60.);
+	FElysiumSavedPhysicsBody UnhiddenDoorNative;
+	const bool bUnhiddenNativeCaptured = ElysiumModelPhysics::Capture(LiveDoor->VPhysicsGetObject(), UnhiddenDoorNative);
+	TestTrue(TEXT("unhidden PASSABLE door continues an actual native frame with its parent shadow pose"),
+		bUnhiddenNativeCaptured && ElysiumModelPhysics::IsCurrentOutput(BeforeHiddenDoorIdentity)
+		&& LiveDoor->Body->IsSimulatingPhysics() && UnhiddenDoorNative.Shadow.bInstalled
+		&& World.Resolve(LiveDoor->MoveParent) == LiveElevator
+		&& UnhiddenDoorNative.Shadow.Target.GetLocation().Equals(LiveDoor->GetAbsOrigin(), .01f)
+		&& UnhiddenDoorNative.Pose.GetLocation().Equals(LiveDoor->GetAbsOrigin(), 1.f));
 
 	World.AcceptInput(TEXT("elev_button"), FName(TEXT("ScriptHide")), FElysiumVariant::Void(),
 		LiveButton->Handle, LiveButton->Handle);

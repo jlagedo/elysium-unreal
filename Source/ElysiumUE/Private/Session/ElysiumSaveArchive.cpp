@@ -418,6 +418,10 @@ FArchive& operator<<(FArchive& Ar, FElysiumEntityState& S)
 {
 	Ar << S.Index << S.ClassName << S.TargetName << S.Origin;
 	Ar << S.bDead << S.bHidden << S.bSpawnCalled;
+	Ar << S.EFlags; //schema53/current disposable floor; no pointer/queue replay.
+	Ar << S.AbsoluteOrigin << S.AbsoluteAngles;
+	for (float& FrameValue : S.CoordinateFrame) Ar << FrameValue;
+	Ar << S.bCoordinateFrameValid;
 	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::Activation)
 	{
 		Ar << S.bActivateCalled;

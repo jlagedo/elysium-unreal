@@ -2413,3 +2413,95 @@ flags and gameplay associations remain absent, rather than treating allocation c
 The bounded arena/native fixtures cover this P1 producer/save slice. Integrated parent movement,
 motion/clock/pose feedback/P3, P2 contact/filter parity, remaining callers/metadata and full P1/D02
 closure remain open.
+
+### Shared type1 failure, diagnostic and queued lifetime (2026-10-12)
+
+This supersedes the open generic-failure disposition above for the selected shared creator.
+InitShadow100a6150 gates edict admission, performs Setup100a5ad0 (including virtual225),
+then checks solid0. Only an actual attempted native creation returning null and model type
+exactly1 enters its diagnostic/removal arm. Studio3 null remains alive. Developer1070af4c is
+resolved through10118350: the object must not be a command and its current integer must be
+positive. Debug prints bad-collision text then the rotated bounds at absolute pose. Bounds
+remain Source inches; Unreal half extents use1.27cm per inch extent. Removal is independent
+of developer. Q_stristr receives literal haystack sm_oceanhouse_2 and current-map needle;
+primary vstdlib100036d0 returns null for an empty needle. Partial and mixed-case matching
+preserves the exemption; an empty name or longer reverse-match does not.
+
+The admitted finite collinear four-vertex synthetic brush reaches actual Chaos creation and
+returns no actor. This is an intentionally malformed fixture, not evidence of identical
+Source geometry acceptance or corrupt stock maps. Expected native zero-particle/no-geometry
+warnings remain. Real tutorial door tutwareelevdrd is the successful type1 control; edict0
+preserves a previous native, solid0 destroys it first. The classifier3 malformed brush only
+proves the exact classifier guard; the accepted genuine studio3/no-binary ModelShadow witness
+proves that separate path. Native BrushCreatorFailure joins current developer values/command
+rejection, map substring arms and queue-before-release. Integrated l0_physics_object_contract
+joins primary SetObject/Swap, real velocity, current flags, hidden/parented bodies and actual
+host typed save/reset/reload. It advances the two P1 briefs without closing all P1 metadata.
+
+Retail101cd8c0 latches EFL_KILLME before virtual180, clears the name afterwards and appends
+100f6bb0.100f6ce0 uses a native service barrier, insertion order and live count, so a release
+callback's appended owner is released in the same pass. The host uses registered stable
+handles, distinct pending and released state, and Unreal WaitPhysScenes. Actual purge seams
+are1003bdd0 pre-simulation,1011abc0 after ServiceEvents,10136650 negative DispatchSpawn,
+101a3c40 per admitted restore row and100f6ec0 shutdown. Bare SetEFlags1 does not enqueue;
+negative DispatchSpawn drains unrelated queued rows while preserving that pending identity.
+A stale Spawn/body identity cannot reach PostSpawn. Global activation's dormancy-only behavior
+is retained. These are bounded required E2 producers, not complete removal-record closure.
+
+Native schema53/floor53 saves the complete semantic EFlags word independently of the transient
+queue. SAVE admission101a37c0 and Physics10043c70 do not reject pending owners or force a drain;
+Entities101a2e40 and Physics100443e0 restore valid owners without re-enqueueing. Typed pending
+restore preserves actual name/latch/current native and begins with an empty runtime queue.
+Base180100a47d0 invokes225 before name clear/append; a legitimate overriding180 that omits base
+can retain its body until release. Both cases are tested separately. Prop creation-owned carriers
+survive detached/replaced current fields until release; release retires those carriers and
+base references/game data. Dynamic-light native destruction also occurs at release. Existing
+NPC Troika destructor cleanup dispatch has a distinct idempotence latch, so immediate Kill
+rows still get the old teardown fallback. This does not claim all derived destructor parity.
+
+SAVE datamap CBaseEntity records m_rgflCoordinateFrame(+304,12 floats), m_vecAbsOrigin(+1028),
+m_angAbsRotation(+1040), local pose and m_iEFlags(+616). Abs velocity is not among these SAVE
+rows. Native capture therefore stores semantic cached affine frame and absolute words separately
+from local pose and dirty flags; no packed Source matrix layout is required. Restore100aa140
+clears only8000 then100dda20 invalidates collision bounds/partition (OR14000, edict-dependent8000),
+preserving saved cache800 clean/dirty timing. Tests decode typed clean and dirty parented frames,
+full Euler words and saved input without14000; the original moving-parent first target also
+passes. Broader native travel-offset contracts remain open unless independently witnessed.
+
+Authoritative bounded recovery and primary files:
+E:/elysium-work/codex/l0-p1-creator-reconcile-20261012/packet.md and listener-primary.md.
+Native family receipts and final source hashes are recorded by the frozen worker packet.
+P2/P3, impact10151c00/I2, Break,36 metadata admissions and full D02/L0 remain open.
+### Native brush participation and restore projection repair (2026-10-12)
+
+The default gate after the shared100a6150 creator repair exposed two distinct assumptions in
+old witnesses. A PASSABLE parented door is solid6/FSOLID_NOT_SOLID4:100a6150 tests solid0,
+so it still creates an actual native shadow. Unreal's public SetSimulatePhysics starts a
+single-body simulation by detaching its component; the retail MoveParent/local/absolute pose
+and object45/46 shadow target remain the parent contract. Named profile and UE attachment
+are not substitutes for those outputs. DoorElevator now checks the profile's authored channel
+responses, actual use/pick rays and player/NPC/physics hull queries, a separate awake native
+actor traversing the cube, and the door's own target/solved pose/local offset. The crossing
+uses the actual solver interval with the same0.1cm tolerance; measured0.501000026s explains
+the diagnostic pose-40.200cm from a60cm start at-200cm/s without collision deflection.
+
+ScriptHide100a8710 and Unhide100a8990 change the saved physical words and participation;
+they do not invoke225. The installed UE BodyInstance.cpp742-769 changes physics mode through
+RecreateInstanceBody when SetCollisionEnabled crosses its physics-enabled boundary. For an
+admitted brush this invokes OnDestroyPhysicsState ->RetireNative, correctly retiring aliases,
+recipe and shadow but at the wrong game-visible lifetime. UElysiumBrushComponent::SetDormant
+now uses the already accepted native shape gate only for an actual Brush recipe. It preserves
+the actor/controller/mechanics and authored responses while gating every native query/sim
+shape and the visual. Nonrecipe/query-trigger profile behavior is unchanged. Hidden and
+unhidden witnesses check current incarnation, native mechanics, query absence/re-entry and
+an actual resumed shadow frame; born-hidden brush coverage reads the actual native shapes
+and semantic solid/hidden words. No scene hierarchy, allocator or solver reconstruction.
+
+The same default gate found SaveRoundTrip's former raw byte-identity assumption inconsistent
+with100aa140 ->100dda20. Restore clears8000, then bounds invalidation ORs14000 and adds8000
+only when the actual EdictIndex is nonzero. Its independent expected snapshot now applies
+that exact formula to saved rows, re-encodes them through the same block writer, and compares
+the complete payload strictly. All other cached pose/frame, leaf, queue, membership and section
+words remain byte-compared; the original frozen payload must remain unchanged. This is an
+oracle-derived postrestore state expectation, with no arbitrary flag masking or compatibility
+migration. The saved clean/dirty absolute cache contract and parent first-target controls remain.

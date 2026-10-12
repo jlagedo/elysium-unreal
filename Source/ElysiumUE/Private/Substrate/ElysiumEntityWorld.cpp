@@ -39,6 +39,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
+#include "Physics/Experimental/PhysScene_Chaos.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY(LogElysiumWorld);
@@ -540,13 +541,23 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		FElysiumEntity* const Ent = EntityList[Index].Get();
 		if (Ent)
 		{
+			const FElysiumEntityHandle SpawnIdentity = Ent->Handle; //101d1280 snapshots before Spawn.
 			Ent->bSpawnCalled = true;
 			Ent->Spawn();
-			if (Ent->IsDead()) continue; // 101d1280: removed Spawn never reaches100aaf30.
+			if (Resolve(SpawnIdentity) != Ent || Ent->IsMarkedForDeletion())
+			{
+				PurgeEntityRemovals(); //101d1280 negative return; a bare latch does not enqueue.
+				continue;
+			}
 			Ent->EnsurePlacedModelBody();
 			if (bBuildBodies)
 			{
 				BuildBrushBody(*Ent);
+			}
+			if (Resolve(SpawnIdentity) != Ent || Ent->IsMarkedForDeletion())
+			{
+				PurgeEntityRemovals(); //10136650: negative DispatchSpawn immediately drains.
+				continue;
 			}
 			// These helpers complete the port's Spawn body production before100aaf30.
 			Ent->DispatchSpawnHiddenArm();
@@ -558,14 +569,15 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	for (int32 Index = 0; Index < MapEntityCount; ++Index)
 	{
 		FElysiumEntity* const Ent = EntityList[Index].Get();
-		if (Ent && !Ent->IsDead())
+		if (Ent && !Ent->IsDead() && !Ent->IsMarkedForDeletion())
 		{
 			Ent->PostSpawn();
 			// `DispatchSpawn` 0x101d1280, after `CBaseEntity::PostSpawn`: the `globalname` arm over the
 			// global-entity table (L0-r030); -1 is the GLOBAL_DEAD removal the caller performs.
 			if (ElysiumTransitionState::DispatchSpawnGlobalArm(*this, *Ent) < 0)
 			{
-				Ent->Kill(); // UTIL_Remove on a DispatchSpawn < 0 (the engine's spawn loop)
+				Ent->QueueRemove(); //10136650: actual negative DispatchSpawn owner removal.
+				PurgeEntityRemovals();
 			}
 		}
 	}
@@ -903,14 +915,24 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 		return;   // idempotent: CallEntitySpawn on an already-spawned (or killed) entity is a no-op
 	}
 	Ent.bSpawnCalled = true;
+	const FElysiumEntityHandle SpawnIdentity = Ent.Handle;
 	// Spawn() is the leaf's own wiring (the FElysiumNpc leaf stands its body/visual here); then attach a
 	// brush body if this runtime entity is a brush (point NPCs/props/items early-out of BuildBrushBody).
 	Ent.Spawn();
-	if (Ent.IsDead()) return; // 101d1280: dead Spawn skips base PostSpawn and activation.
+	if (Resolve(SpawnIdentity) != &Ent || Ent.IsMarkedForDeletion())
+	{
+		PurgeEntityRemovals(); //negative DispatchSpawn: no synthetic removal for a bare flag.
+		return;
+	}
 	Ent.EnsurePlacedModelBody();
 	if (CVarBrushBodies.GetValueOnGameThread() != 0)
 	{
 		BuildBrushBody(Ent);
+	}
+	if (Resolve(SpawnIdentity) != &Ent || Ent.IsMarkedForDeletion())
+	{
+		PurgeEntityRemovals();
+		return;
 	}
 	Ent.DispatchSpawnHiddenArm(); //100aaf30 captures completed Spawn body words and callback.
 	// A runtime-spawned entity has no "all entities" barrier to wait on; its attach targets (if any)
@@ -919,7 +941,8 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	// `DispatchSpawn` 0x101d1280's `globalname` arm (L0-r030); -1 removes the entity (GLOBAL_DEAD).
 	if (ElysiumTransitionState::DispatchSpawnGlobalArm(*this, Ent) < 0)
 	{
-		Ent.Kill();
+		Ent.QueueRemove();
+		PurgeEntityRemovals();
 		return;
 	}
 	if (bActive)
@@ -2146,6 +2169,7 @@ void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics, TOptional<do
 	{
 		return;
 	}
+	PurgeEntityRemovals(); //1003bdd0: generic pre-physics/think seam, including standalone Tick.
 	LastTickNow = Now;
 	// `_Host_RunFrame` `0x2008e450`'s `INC [0x20b42980]` (`0x2008e737`): one per host frame, read
 	// back by `VEngineServer014` slot 120 (`HostFrame()`).
@@ -2220,6 +2244,37 @@ void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics, TOptional<do
 	FinishFrame(Now);
 }
 
+void FElysiumEntityWorld::EnqueueEntityRemoval(const FElysiumEntityHandle& Entity)
+{
+	if (Resolve(Entity)) EntityRemovalQueue.Add(Entity); //100f6bb0 stores valid registered identities.
+}
+
+void FElysiumEntityWorld::PurgeEntityRemovals()
+{
+	if (bPurgingEntityRemovals) return;
+	bPurgingEntityRemovals = true;
+	//100f6ce0 environment46 waits before networkable6 release, even with an empty queue.
+	if (Owner && Owner->GetWorld())
+		if (FPhysScene* Scene = Owner->GetWorld()->GetPhysicsScene()) Scene->WaitPhysScenes();
+	for (int32 RemovalIndex = 0; RemovalIndex < EntityRemovalQueue.Num(); ++RemovalIndex)
+	{
+		const FElysiumEntityHandle Removing = EntityRemovalQueue[RemovalIndex];
+		if (FElysiumEntity* Entity = Resolve(Removing))
+		{
+			// Existing retirement/destructor projection keeps stable slots as dead tombstones.
+			// Re-read count each iteration: a release callback may append more removals.
+			if (FElysiumNpc* Npc = Entity->AsNpc(); Npc && !Entity->bNpcDestructorCleanupDispatched)
+			{
+				Entity->bNpcDestructorCleanupDispatched = true;
+				Npc->TroikaUpdateOnRemove(); //1028d610 destructor, once at release.
+			}
+			Entity->ReleaseForRemoval();
+		}
+	}
+	EntityRemovalQueue.Reset(); //100f6ce0 clears only after every live-count row has released.
+	bPurgingEntityRemovals = false;
+}
+
 void FElysiumEntityWorld::FinishFrame(double Now)
 {
 	// `CEntityListSystem::FrameUpdatePostEntityThink` 0x100f9160: `GameFrame` `0x1011abc0` step 4,
@@ -2227,6 +2282,7 @@ void FElysiumEntityWorld::FinishFrame(double Now)
 	// path; `walks/L0-r015.md`). The deferred untouch checks run here.
 	FrameUpdatePostEntityThinkUntouch();
 	ServiceEvents(Now);
+	PurgeEntityRemovals(); //1011abc0 step9 precedes client/presentation publication.
 	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
 	// chance to replace or close the session. A stale completion therefore cannot advance a newer turn.
 	UpdateDialogueAutomatic();
@@ -3299,6 +3355,17 @@ void FElysiumEntityWorld::Teardown()
 	}
 	ClearTrackCamera(/*BlendOutSeconds*/ 0.0f);
 	ClearScriptedCamera();
+	//100f6ec0 shutdown uses the same removal producer, then one live-count drain.
+	// A saved bare kill latch remains unqueued; final world destruction still owns that row.
+	const uint32 ShutdownEpoch = Epoch;
+	for (int32 ShutdownIndex = 0; ShutdownIndex < EntityList.Num() && Epoch == ShutdownEpoch; ++ShutdownIndex)
+	{
+		//100f6ec0 reads the next registered node AFTER virtual180, admitting tail additions.
+		// Copy identity before dispatch; no TArray element reference survives the callback.
+		const FElysiumEntityHandle Outgoing = EntityList[ShutdownIndex] ? EntityList[ShutdownIndex]->Handle : FElysiumEntityHandle::Invalid();
+		if (FElysiumEntity* Entity = Resolve(Outgoing)) Entity->QueueRemove();
+	}
+	PurgeEntityRemovals();
 
 	// ~CAI_BaseNPCTroika0x1028d610 calls its own UpdateOnRemove0x1028d6e0.
 	// Run that destructor work before invalidating handles or destroying any records:
@@ -3306,8 +3373,9 @@ void FElysiumEntityWorld::Teardown()
 	// In particular both global patrol pool cells must be returned on every reload/load.
 	for (const TUniquePtr<FElysiumEntity>& OutgoingEntity : EntityList)
 	{
-		if (FElysiumNpc* OutgoingNpc = OutgoingEntity ? OutgoingEntity->AsNpc() : nullptr)
+		if (FElysiumNpc* OutgoingNpc = OutgoingEntity && !OutgoingEntity->bNpcDestructorCleanupDispatched ? OutgoingEntity->AsNpc() : nullptr)
 		{
+			OutgoingEntity->bNpcDestructorCleanupDispatched = true;
 			OutgoingNpc->TroikaUpdateOnRemove(); // destructor uses Troika dispatch, not species slot180
 		}
 	}
@@ -3332,12 +3400,14 @@ void FElysiumEntityWorld::Teardown()
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once.
 	// Retire registered model/bbox references before their components and entity slots disappear.
-	// Other physics producers and base UpdateOnRemove remain open.
+	// Already released tombstones have no native/reference ownership; remaining bare-latched rows
+	// are destroyed with the world without inventing a queue replay.
 	for (const TUniquePtr<FElysiumEntity>& Dying : EntityList)
 	{
 		if (Dying && Dying->VPhysicsGetObject()) Dying->VPhysicsDestroyObject();
 	}
 	Epoch = 0;
+	EntityRemovalQueue.Reset();
 	PhysicsShadowHandles.Reset();
 	ComfortTargetList.Reset();
 	EventQueue.Reset();
