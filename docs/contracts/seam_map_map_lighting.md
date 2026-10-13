@@ -543,7 +543,7 @@ SetPattern, `10130800` FadeToPattern, `101308d0` FadeThink), read off the corpus
 
 | Input | Writes. Retail tests style 32 in exactly two places, `Spawn` (`0x101304aa`) and `Use` (`0x10130583`); the inputs and the helpers publish whatever the style is (walk L0-r012) |
 |---|---|
-| Spawn | an unnamed light (`m_iName == 0`) is removed through `UTIL_RemoveImmediate` `0x1000e255` -> `0x101cd970` with no write (the port's stand-in is the base `Kill`); a named one floors `fade_time`, then: style < 32 -> nothing; `START_OFF` (spawnflags 1) -> `"a"`, and the pattern becomes `"a"`; else the authored `pattern` if any (`pattern ""` is NULL, so it counts as none); else `"m"` (and the pattern becomes `"m"`) |
+| Spawn | an unnamed light (`m_iName == 0`) is removed through `UTIL_RemoveImmediate` `0x1000e255` -> `0x101cd970` with no write (the port uses `RemoveImmediate`); a named one floors `fade_time`, then: style < 32 -> nothing; `START_OFF` (spawnflags 1) -> `"a"`, and the pattern becomes `"a"`; else the authored `pattern` if any (`pattern ""` is NULL, so it counts as none); else `"m"` (and the pattern becomes `"m"`) |
 | `Use` (the input: `CBaseEntity::InputUse` `0x100ac9f0`, USE_TOGGLE) | style < 32 -> nothing; `ShouldToggle(useType, !START_OFF)` (`0x100a98f0`) then `Toggle`. The `Toggle` / `TurnOn` / `TurnOff` inputs bypass `Use` |
 | `TurnOn` | the pattern if it is at least two characters and does not start with `'a'`, else `"m"`; clears `START_OFF` |
 | `TurnOff` | `"a"`; sets `START_OFF` |

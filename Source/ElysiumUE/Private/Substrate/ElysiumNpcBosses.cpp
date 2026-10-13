@@ -101,12 +101,12 @@ void FElysiumNpc::RemovePhysAnimlink(const FElysiumEntityHandle& Link)
 {
 	// `thunk_FUN_101cd970(link)` -- `UTIL_RemoveImmediate` (`+0x268 |= 1`, slot `0x2d0`, then the
 	// deleting destructor, slot 5) on the resolved link. Every caller resolves the handle first
-	// (`0x1038291f`); this runtime's removal is `Kill()`. (Was a no-op seam; story 8 L08 integration.)
+	// (`0x1038291f`); this runtime's removal is `RemoveImmediate()`. (Story 8 L08 integration.)
 	if (World != nullptr && Link.IsSet())
 	{
 		if (FElysiumEntity* const Entity = World->Resolve(Link))
 		{
-			Entity->Kill();
+			Entity->RemoveImmediate(); //101cd970, distinct from deferred119.
 		}
 	}
 }

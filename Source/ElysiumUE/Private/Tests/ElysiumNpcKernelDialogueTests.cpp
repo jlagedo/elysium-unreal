@@ -505,9 +505,13 @@ bool FElysiumNpcKernelDialogueSecCameraLinkTest::RunTest(const FString&)
 	World.World.Tick(World.World.NowSeconds());
 	TestNull(TEXT("0x10369e70: a dead camera with no replacement answers null"),
 		Camera->ResolveSecCameraLink());
+	TestTrue(TEXT("removal is pending before the terminal purge"), Camera->IsMarkedForDeletion() && !Camera->IsDead());
+	World.World.PurgeEntityRemovals();
 	TestTrue(TEXT("...and a PREVIOUSLY LINKED camera NPC removes itself"), Camera->IsDead());
 	TestFalse(TEXT("slot 201 on the watcher, its camera gone, answers false"),
 		Watcher->FVisible(Player, 0x2804091, nullptr, 0));
+	TestTrue(TEXT("removal is pending before the terminal purge"), Watcher->IsMarkedForDeletion() && !Watcher->IsDead());
+	World.World.PurgeEntityRemovals();
 	TestTrue(TEXT("...and the previously linked watcher removes itself through slot 201"),
 		Watcher->IsDead());
 	return true;

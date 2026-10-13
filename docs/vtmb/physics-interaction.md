@@ -2809,8 +2809,18 @@ Base180100a47d0 invokes225 before name clear/append; a legitimate overriding180 
 can retain its body until release. Both cases are tested separately. Prop creation-owned carriers
 survive detached/replaced current fields until release; release retires those carriers and
 base references/game data. Dynamic-light native destruction also occurs at release. Existing
-NPC Troika destructor cleanup dispatch has a distinct idempotence latch, so immediate Kill
-rows still get the old teardown fallback. This does not claim all derived destructor parity.
+NPC Troika destructor cleanup dispatch has a distinct idempotence latch and is shared by
+purge, immediate101cd970 and native absent-set terminal release. This does not claim all
+derived destructor parity.
+
+InputKill100acef0 now reaches virtual119100acf90 and the same queue contract, rather than
+terminal host release. The shipped tutorial logic_kill_elev_doors OnTrigger Kill targeting
+tutwareelevdrf is delivered through actual Tick:180 observes its original name/current native,
+base225 retires current before name clear, and post-I/O100f6ce0 invalidates the handle. Solved
+native bottle contacts additionally prove pending entity links, suppressed wrapper End, and
+survivor End176 with the live authored-parent relay at purge. Bare pending EFlags1 and
+180/release callback teardown are separate negative/reentry witnesses. See
+`docs/contracts/seam_entity_removal.md`; CNotify/Aim/PhysicsAnimLink remain separate E2 work.
 
 SAVE datamap CBaseEntity records m_rgflCoordinateFrame(+304,12 floats), m_vecAbsOrigin(+1028),
 m_angAbsRotation(+1040), local pose and m_iEFlags(+616). Abs velocity is not among these SAVE

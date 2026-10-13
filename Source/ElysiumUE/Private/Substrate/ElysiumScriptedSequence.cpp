@@ -572,8 +572,7 @@ void FElysiumScriptedSequence::RemoveSelf()
 	{
 		return;
 	}
-	UpdateOnRemove();
-	Kill();
+	QueueRemove();
 }
 
 // --- Target acquisition ---------------------------------------------------------------------------

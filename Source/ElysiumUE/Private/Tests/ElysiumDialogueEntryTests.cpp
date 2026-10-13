@@ -256,6 +256,8 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 
 	// An inert character is never a talk target, whatever its latches say.
 	Npc->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), Npc->IsMarkedForDeletion() && !Npc->IsDead());
+	World.PurgeEntityRemovals();
 	TestFalse(TEXT("a dead talker refuses focus"), Npc->CanPlayerFocus(Context));
 	return true;
 }

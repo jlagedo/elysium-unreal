@@ -110,8 +110,12 @@ bool FElysiumEnvSpriteTest::RunTest(const FString&)
 	// start_hidden is the base's ScriptHide at birth: ScriptUnhide reveals a Start On sprite.
 	Fire(TEXT("hidden_glow"), TEXT("ScriptUnhide"));
 	TestEqual(TEXT("ScriptUnhide reveals a start_hidden Start On sprite"), Visible(3), 1);
-	// Kill is terminal and hides.
+	// Slot 119 queues removal; terminal release hides the sprite.
+	FElysiumEntity* Doomed = World.FindByName(TEXT("doomed_glow"));
 	Fire(TEXT("doomed_glow"), TEXT("Kill"));
+	TestTrue(TEXT("the sprite remains registered and pending until purge"),
+		Doomed && Doomed->IsMarkedForDeletion() && World.Resolve(Doomed->Handle) == Doomed);
+	World.PurgeEntityRemovals();
 	TestEqual(TEXT("Kill hides"), Visible(4), 0);
 	return true;
 }

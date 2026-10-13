@@ -96,15 +96,13 @@ public:
 		//    and return -- no floor, no publish, no pattern write. `hooks.tsv:297` lists the call as
 		//    the L0 -> L4 hook of this function; its body is the immediate removal (KILLME `+0x268`
 		//    bit 0, `UpdateOnRemove` slot 180, the deleting destructor slot 5) with no NPC logic in it,
-		//    and the port's stand-in for `0x101cd970` is the base `Kill` everywhere it is reached
-		//    (`CAmbientGeneric::Spawn`'s `0x1000e255`, `ElysiumNpcBosses.cpp`, `ElysiumInterestingPlace.cpp`).
-		//    The BASE Kill, deliberately: `CLight::Kill` `0x101306d0` is the deferred `UTIL_Remove` with
-		//    a TurnOff in front, and retail does not run it here.
+		//    `RemoveImmediate` reaches180 then the host destructor service without119 or queue.
+		//    `CLight::Kill` `0x101306d0` is deferred with a TurnOff in front; retail does not run it here.
 		if (TargetName.IsEmpty())
 		{
 			Site(TEXT("light_spawn"), TEXT("CLight::Spawn"), 0x10130460u, TEXT("branch"),
 				FString::Printf(TEXT("arm=name_zero hook=0x1000e255 fn=UTIL_RemoveImmediate va=0x101cd970 style=%d"), Style));
-			FElysiumEntity::Kill();
+			RemoveImmediate();
 			return;
 		}
 		// 2. `m_flFadeTime = max(0.05, m_flFadeTime)` (`0x10130478-0x101304a1`), named lights only,

@@ -1,5 +1,11 @@
 # L0 Goal — subsystem delivery
 
+Owner stop/release instruction, 2026-10-12: close current tasks, finish the existing
+changes through review and gates, merge reviewed branch work into main and push.
+This authorizes the release push despite the historical never-push instructions
+below. The full L0 Goal remains paused and incomplete; do not start another packet.
+The checkpoint records the released code and the remaining closing requirements.
+
 Owner-authorized replacement operating instructions, 2026-10-11. Continue the existing L0
 Goal in the main thread. The owner authorizes resuming implementation under this flow; this
 supersedes the earlier pause pending the planning review. Keep the existing Goal and its

@@ -1102,6 +1102,9 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 			return false;
 		}
 		F.Victim->Kill();
+		TestTrue(TEXT("Kill leaves the victim pending until the physical release fence"),
+			!F.Victim->IsDead() && F.Victim->IsMarkedForDeletion());
+		F.World->PurgeEntityRemovals();
 
 		TestFalse(TEXT("a dead victim is refused"), F.Knockback(10.0));
 		TestEqual(TEXT("...and plays nothing"), CountCalls(F.Services, TEXT("PlayNpcOneShot")), 0);

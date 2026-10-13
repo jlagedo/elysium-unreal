@@ -338,7 +338,8 @@ int32 FElysiumEntityWorld::ApplyRestoredEntities(const FElysiumMapSnapshot& Snap
 		SnapshotEntityIndices.Add(Absent);
 		if (FElysiumEntity* E = Resolve(FElysiumEntityHandle(Absent, Epoch)))
 		{
-			E->Kill();
+			const FElysiumEntityHandle AbsentHandle = E->Handle;
+			ReleaseEntityRemoval(AbsentHandle); // native absent-set statement is terminal, not authored119.
 		}
 	}
 

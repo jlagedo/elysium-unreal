@@ -634,6 +634,9 @@ bool FElysiumInteractionLifecycleTest::RunTest(const FString&)
 	const FElysiumEntityHandle Stale = Hold->Handle;
 	World.AcceptInput(TEXT("hold"), FName(TEXT("Kill")), FElysiumVariant::Void(),
 		Hold->Handle, Hold->Handle);
+	TestTrue(TEXT("authored Kill retains the pending handle before purge"),
+		World.Resolve(Stale) == Hold && Hold->IsMarkedForDeletion());
+	World.PurgeEntityRemovals();
 	FElysiumUseCandidate StaleHit = Candidate(
 		Stale.Index, EElysiumUseSelection::Exact, 0.0f, 20.0f);
 	StaleHit.Owner = Stale;
@@ -2888,6 +2891,9 @@ bool FElysiumLockableCameraTest::RunTest(const FString&)
 		TestFalse(TEXT("the closer drops the cine slot"), Fixture->World->HasScriptedCamera());
 		TestEqual(TEXT("... to nothing, never to a previously stacked shot"),
 			Fixture->World->CineCameraShotId(), 0);
+		TestTrue(TEXT("the disposable camera is pending before terminal release"),
+			Cine->IsMarkedForDeletion() && Fixture->World->Resolve(CameraHandle) == Cine);
+		Fixture->World->PurgeEntityRemovals();
 		FElysiumEntity* Dead = Fixture->World->Resolve(CameraHandle);
 		TestTrue(TEXT("and destroys the disposable camera with it"),
 			Dead == nullptr || Dead->IsDead());

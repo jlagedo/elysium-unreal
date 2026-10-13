@@ -426,6 +426,5 @@ void FElysiumDecal::UtilRemove()
 	// `FUN_101cd940` 0x101cd940 -> `FUN_101cd8c0` 0x101cd8c0 (idempotent: the node's bit 0, slot 180
 	// `UpdateOnRemove`, `SetName(NULL)`, then `0x100f6bb0` queues the deferred deletion). The port's
 	// `Kill` is this removal (audit rows 788 / 706 file its partial words).
-	UpdateOnRemove();
-	Kill();
+	QueueRemove();
 }

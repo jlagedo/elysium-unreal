@@ -877,6 +877,8 @@ bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodDestroyTest::RunTest(const FS
 
 	N.DestroyAndreiBlood();
 
+	TestTrue(TEXT("removal is pending before the terminal purge"), Blood->IsMarkedForDeletion() && !Blood->IsDead() && Summon->IsMarkedForDeletion() && !Summon->IsDead());
+	Fix.World.World.PurgeEntityRemovals();
 	TestTrue(TEXT("the blood emitter (+0x66e0) is removed"), Blood->IsDead());
 	TestTrue(TEXT("the summon emitter (+0x66e4) is removed"), Summon->IsDead());
 	TestFalse(TEXT("and its handle is written back invalid"), N.AndreiBloodEmitter.IsSet());

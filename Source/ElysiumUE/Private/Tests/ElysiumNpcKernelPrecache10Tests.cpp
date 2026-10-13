@@ -351,13 +351,13 @@ namespace
 			// has ALREADY run once at map load — which is retail's order — and a maker with no model
 			// keyfield has already `UTIL_Remove`d itself, exactly as retail's does.
 			//
-			// Two consequences, both recorded rather than hidden: `FindByName` answers only LIVE
-			// entities, so the maker is fetched off the entity list by targetname whether it lives or
-			// not; and the spawn-time log is kept before the live one is cleared, so each case below
+			// Negative DispatchSpawn already purges rejected makers before the fixture's Tick;
+			// UTIL_Remove clears the name, so fetch the terminal identity through its authored record.
+			// The spawn-time log is kept before the live one is cleared, so each case below
 			// still measures exactly the `Precache()` it drives by hand.
 			for (const TUniquePtr<FElysiumEntity>& Entity : World.World.Entities())
 			{
-				if (Entity && Entity->TargetName == TEXT("maker"))
+				if (Entity && Entity->Def && Entity->Def->TargetName == TEXT("maker"))
 				{
 					Maker = static_cast<FElysiumNpcMaker*>(Entity.Get());
 					break;
@@ -478,6 +478,12 @@ bool FElysiumNpcKernelPrecache10MakerArmCoverageTest::RunTest(const FString&)
 			Arm->Expected, Fix.SpawnPrecacheLog);
 		TestEqual(*FString::Printf(TEXT("%s's arm decides removal on an empty child classname"),
 			Classname), Fix.bDeadAfterSpawn, Arm->bRemoved);
+		const FElysiumEntityHandle MakerHandle = Fix.Maker->Handle;
+		TestEqual(TEXT("negative DispatchSpawn already purges only the rejected maker"),
+			Fix.World.World.Resolve(MakerHandle) == nullptr, Arm->bRemoved);
+		if (Arm->bRemoved) TestTrue(TEXT("UTIL_Remove clears the maker name before purge"), Fix.Maker->TargetName.IsEmpty());
+		Fix.World.World.PurgeEntityRemovals();
+		TestEqual(TEXT("purge releases exactly the rejected maker arm"), Fix.World.World.Resolve(MakerHandle) == nullptr, Arm->bRemoved);
 	}
 	TestEqual(TEXT("the census carries 3 CNPCMaker* slot-104 override rows"), Rows, 3);
 	return true;
@@ -513,14 +519,18 @@ bool FElysiumNpcKernelPrecache10MakerBaseTest::RunTest(const FString&)
 	// An EMPTY model keyfield: warn, `UTIL_Remove`, and — under `developer >= 1` — the
 	// `"%s: BAD MODEL NAME"` overlay box. The child classname is never reached.
 	{
-		FPrecache10MakerFixture Fix(TEXT("npc_maker"), nullptr, TEXT("npc_VCop"));
+		FPrecache10MakerFixture Fix(TEXT("npc_maker"), TEXT("models/maker.mdl"), TEXT("npc_VCop"));
 		if (!TestNotNull(TEXT("the maker spawned"), Fix.Maker))
 		{
 			return false;
 		}
+		Fix.Maker->Model.Reset(); // establish the missing-model input on a live, spawned maker.
 		FElysiumNpcMaker::DeveloperCvarLevel = 0;
 		Fix.Maker->Precache();
 		TestEqual(TEXT("an empty model precaches nothing"), Fix.Maker->PrecacheLog.Num(), 0);
+		TestTrue(TEXT("the missing-model arm retains the registered pending maker"),
+			Fix.Maker->IsMarkedForDeletion() && !Fix.Maker->IsDead() && Fix.World.World.Resolve(Fix.Maker->Handle) == Fix.Maker);
+		Fix.World.World.PurgeEntityRemovals();
 		TestTrue(TEXT("and removes the maker"), Fix.Maker->IsDead());
 		TestEqual(TEXT("the overlay is refused at the shipped developer 0"),
 			Fix.Maker->DeveloperOverlayBoxes.Num(), 0);
@@ -539,15 +549,19 @@ bool FElysiumNpcKernelPrecache10MakerBaseTest::RunTest(const FString&)
 	// An EMPTY child classname with a model present: the model IS precached, then warn,
 	// `UTIL_Remove` and the `"%s: BAD NPC Classname"` overlay.
 	{
-		FPrecache10MakerFixture Fix(TEXT("npc_maker"), TEXT("models/maker.mdl"), nullptr);
+		FPrecache10MakerFixture Fix(TEXT("npc_maker"), TEXT("models/maker.mdl"), TEXT("npc_VCop"));
 		if (!TestNotNull(TEXT("the maker spawned"), Fix.Maker))
 		{
 			return false;
 		}
+		Fix.Maker->NpcType.Reset(); // establish the missing-classname input before direct Precache.
 		FElysiumNpcMaker::DeveloperCvarLevel = 1;
 		Fix.Maker->Precache();
 		Precache10CheckMakerLog(*this, TEXT("an empty child classname"), *Fix.Maker,
 			{ TEXT("model:models/maker.mdl:0") });
+		TestTrue(TEXT("the missing-classname arm retains the registered pending maker"),
+			Fix.Maker->IsMarkedForDeletion() && !Fix.Maker->IsDead() && Fix.World.World.Resolve(Fix.Maker->Handle) == Fix.Maker);
+		Fix.World.World.PurgeEntityRemovals();
 		TestTrue(TEXT("and the maker is removed"), Fix.Maker->IsDead());
 		if (TestEqual(TEXT("the overlay arm ran"), Fix.Maker->DeveloperOverlayBoxes.Num(), 1))
 		{
@@ -597,14 +611,18 @@ bool FElysiumNpcKernelPrecache10MakerFleshpileTest::RunTest(const FString&)
 	}
 	// The missing-model arm it DOES keep.
 	{
-		FPrecache10MakerFixture Fix(TEXT("npc_maker_fleshpile"), nullptr, TEXT("npc_VCop"));
+		FPrecache10MakerFixture Fix(TEXT("npc_maker_fleshpile"), TEXT("models/fp.mdl"), TEXT("npc_VCop"));
 		if (!TestNotNull(TEXT("the fleshpile maker spawned"), Fix.Maker))
 		{
 			return false;
 		}
+		Fix.Maker->Model.Reset();
 		FElysiumNpcMaker::DeveloperCvarLevel = 1;
 		Fix.Maker->Precache();
 		TestEqual(TEXT("an empty model precaches nothing"), Fix.Maker->PrecacheLog.Num(), 0);
+		TestTrue(TEXT("fleshpile missing-model removal retains the registered pending maker"),
+			Fix.Maker->IsMarkedForDeletion() && !Fix.Maker->IsDead() && Fix.World.World.Resolve(Fix.Maker->Handle) == Fix.Maker);
+		Fix.World.World.PurgeEntityRemovals();
 		TestTrue(TEXT("and removes the maker"), Fix.Maker->IsDead());
 		TestEqual(TEXT("with no overlay"), Fix.Maker->DeveloperOverlayBoxes.Num(), 0);
 		FElysiumNpcMaker::DeveloperCvarLevel = 0;
@@ -652,14 +670,18 @@ bool FElysiumNpcKernelPrecache10MakerZombieTest::RunTest(const FString&)
 
 	// The missing-model arm, same as the fleshpile's: warn, remove, no overlay.
 	{
-		FPrecache10MakerFixture Empty(TEXT("npc_maker_zombie"), nullptr, TEXT("npc_VZombie"));
+		FPrecache10MakerFixture Empty(TEXT("npc_maker_zombie"), TEXT("models/z.mdl"), TEXT("npc_VZombie"));
 		if (!TestNotNull(TEXT("the second maker spawned"), Empty.Maker))
 		{
 			return false;
 		}
+		Empty.Maker->Model.Reset();
 		FElysiumNpcMaker::DeveloperCvarLevel = 1;
 		Empty.Maker->Precache();
 		TestEqual(TEXT("an empty model precaches nothing"), Empty.Maker->PrecacheLog.Num(), 0);
+		TestTrue(TEXT("zombie missing-model removal retains the registered pending maker"),
+			Empty.Maker->IsMarkedForDeletion() && !Empty.Maker->IsDead() && Empty.World.World.Resolve(Empty.Maker->Handle) == Empty.Maker);
+		Empty.World.World.PurgeEntityRemovals();
 		TestTrue(TEXT("and removes the maker"), Empty.Maker->IsDead());
 		TestEqual(TEXT("with no overlay"), Empty.Maker->DeveloperOverlayBoxes.Num(), 0);
 		FElysiumNpcMaker::DeveloperCvarLevel = 0;

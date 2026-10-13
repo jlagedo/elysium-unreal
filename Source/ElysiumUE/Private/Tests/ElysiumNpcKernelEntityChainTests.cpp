@@ -774,6 +774,8 @@ bool FElysiumNpcKernelEntityChainClosestNpcTest::RunTest(const FString&)
 
 	// ...and a cached entity that has died resets the triple.
 	Fixture.Other->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), Fixture.Other->IsMarkedForDeletion() && !Fixture.Other->IsDead());
+	Fixture.World.World.PurgeEntityRemovals();
 	Npc.UpdateClosestNpc(Fixture.Other, 5.f);
 	TestFalse(TEXT("a dead cached entity is dropped"), Player->Observer.Observer.IsSet());
 
@@ -1023,6 +1025,8 @@ bool FElysiumNpcKernelEntityChainWalkOrderTest::RunTest(const FString&)
 	}
 	const int32 CIndex = C->Handle.Index;
 	C->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), C->IsMarkedForDeletion() && !C->IsDead());
+	Fixture.World.PurgeEntityRemovals();
 	A->ChainEntityList(Walk);
 	bool bReapedGone = true;
 	bool bStillAscending = true;

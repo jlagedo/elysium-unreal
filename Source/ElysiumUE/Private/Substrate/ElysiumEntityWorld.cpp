@@ -1288,10 +1288,13 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity(EElysiumControllerRelease
 	// request, rather than 0.01 s later; the handle is cleared at the request in both, so nothing
 	// reaches it through `!playercontroller` in that window.
 	//
-	// Kill first: the stand-in releases its scripted motor while the skeletal component is
+	// Terminal release first: the stand-in releases its scripted motor while the skeletal component is
 	// still a valid child of that motor. The visual can then be destroyed without leaving the
 	// engine-side path follower holding a dead attachment.
-	Controller->Kill();
+	const FElysiumEntityHandle ControllerHandle = Controller->Handle;
+	ReleaseEntityRemoval(ControllerHandle);
+	if (Epoch != ControllerHandle.Epoch || !EntityList.IsValidIndex(ControllerHandle.Index)
+		|| EntityList[ControllerHandle.Index].Get() != Controller) return true;
 	if (FElysiumCombatCharacter* const Character = Controller->AsCombatCharacter();
 		Character != nullptr && Character->Visual)
 	{
@@ -2286,28 +2289,33 @@ void FElysiumEntityWorld::EnqueueEntityRemoval(const FElysiumEntityHandle& Entit
 	if (Resolve(Entity)) EntityRemovalQueue.Add(Entity); //100f6bb0 stores valid registered identities.
 }
 
+void FElysiumEntityWorld::ReleaseEntityRemoval(const FElysiumEntityHandle& Removing)
+{
+	FElysiumEntity* Entity = Resolve(Removing);
+	if (!Entity) return;
+	if (FElysiumNpc* Npc = Entity->AsNpc(); Npc && !Entity->bNpcDestructorCleanupDispatched)
+	{
+		Entity->bNpcDestructorCleanupDispatched = true;
+		Npc->TroikaUpdateOnRemove(); //1028d610 deleting destructor, shared immediate/purge recipient.
+		if (Resolve(Removing) != Entity) return;
+	}
+	Entity->ReleaseForRemoval();
+	if (Epoch == Removing.Epoch) RetireRestoredConstraintEndpoints(Removing);
+}
+
 void FElysiumEntityWorld::PurgeEntityRemovals()
 {
 	if (bPurgingEntityRemovals) return;
 	bPurgingEntityRemovals = true;
+	const uint32 PurgeEpoch = Epoch;
 	//100f6ce0 environment46 waits before networkable6 release, even with an empty queue.
 	if (Owner && Owner->GetWorld())
 		if (FPhysScene* Scene = Owner->GetWorld()->GetPhysicsScene()) Scene->WaitPhysScenes();
 	for (int32 RemovalIndex = 0; RemovalIndex < EntityRemovalQueue.Num(); ++RemovalIndex)
 	{
 		const FElysiumEntityHandle Removing = EntityRemovalQueue[RemovalIndex];
-		if (FElysiumEntity* Entity = Resolve(Removing))
-		{
-			// Existing retirement/destructor projection keeps stable slots as dead tombstones.
-			// Re-read count each iteration: a release callback may append more removals.
-			if (FElysiumNpc* Npc = Entity->AsNpc(); Npc && !Entity->bNpcDestructorCleanupDispatched)
-			{
-				Entity->bNpcDestructorCleanupDispatched = true;
-				Npc->TroikaUpdateOnRemove(); //1028d610 destructor, once at release.
-			}
-			Entity->ReleaseForRemoval();
-			RetireRestoredConstraintEndpoints(Removing);
-		}
+		ReleaseEntityRemoval(Removing); // re-read live count: callbacks may append more removals.
+		if (Epoch != PurgeEpoch) { bPurgingEntityRemovals = false; return; }
 	}
 	EntityRemovalQueue.Reset(); //100f6ce0 clears only after every live-count row has released.
 	bPurgingEntityRemovals = false;

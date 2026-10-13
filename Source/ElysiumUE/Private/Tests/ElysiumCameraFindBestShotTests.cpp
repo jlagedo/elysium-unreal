@@ -526,6 +526,8 @@ bool FElysiumCameraFindBestShotTest::RunTest(const FString&)
 
 		TestTrue(TEXT("4051 is claimed"), PlayerEnt->HandleAnimEvent(Event(4051, TEXT(""))));
 		TestFalse(TEXT("4051 drops the cine slot"), World.HasScriptedCamera());
+		TestTrue(TEXT("removal is pending before the terminal purge"), Camera->IsMarkedForDeletion() && World.Resolve(CameraHandle) == Camera);
+		World.PurgeEntityRemovals();
 		TestNull(TEXT("and destroys the disposable camera it dropped"),
 			static_cast<void*>(World.Resolve(CameraHandle)));
 		TestTrue(TEXT("4051 raised the pending eye snap"), PlayerEnt->HasPendingEyeAngleSnap());
@@ -621,6 +623,8 @@ bool FElysiumCameraFindBestShotTest::RunTest(const FString&)
 		const FElysiumEntityHandle KillCamera = Camera->Handle;
 		TestTrue(TEXT("4051 is claimed"), PlayerEnt->HandleAnimEvent(Event(4051, TEXT(""))));
 		TestFalse(TEXT("4051 ends the stealth-kill shot"), World.HasScriptedCamera());
+		TestTrue(TEXT("removal is pending before the terminal purge"), Camera->IsMarkedForDeletion() && World.Resolve(KillCamera) == Camera);
+		World.PurgeEntityRemovals();
 		TestNull(TEXT("and destroys its camera"),
 			static_cast<void*>(World.Resolve(KillCamera)));
 
@@ -637,6 +641,8 @@ bool FElysiumCameraFindBestShotTest::RunTest(const FString&)
 		const FElysiumEntityHandle SecondHandle = Second->Handle;
 		PlayerEnt->LeaveGrappleState();
 		TestFalse(TEXT("leaving the grapple ends a live scripted shot"), World.HasScriptedCamera());
+		TestTrue(TEXT("removal is pending before the terminal purge"), Second->IsMarkedForDeletion() && World.Resolve(SecondHandle) == Second);
+		World.PurgeEntityRemovals();
 		TestNull(TEXT("and destroys the disposable camera under it"),
 			static_cast<void*>(World.Resolve(SecondHandle)));
 		TestTrue(TEXT("the grapple block is cleared"),

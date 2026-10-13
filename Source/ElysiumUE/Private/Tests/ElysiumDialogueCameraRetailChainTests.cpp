@@ -371,7 +371,11 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		TestFalse(TEXT("...and forgets the latch"), Player->bDialogWeaponHolstered);
 		TestFalse(TEXT("the cine slot is empty the same frame — no blend (M1)"),
 			World.HasScriptedCamera());
-		TestNull(TEXT("...and UTIL_Remove destroyed the camera entity"),
+		TestTrue(TEXT("UTIL_Remove queues the still-registered camera after clearing its name"),
+			World.Resolve(CameraHandle) && World.Resolve(CameraHandle)->IsMarkedForDeletion()
+			&& World.Resolve(CameraHandle)->TargetName.IsEmpty());
+		World.PurgeEntityRemovals();
+		TestNull(TEXT("...and UTIL_Remove destroyed the camera entity at purge"),
 			World.Resolve(CameraHandle));
 	}
 
@@ -562,6 +566,9 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 			World.CloseDialog(/*bSilent*/ false);
 			TestFalse(TEXT("the dialogue end cut drops the slot the same frame"),
 				World.HasScriptedCamera());
+			TestTrue(TEXT("unconditional UTIL_Remove marks the non-disposable adopted camera pending"),
+				World.Resolve(Runtime) && World.Resolve(Runtime)->IsMarkedForDeletion());
+			World.PurgeEntityRemovals();
 			TestNull(TEXT("...and the UNCONDITIONAL UTIL_Remove destroys even a "
 				"non-disposable adopted camera"), World.Resolve(Runtime));
 		}
@@ -618,6 +625,9 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 			TestFalse(TEXT("a default_camera that does not load CLEARS the slot"),
 				World.HasScriptedCamera());
 			TestFalse(TEXT("...handle and all"), World.CineCameraEntity().IsSet());
+			TestTrue(TEXT("outgoing disposable camera remains pending until purge"),
+				World.Resolve(Outgoing) && World.Resolve(Outgoing)->IsMarkedForDeletion());
+			World.PurgeEntityRemovals();
 			const FElysiumEntity* Dead = World.Resolve(Outgoing);
 			TestTrue(TEXT("...and destroys the outgoing disposable camera with it"),
 				Dead == nullptr || Dead->IsDead());
@@ -640,6 +650,9 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 				EElysiumDialogOpenerKind::Use, 0, FString());
 			TestFalse(TEXT("an NPC with no default_camera clears the slot too"),
 				World.HasScriptedCamera());
+			TestTrue(TEXT("empty-name opener queues the outgoing disposable camera"),
+				World.Resolve(Second) && World.Resolve(Second)->IsMarkedForDeletion());
+			World.PurgeEntityRemovals();
 			const FElysiumEntity* Dead = World.Resolve(Second);
 			TestTrue(TEXT("...and takes the outgoing disposable camera down"),
 				Dead == nullptr || Dead->IsDead());

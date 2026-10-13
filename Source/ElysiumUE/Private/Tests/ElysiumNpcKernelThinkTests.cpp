@@ -456,6 +456,8 @@ bool FElysiumNpcKernelThink19Set2Test::RunTest(const FString&)
 	N.Senses.Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
 	N.NpcFlags.Set(EElysiumNpcFlag2::DISAPPEAR);
 	TestTrue(TEXT("the pass continues past UTIL_Remove"), N.Think19NormalSet2(Now, 0.1f));
+	TestTrue(TEXT("removal is pending before the terminal purge"), N.IsMarkedForDeletion() && !N.IsDead());
+	F.W.World.PurgeEntityRemovals();
 	TestTrue(TEXT("0x102933f1 UTIL_Remove(this)"), N.IsDead());
 	return true;
 }

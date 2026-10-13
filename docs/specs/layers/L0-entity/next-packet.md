@@ -1,13 +1,21 @@
-# Next bounded candidate — E2 deferred Kill and native body release
+# Next candidate — paused, no dispatch
 
-Dispatch only after sleeping-query exact local commit/checkpoint. Main Sol Medium owns planning/review/gates/commit; one fresh Sol High worker fork_turns=none, one worker/run/enginejob at a time, no nested agents, no worker commit, never push.
+Owner 2026-10-12 requested closing current tasks and releasing existing code.
+The full L0 Goal remains paused and incomplete. Read goal.md and checkpoint.md.
+Do not launch a new worker or engine implementation run without owner resumption.
 
-Named core observer InputKill100acef0 ->virtual119 Kill100acf90 ->UTIL_Remove101cd940; shipped tutorial/hub entity I/O and lighting callers observe deferred removal, UpdateOnRemove ordering, current native body/contact state and eventual destruction. Current FElysiumEntity::Kill instead calls VPhysicsDestroyObject immediately and performs terminal release; ReleaseForRemoval invokes baseKill. This concrete divergence is the next required E2/body lifecycle dependency, not a request for a symptom patch.
+The deferred Kill packet is the accepted code checkpoint; authoritative acceptance
+is recorded in checkpoint.md and E:/elysium-work/codex/l0-release-20261012/.
+The former Kill candidate is preserved in Git history and worker packet evidence.
 
-Reuse entity_io.md section Kill removes; it never kills, accepted removal/native contact event/seam walks, and all accepted P1/P2 receipts. Start research where/section for exact UTIL_Remove/queue/purge/slot119 chain before coding. Determine actual terminal release phase and inputs, reentrant identity/epoch behavior, current body GameData/callback clearing and touch/untouch order. Native body lifetime services remain Unreal/Chaos; no Source networkable/list/allocator clone absent observer. No premature claim wholeE2/P1 done.
+On a later authorized continuation, reconcile final P1 lifecycle/caller disposition
+and E2 CNotify target/pair, Aim10000 deletion and PhysicsAnimLink1014ec70 obligations
+against their actual observers and dependency order. Reuse accepted body/material/
+shadow/contact/removal walks. Select one bounded required contract with real same/
+lower producers, never an IVP clone or unrelated subsystem prerequisite.
 
-Inspect actual Kill/InputKill/QueueRemove/ReleaseForRemoval callers and class overrides, map bindings and reset/persistence direct calls. Separate authored deferred119 from legitimate internal terminal teardown without silently changing consumers. Higher-layer calls remain registered ownership/hooks; no NPC gameplay project. Preserve accepted physical event destruction suppression versus entity-removal other-side End, queued callbacks and fences, native current identity until actual terminal phase, output/think/name handling as retail dictates. Recover only material missing fact.
-
-Select exact permitted paths after review: entity lifecycle/world purge/I/O, affected overrides/consumers only when necessary, tests/arena witness, matching oracle/seam/audit/delivery rows. If coupled producer required, repair same run. No corpus/content/ledger changes or retailsave import. Prove actual authored Kill input and physical contact/body consumer before literals; positive/negative/idempotence/reentry/queue/purge/epoch/reset and actual native lifecycle. Do not weaken expected immediate-vs-deferred assertions to green. Freeze coherent source/docs, independently review, main build/default/affected arena, arm at story closure and relevant checks, exact local commit/checkpoint.
-
-Full P1 caller/writer disposition, remaining E2 CNotify/Aim10000/PhysicsAnimLink, native62 core/noncore producer disposition/wheel/query/material, ordinary moving timing/P3 integration and fullL0 remain open. Native62 preliminary lookup names water.md500–514 fluid producer10158600 with fluid.index>0; two authored owner maps. Do not require a map-specific wheel/fluid clone or unrelated subsystem to close core; retain explicit mapped scope and identify real observers/producers when selected.
+Main Sol Medium independently reviews/gates/commits/checkpoints; one fresh Sol High
+worker/run, no nested workers. Historical never-push resumes for future Goal runs
+unless the owner authorizes otherwise; the current release push alone is authorized.
+Native persistence/travel remains required, retail-save import excluded. Wider
+P2/P3, mapped scope reviews and the full L0 closing gate remain open.

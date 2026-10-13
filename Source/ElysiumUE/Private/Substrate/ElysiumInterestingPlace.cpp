@@ -35,7 +35,7 @@ bool FElysiumInterestingPlace::ResolveTypeOrRemove(bool bWarn)
 			UE_LOG(LogElysiumNpcEnt, Verbose,
 				TEXT("Could not find InterestingPlaceType %s"), *Type);
 		}
-		Kill();   // thunk_FUN_101cd970 — UTIL_Remove
+		RemoveImmediate(); // thunk_FUN_101cd970 — UTIL_RemoveImmediate
 		return false;
 	}
 	return true;

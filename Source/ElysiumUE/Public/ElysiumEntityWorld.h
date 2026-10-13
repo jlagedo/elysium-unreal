@@ -343,6 +343,7 @@ public:
 	//100f6bb0/100f6ce0: handles stay registered until append-order release.
 	void EnqueueEntityRemoval(const FElysiumEntityHandle& Entity);
 	void PurgeEntityRemovals();
+	void ReleaseEntityRemoval(const FElysiumEntityHandle& Entity); // shared immediate/purge destructor recipients.
 	int32 PendingEntityRemovalCount() const { return EntityRemovalQueue.Num(); }
 	//100a47d0->102ca630: L2/L4 CAI_CsActList owner-entry cleanup. Actual entries are produced
 	//by101f8620 combat/stat programs and102bf340/102a1910 NPC death/tasks, not L0 brush creation.

@@ -1,83 +1,85 @@
 # L0 restart checkpoint
 
-Updated 2026-10-12 UTC. Full Goal ACTIVE; full D02/P1/E2/P2/P3 and L0 closure unproven.
-Read goal.md at every continuation. Main Sol Medium owns planning/review/gates/local commits;
-one fresh Sol High worker per run, one worker/run/enginejob at a time, no nested agents.
-Never push. No genuine owner decision or external blocker. Unreal supplies engine services;
-substrate preserves retail observable contracts. No IVP clone or retail-save import prerequisite.
+Owner stop/release instruction, 2026-10-12: finish the existing code, close tasks,
+merge into main and push. Full L0 Goal PAUSED and INCOMPLETE. Do not dispatch a
+new packet. The owner explicitly excluded park/ghidra-knowledge-feedback.
+The release push is authorized despite the historical never-push instructions.
+Read goal.md and this checkpoint before any later owner-authorized continuation.
 
-## Latest accepted run — selected44 sleeping lifetime
+## Accepted code checkpoint — deferred Kill
 
-The local commit containing this checkpoint accepts the bounded native sleeping-query adapter.
-Exact accepted HEAD/tree/parent/path hashes and all authoritative main receipts:
-E:/elysium-work/codex/l0-p2-sleeping-contact-query-main-20261012/acceptance-checkpoint.json.
-Parent08694609f36834158a2ea138ed69e08930cf0a37. Sole worker
-/root/l0_sleeping_contact_query terminal; all worker/main engine jobs terminal at acceptance.
-Worker freeze E:/elysium-work/codex/l0-p2-sleeping-contact-query-20261012/freeze.json
-SHA018bbe3334692ec4a33d68465b8e7408330d83fec9e49a99aa6b0d83c46741c0;
-10source plus50evidence/dependency hashes independently verified. Final sources unchanged
-through main gates. Main selection/frozen review and raw baseline reviews in main scratch;
-prior checkpoint/packet archived there, with full history retained by parent commits.
+Parent accepted HEAD e7f9e53caaec7b8aefd763cf10ed77856a1eb67f.
+This commit records the reviewed deferred Kill contract and owner stop. Its exact
+HEAD/tree, source hashes, terminal jobs and push verification are recorded in
+E:/elysium-work/codex/l0-release-20261012/acceptance-checkpoint.json.
+Main release evidence: E:/elysium-work/codex/l0-release-20261012/.
+Worker evidence: E:/elysium-work/codex/l0-e2-deferred-kill-20261012/.
 
-Observer active226 ->100a55b0 full rewind ->44/260184a0 ->178 before corrected LocalTime.
-Current nonprobe native sleeping contacts retain only prior qualified births. A rejected
-sleeping cache cannot birth. First enabled genuinely qualifying wake preserves surviving
-birth/priority despite native initial activation flags restarting. Awake enabled active IsSet
-strict skin remains mandatory; rejection/reentry, prune/retirement/rebuild lifetime preserved.
-Physical Start/End adapter unchanged. Genuine late unbound world collider proves newest null
-GameData selection and actual Blocked(nullptr), exact both birth identities/times across wake,
-retirement exposing older and recreation. Controlled discrepancy proves real226/44/178 branch,
-not ordinary moving timing equivalence. No invented sleeping226 callback or waking workaround.
-See docs/contracts/seam_physics_contact_query.md and physics-interaction.md's bounded recovery.
+Final gates: fresh arm1671/1671, default221/221 (all prior219 plus two removal
+witnesses), all prior23 affected arena scenarios pass across five successful
+boots. The added save_cine_possession_resume witness retains its existing0017/35
+known-open admission: native event-free body/clip continuation is unavailable.
+It is not claimed as implemented. Authoritative reports:
 
-## Main acceptance gates and limits
+- arm: E:/elysium-work/reports/tests/20261013T002059.160997Z-elysium-arm/index.json
+- default: E:/elysium-work/reports/tests/20261013T002212.928191Z-elysium-session-elysium-substrate/index.json
+- arena: E:/elysium-work/reports/arena/20261013T000641.905293Z/index.json
 
-CLI receipts below are E:/elysium-work/logs/<filename>.
-- Build20261012T232548.114745Z-build.json exit0.
-- Default232555.159073Z-test.json:219/219 pass; all218 prior names preserved, exactly
-  NativeSleepingWorldContact added. Raw232555.315992Z-elysium-session-elysium-substrate/index.json
-  under reports/tests; SHA48761588ad334cc8a75e77883367277b88420d7ed9e35c58e1131441a21670d5.
-- Arena232639.490729Z-arena.json:23/23 pass across fourboots, allhost0, no scenarioerror/first_unmet;
-  all22 prior records preserved plus l0_sleeping_contact_query. Raw reports/arena/
-  20261012T232639.706421Z/index.json SHAf5783e4d7748ee9108fe1902fb20b565d11c24d03a6d2ab97b36dd58ec9fedd2.
-  Literal startup Error lines124, allLogPython/nonPython0; known editor limitation distinguished
-  from scenario verdicts. Full L0 arena and required repeated boot orders remain unproved.
-- Fresharm233022.283140Z-test.json:1671/1671 pass, all1671 prior names preserved,
-  errors/failures/unfinished0. Raw reports/tests/20261012T233153.460980Z-elysium-arm/index.json
-  SHAde32be170a40da8c77f1a6a97c30445693b3b41d3872d5282bdee8f6da385d9d.
-- Doctor232609.748230Z-doctor.json repo-only0warnings; generated shape232609.747729Z-research.json
-  allsurfacesmatch, no ledger regeneration. Worker54affected and3focusedarena receipts in freeze.
+Final arm receipt001950.238363Z includes the successful fresh build. Repository
+doctor000718.270828Z passes with zero warnings; generated-shape000718.642943Z
+matches all surfaces. Full doctor retains21 corpus warnings. Arena startup has
+155 literal LogPython Error lines across five boots, zero nonPython Error lines;
+these existing editor plugin errors do not count as successful gameplay coverage.
+All worker jobs are terminal; no further packet is dispatched.
 
-Failed fixture compile231140 and focused231350/231632 retained. Diagnostic actualwake rebirthed
-survivors in reverse priority, now repaired with semantic prior-sleep marker; expectations not
-weakened. Audit100a55b0/100aaa40 and mapped rows remain partial/open. Ordinary moving-pusher
-first-contact/mechanics timing, generic changed-feature/same-step order, wider query/material
-and saved/reconstructed contact integration remain OPEN. No full P1/E2/P2/P3/M1/L0 closure.
+InputKill100acef0 -> virtual119100acf90 now queues UTIL_Remove101cd940/101cd8c0:
+latch before180, clear name, enqueue registered identity. Base180 retires current
+native225 before append; overriding180 can retain it until release. Creation-owned
+detached carriers retire at terminal release. Immediate101cd970 and internal
+terminal teardown use separate services. Purge waits through public WaitPhysScenes,
+re-reads live insertion count, shares destructor recipients and fences callback
+teardown/reentry. Bare semantic latch never invents queue entries; pending native
+SAVE does not serialize the transient queue. Native wrapper End suppression is
+separate from survivor End176/parent at entity purge.
 
-## Reuse accepted foundations
+Actual deployed tutorial relay/door and native solved bottle contacts are exercised
+by DeferredKill; DeferredKillEpoch tests bare latch/think words/callback teardown.
+Broader gate exposed seven obsolete immediate-phase fixtures and a real scene wire:
+CSceneEntity18010080a80 cancels playback, runs10083a60 cleanup and then base180.
+This preserves OnCanceled and cast AI restoration before terminal source loss.
+Camera/dialogue/inventory/maker/mover fixtures now distinguish pending and purge;
+explicit dead/stale fixtures still prove terminal outcomes. Failed receipts remain
+in scratch. The arm gate exposed23 more phase assumptions: pending witnesses and
+actual owning-world purge precede the original terminal/refusal assertions; native
+query lifetime adversaries use real immediate removal. That final repair changed
+only tests and documentation; runtime/header hashes retain the arena proof.
+No content/corpus/retail ledger changes or named gameplay divergence
+were introduced by this packet. Existing controller same-frame divergence is retained.
 
-08694609 production physical event adapter: callback/GameData admission, retained physical
-participation, before226/229 ordered FIFO, event-driven touch sentinels, base176 parent relay,
-wrapper destruction suppression vs entity removal End, reset fences. Exact acceptance:
-E:/elysium-work/codex/l0-p2-physical-event-adapter-main-20261012/acceptance-checkpoint.json.
-6a757880 native retained/sleep/prune/incarnation preparatory proof reused without replay.
-860d053c actual1002f1e0 immutable native admission, current no-wake mutations/contents/callback/
-SAVE56, coreworld/door constructors, current identity and masks; acceptance in
-E:/elysium-work/codex/l0-p2-native-admission-main-20261012/acceptance-checkpoint.json.
-348959fe core InitNormal/PhysProp; 8f8aea1b sound and5b48bb61 separate34pathplan remain accepted.
-Reuse body/material/shadow/query/save/sound walks; no content/corpus/retail/ledger writes.
+## Prior accepted foundations — reuse
 
-## First unmet / next closing witness
+e7f9e53c selected44 sleeping contact lifetime and first qualifying wake, actual
+null-world Blocked(nullptr); prior default219, affected23arena and fresharm1671.
+Exact acceptance E:/elysium-work/codex/l0-p2-sleeping-contact-query-main-20261012/acceptance-checkpoint.json.
+08694609 ordered native physical event/lifecycle adapter; 6a757880 retained-contact
+preparation; 860d053c native admission; 348959fe core InitNormal/PhysProp;
+8f8aea1b sound and 5b48bb61 separate34pathplan. Their walks/receipts remain accepted.
+No physics/layout/allocator/solver clone or retail-save import prerequisite.
 
-Next required body lifecycle dependency E2: core Kill100acf90 vs QueueRemove and terminal
-ReleaseForRemoval. Current base Kill immediately performs terminal native/body cleanup;
-retail119 queues UTIL_Remove. Confirm actual bindings/overrides/callers and deferred phases,
-then faithful implementation with real authored/native consumer witness; see next-packet.md.
-P1 caller/writer/lifecycle final disposition remains; E2 CNotifytarget40/pair/Aim10000 deletion/
-PhysicsAnimLink1014ec70; P2 native62 core/noncore producer disposition, map-specificwheel,
-query/material; P3 shadow simulation/parent/bounds/native landmark travel/globalcollisionSAVE
-merge remain open. FuncRotating51D07/P3, CPhysBox17D08/I1, I2impact10151c00/fullBreak/wider
-constraints, ragdoll/fourD09scope reviews and D03audioocclusion policy retain mapped obligations.
-Full gate: allactiveL0/integration onefullarena, required repeatedbootorders, default+armzero/
-baselines, owned auditdone or owneracceptednameddivergence, observable service contracts,
-registeredhigherhooks and completemappeddisposition. Never mark complete for a packet/subsystem.
+## Remaining full gate and next candidate — no dispatch
+
+Full P1 caller/writer/lifecycle disposition and E2 CNotify target/pair, Aim10000
+membership/deletion and PhysicsAnimLink1014ec70 lifetime remain open. Arbitrary
+higher listener/destructor disposition is not inferred from this bounded packet.
+P2 native62 core/noncore producer disposition, map-specific wheel, query/material,
+feature/same-step ordering and ordinary moving-contact timing remain open.
+P3 shadow feedback/simulation timing, parent/bounds, native landmark travel and
+global-collision SAVE merge remain open. FuncRotating51D07/P3, CPhysBox17D08/I1,
+I2impact10151c00/fullBreak/wider constraints, ragdoll/fourD09 scope reviews and
+D03audio-occlusion policy retain their mapped obligations.
+
+Completion requires all active L0/integration records in one full arena, required
+repeated boot orders, default+arm zero failures/baseline preservation, owned audit
+rows done or owner-accepted named divergence, observable engine-service contracts,
+registered higher hooks and complete mapped disposition. This release does not
+prove full P1/E2/P2/P3/M1/L0 closure. Only the owner can authorize resuming that work.

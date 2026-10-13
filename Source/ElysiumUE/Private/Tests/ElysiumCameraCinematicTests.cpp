@@ -393,9 +393,11 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 		TestFalse(TEXT("EndShot cleared the cine slot the same frame"), World.HasScriptedCamera());
 		TestFalse(TEXT("... and the slot's entity"), World.CineCameraEntity().IsSet());
 		{
-			const FElysiumEntity* Dead = World.Resolve(RuntimeHandle);
-			TestTrue(TEXT("... and destroyed the disposable runtime camera"),
-				Dead == nullptr || Dead->IsDead());
+			FElysiumEntity* Dead = World.Resolve(RuntimeHandle);
+			TestTrue(TEXT("disposable runtime camera is registered and pending after EndShot"),
+				Dead && !Dead->IsDead() && Dead->IsMarkedForDeletion());
+			World.PurgeEntityRemovals();
+			TestNull(TEXT("... and destroyed the disposable runtime camera at purge"), World.Resolve(RuntimeHandle));
 		}
 		TestTrue(TEXT("the release is a cut: PopCameraShot with a zero blend"),
 			Services.Saw(TEXT("PopCameraShot")));
@@ -507,9 +509,11 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 		World.SetCineCamera(FElysiumEntityHandle::Invalid(), TerminalShot, /*bDisposable*/ true,
 			TEXT("special-case"));
 		{
-			const FElysiumEntity* Dead = World.Resolve(RuntimeHandle);
-			TestTrue(TEXT("a terminal opened over a live cine shot destroys the disposable camera"),
-				Dead == nullptr || Dead->IsDead());
+			FElysiumEntity* Dead = World.Resolve(RuntimeHandle);
+			TestTrue(TEXT("a terminal opened over a live cine shot queues the disposable camera"),
+				Dead && !Dead->IsDead() && Dead->IsMarkedForDeletion());
+			World.PurgeEntityRemovals();
+			TestNull(TEXT("terminal replacement destroys the disposable camera at purge"), World.Resolve(RuntimeHandle));
 		}
 		TestTrue(TEXT("and the slot is the terminal's"), World.HasScriptedCamera());
 		TestFalse(TEXT("which owns no entity"), World.CineCameraEntity().IsSet());
@@ -906,9 +910,10 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 		TestFalse(TEXT("the grapple leave drops the pose lock"),
 			PlayerEnt->HasViewFlags(EElysiumViewFlags::MoveAnglesFromEntity));
 		TestFalse(TEXT("... and ends the scripted shot (RC13)"), World.HasScriptedCamera());
-		const FElysiumEntity* Dead = World.Resolve(RuntimeHandle);
-		TestTrue(TEXT("... destroying the disposable camera with it"),
-			Dead == nullptr || Dead->IsDead());
+		FElysiumEntity* Dead = World.Resolve(RuntimeHandle);
+		TestTrue(TEXT("grapple exit queues the disposable camera"), Dead && !Dead->IsDead() && Dead->IsMarkedForDeletion());
+		World.PurgeEntityRemovals();
+		TestNull(TEXT("... destroying the disposable camera at purge"), World.Resolve(RuntimeHandle));
 	}
 
 	// --- 13. `camera_showdebug`, `ShouldTransmit` and `ObjectCaps` --------------------------------

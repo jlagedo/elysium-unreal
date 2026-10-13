@@ -296,6 +296,8 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 
 	TestTrue(TEXT("RemoveItem matches the owned classname"),
 		Player->Inventory.ScriptRemove(*Player, TEXT("item_g_lockpick")));
+	TestTrue(TEXT("removal is pending before the terminal purge"), Lockpick->IsMarkedForDeletion() && !Lockpick->IsDead());
+	World.PurgeEntityRemovals();
 	TestTrue(TEXT("...and destroys the final entity"), Lockpick->IsDead());
 	TestEqual(TEXT("...leaving the slot list empty"), Player->Inventory.Num(), 0);
 	TestFalse(TEXT("RemoveItem on nothing matches nothing"),
@@ -327,6 +329,8 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 	TestFalse(TEXT("...and destroys nothing"), Iron->IsDead());
 	TestTrue(TEXT("RemoveItem on the last of a stack"),
 		Player->Inventory.ScriptRemove(*Player, TEXT("item_w_tire_iron")));
+	TestTrue(TEXT("removal is pending before the terminal purge"), Iron->IsMarkedForDeletion() && !Iron->IsDead());
+	World.PurgeEntityRemovals();
 	TestTrue(TEXT("...destroys the entity"), Iron->IsDead());
 	TestEqual(TEXT("...and empties the slot"), Player->Inventory.Num(), 0);
 
@@ -859,6 +863,10 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 	World.AcceptInput(TEXT("crate"), FName(TEXT("DeleteItems")), FElysiumVariant::Void(),
 		Live->Handle, Live->Handle);
 	TestEqual(TEXT("DeleteItems clears all slots"), Live->Inventory.Num(), 0);
+	TestTrue(TEXT("DeleteItems queues both registered items before terminal release"),
+		Seed && !Seed->IsDead() && Seed->IsMarkedForDeletion()
+		&& LooseGun && !LooseGun->IsDead() && LooseGun->IsMarkedForDeletion());
+	World.PurgeEntityRemovals();
 	TestTrue(TEXT("DeleteItems destroys every contained entity"),
 		Seed && Seed->IsDead() && LooseGun && LooseGun->IsDead());
 

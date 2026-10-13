@@ -456,6 +456,8 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 			TestEqual(TEXT("an infinite spawn consumes nothing"),
 				ReadInt(*RestoredMaker, TEXT("MaxNPCCount")), TotalBefore);
 			LiveChild->Kill();
+			TestTrue(TEXT("removal is pending before the terminal purge"), LiveChild->IsMarkedForDeletion() && !LiveChild->IsDead());
+			Restored.PurgeEntityRemovals();
 			TestEqual(TEXT("and a live removal still refunds, infinite or not"),
 				ReadInt(*RestoredMaker, TEXT("MaxNPCCount")), TotalBefore + 1);
 		}
@@ -510,6 +512,8 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 	TestEqual(TEXT("finite spawn consumes the remaining total"),
 		ReadInt(*FiniteMaker, TEXT("MaxNPCCount")), 0);
 	FiniteChild->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), FiniteChild->IsMarkedForDeletion() && !FiniteChild->IsDead());
+	Finite.PurgeEntityRemovals();
 	TestEqual(TEXT("live removal refunds the finite total"),
 		ReadInt(*FiniteMaker, TEXT("MaxNPCCount")), 1);
 	TestEqual(TEXT("live removal decrements the live count"),

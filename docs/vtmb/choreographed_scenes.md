@@ -467,7 +467,14 @@ are never used. Scenes also receive the generic `Kill` (20), `ScriptHide` (11) a
 `ScriptUnhide` (6). The `Kill` arm is load-bearing: `sp_theatre`'s `scene_over_relay` kills
 `courtroom_scene_bip2` (the Prince's speech, `position_start 1`) 1.7 s before its end, and only the
 remove-time cancel gives Prince1 his AI back before `Prince_Escort_*` binds him again (recovered
-2026-09-12; the port's `FElysiumChoreoScene::OnDormancyChanged` runs the cancel on death). The
+2026-09-12). The port's `FElysiumChoreoScene::UpdateOnRemove` now runs cancellation while the
+scene is still registered, before base180/name clearing and purge. The host scene-storage
+adapter stops any remaining events and releases the player's scene state/reference. Retail
+10083a60 also calls10084170/100845a0: actor285 and specialized recipient246 callbacks with
+nested scene recursion. Their wider derived recipient contract remains L5 work (audit rows
+remain open); this correction retains the existing cast/clip/event cleanup. Waiting for terminal
+dormancy suppressed the scene's caller-context OnCanceled output; `ChoreoScene` retains the
+actual enqueued Kill/Tick witness and proves the restored AI and absence of OnCompletion. The
 finish walk `0x100847e0` skips only an actor held by a cine (`m_hCine`) or in a dialogue
 (`m_hDialogPartner`); the port had also skipped its own cast, because the scene stamps
 `ScriptOwner` on its actors and thaws them before releasing that claim — so no placed cast had

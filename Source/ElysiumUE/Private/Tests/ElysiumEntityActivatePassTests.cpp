@@ -102,6 +102,7 @@ bool FElysiumEntityActivatePassTest::RunTest(const FString&)
 	}
 	Dormant->bEflDormant = true;   // what `MakeDormant` (`0x100a8060`) leaves
 	Predead->Kill();                // removed before the pass: retail purges it from the list
+	World.PurgeEntityRemovals();
 	Hidden->ScriptHide();           // ScriptHide is not dormancy: retail still activates it
 
 	GActivatePassOrder.Reset();

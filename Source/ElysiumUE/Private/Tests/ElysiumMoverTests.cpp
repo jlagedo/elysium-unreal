@@ -702,7 +702,10 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		const FElysiumEntityHandle ButtonHandle=Button->Handle;
 		Button->BlockedCallback=[](FElysiumEntity& Receiver,FElysiumEntity*) { Receiver.Kill(); };
 		Button->VPhysicsUpdatePusher(Button->VPhysicsGetObject());
-		TestNull(TEXT("actual native178 retirement stops postcallback receiver access"),World.Resolve(ButtonHandle));
+		TestTrue(TEXT("native178 Kill retains pending receiver until purge"),World.Resolve(ButtonHandle)==Button && Button->IsMarkedForDeletion());
+		TestNull(TEXT("base180225 retires current native during178 callback"),Button->VPhysicsGetObject());
+		World.PurgeEntityRemovals();
+		TestNull(TEXT("actual native178 terminal retirement occurs at purge"),World.Resolve(ButtonHandle));
 		return true;
 	}
 	if (Parameters == TEXT("NativeDoorFeedbackObserver") || Parameters == TEXT("NativeMovingFirstContact"))

@@ -1011,6 +1011,8 @@ bool FElysiumNpcKernelRunAi19ZombieDespawnTest::RunTest(const FString&)
 	N->Senses.Memory.ClosestPlayerDistanceCm = 101.f * ElysiumMove::U;
 	N->bGroundSpeedFromIntervalMovement = false;
 	N->RunAI(true);
+	TestTrue(TEXT("removal is pending before the terminal purge"), N->IsMarkedForDeletion() && !N->IsDead());
+	F.World.World.PurgeEntityRemovals();
 	TestTrue(TEXT("103df89f slot 119 Kill"), N->IsDead());
 	TestTrue(TEXT("103df9b1 the tail still ran after Kill"), N->bGroundSpeedFromIntervalMovement);
 	return true;

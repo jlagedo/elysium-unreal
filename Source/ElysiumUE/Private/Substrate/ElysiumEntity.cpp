@@ -373,11 +373,14 @@ void FElysiumEntity::ScriptUnhide()
 
 void FElysiumEntity::UpdateOnRemove()
 {
+	FElysiumEntityWorld* const RemovalWorld = World;
+	const FElysiumEntityHandle RemovalHandle = Handle;
 	//100a47d0: listeners precede state writes and native225. The reached L0 touch
 	// observer uses the existing service. Notify/aim membership belongs to the remaining
 	// E2/constraint contracts; Physics owner association is projected by stable native handles.
 	if (World) World->UntouchListOnEntityDeleted(*this);
 	if (World && World->RemoveExternalActs) World->RemoveExternalActs(*this); //102ca630, higher recipient.
+	if (RemovalWorld && RemovalWorld->Resolve(RemovalHandle) != this) return;
 	if (bEdictAttached) Flags |= 0x4000000; //FL_KILLME, distinct from EFL_KILLME.
 	if (!GlobalName.IsEmpty())
 	{
@@ -386,6 +389,7 @@ void FElysiumEntity::UpdateOnRemove()
 			Record->State = ElysiumTransitionState::GlobalStateDead; //100577d0, existing rows only.
 	}
 	VPhysicsDestroyObject(); //225 occurs in callback before SetName(NULL)/append,100a47d0.
+	if (RemovalWorld && RemovalWorld->Resolve(RemovalHandle) != this) return;
 	UnlinkFromMoveParent(); //1012c840 preserves the observed unlink/absolute-pose order.
 	FElysiumEntity* Child = World ? World->Resolve(MoveChild) : nullptr;
 	while (Child)
@@ -401,36 +405,58 @@ void FElysiumEntity::UpdateOnRemove()
 
 void FElysiumEntity::QueueRemove()
 {
-	if (bDead || bRemovalPending || !World) return;
+	if (bDead || bRemovalPending) return;
 	FElysiumEntityWorld* const RemovalWorld = World;
 	const FElysiumEntityHandle RemovalHandle = Handle;
 	bRemovalPending = true; //101cd8de: latch before virtual180, including reentrant callbacks.
 	UpdateOnRemove();
 	// A callback may retire the host epoch. Never write through a stale identity after dispatch.
-	if (RemovalWorld->Resolve(RemovalHandle) != this) return;
-	RemovalWorld->RenameEntity(*this, FString()); //100a0420(NULL) precedes append.
-	RemovalWorld->EnqueueEntityRemoval(RemovalHandle);
-}
-
-void FElysiumEntity::ReleaseForRemoval()
-{
-	FElysiumEntity::Kill();
-	RetireReconstructedPhysics();
-	ElysiumModelPhysics::BindReference(this, nullptr);
-	ElysiumModelPhysics::ForgetGameData(*this);
+	if (RemovalWorld)
+	{
+		if (RemovalWorld->Resolve(RemovalHandle) != this) return;
+		RemovalWorld->RenameEntity(*this, FString()); //100a0420(NULL) precedes append.
+		RemovalWorld->EnqueueEntityRemoval(RemovalHandle);
+	}
+	else TargetName.Empty(); // unregistered networkable still runs180/name; append admits valid handles only.
 }
 
 void FElysiumEntity::Kill()
 {
-	VPhysicsDestroyObject(); //225 owns supplied actor even if another entity produced it.
-	// Terminal: mark dead and go inert immediately (a killed-but-not-yet-reaped entity must
-	// not touch, trace, or think). The slot removal + handle invalidation is the world's job;
-	// this only flips the entity's own state.
-	if (bDead)
+	QueueRemove(); //100acf90 slot119 ->101cd940; terminal work belongs to the delete-list purge.
+}
+
+void FElysiumEntity::RemoveImmediate()
+{
+	//101cd970: guard116, latch, virtual180, deleting destructor; never dispatch119 or append.
+	if (bDead || IsMarkedForDeletion()) return;
+	FElysiumEntityWorld* const RemovalWorld = World;
+	const FElysiumEntityHandle RemovalHandle = Handle;
+	bRemovalPending = true;
+	UpdateOnRemove();
+	if (RemovalWorld && RemovalWorld->Resolve(RemovalHandle) != this) return;
+	if (RemovalWorld) RemovalWorld->ReleaseEntityRemoval(RemovalHandle);
+	else ReleaseForRemoval();
+}
+
+void FElysiumEntity::ReleaseForRemoval()
+{
+	if (bDead || bReleaseForRemovalInProgress)
 	{
 		return;
 	}
+	bReleaseForRemovalInProgress = true;
+	FElysiumEntityWorld* const RemovalWorld = World;
+	const FElysiumEntityHandle RemovalHandle = Handle;
+	auto StillRegistered = [RemovalWorld,RemovalHandle,this]()
+	{
+		return !RemovalWorld || (RemovalWorld->GetEpoch() == RemovalHandle.Epoch
+			&& RemovalWorld->Entities().IsValidIndex(RemovalHandle.Index)
+			&& RemovalWorld->Entities()[RemovalHandle.Index].Get() == this);
+	};
+	VPhysicsDestroyObject(); //1009df20 destructor225, including overrides that omitted base180.
+	if (!StillRegistered()) return;
 	NotifyOwnerOfTermination(EElysiumOwnedEntityTermination::RemovedAlive);
+	if (!StillRegistered()) return;
 	if (World)
 	{
 		if (IElysiumAudio* Audio = World->Audio())
@@ -451,7 +477,7 @@ void FElysiumEntity::Kill()
 	// CBaseCombatCharacter::UpdateOnRemove 0x10327790 removes one comfort
 	// entry before its handle is invalidated. Other entity classes have no entry.
 	if (FElysiumCombatCharacter* Character = AsCombatCharacter()) { Character->RemoveFromComfortList(); }
-	bRemovalPending = true; // preserve immediate Kill callers' observable kill bit.
+	bRemovalPending = true;
 	bDead = true;
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)
@@ -464,6 +490,7 @@ void FElysiumEntity::Kill()
 		// hidden -> dead, so a retained visualizer must still be told.
 		World->NotifyVisualChanged(*this);
 	}
+	if (!StillRegistered()) return;
 	// `~CBaseEntity` 0x1009df20 -> `PhysicsRemoveTouchedList` 0x1003d8f0 (L0-r019): the dying entity's
 	// touch-link nodes are freed, each node's other side released (the end edges above already ran
 	// through `RouteEntityTouch`, which cannot resolve a dead brush for its own side), and its type-1
@@ -472,11 +499,12 @@ void FElysiumEntity::Kill()
 	if (World)
 	{
 		World->ReleaseTouchedList(*this);
+		if (!StillRegistered()) return;
 		// Then `~CBaseEntity`'s next call, `FUN_100f9f90(&DAT_106eb5d8, handle)` -> `FUN_100fa0f0`: the entity
 		// list's removal, whose `vslot1(ent, handle)` is the listener notice that reaches
 		// `CEntityTouchManager::OnEntityDeleted` 0x100f8cf0 (vslot 1 of `DAT_107036b0`): an entity with the
 		// untouch-pending bit is fast-removed from the deferred untouch list. Retail runs both at the
-		// delete-queue purge; this port's removal is `Kill` itself (the slot is kept, the handle dies).
+		// delete-queue purge; the host keeps the terminal slot as a dead tombstone.
 		World->UntouchListOnEntityDeleted(*this);
 	}
 	// 0x101cd940 actual removal, not Event_Killed: even an already hidden corpse owns physics.
@@ -487,6 +515,9 @@ void FElysiumEntity::Kill()
 			RemovalBody->ReleaseNpcVisual(RemovedNpc->Visual, RemovedNpc->GetNpcMotor());
 		}
 	}
+	RetireReconstructedPhysics();
+	ElysiumModelPhysics::BindReference(this, nullptr);
+	ElysiumModelPhysics::ForgetGameData(*this);
 }
 
 void FElysiumEntity::NotifyOwnerOfTermination(EElysiumOwnedEntityTermination Reason)

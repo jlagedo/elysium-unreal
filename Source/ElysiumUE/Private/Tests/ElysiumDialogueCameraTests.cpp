@@ -263,6 +263,8 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
 		EElysiumDialogOpenerKind::Remote, 0, FString());
 	Speaker->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), Speaker->IsMarkedForDeletion() && !Speaker->IsDead());
+	World.PurgeEntityRemovals();
 	World.RefreshDialogueCamera();
 	TestEqual(TEXT("owner loss releases the request"), Camera.ReleaseCount, 5);
 	TestEqual(TEXT("owner loss closes the dialogue"), Camera.LiveSlots.Num(), 0);

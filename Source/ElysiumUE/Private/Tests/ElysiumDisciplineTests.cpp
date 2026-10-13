@@ -2057,6 +2057,8 @@ bool FElysiumDisciplineFlagSaveTest::RunTest(const FString&)
 	First->OnKilled();
 	TestEqual(TEXT("death removes one comfort occurrence"), World.ComfortTargets().Num(), 2);
 	First->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), First->IsMarkedForDeletion() && !First->IsDead());
+	World.PurgeEntityRemovals();
 	TestEqual(TEXT("entity removal independently removes one occurrence"), World.ComfortTargets().Num(), 1);
 	TestTrue(TEXT("unrelated comfort target survives both removals"), World.ComfortTargets()[0] == Second->Handle);
 	FElysiumPlayer* Player = World.FindPlayer();

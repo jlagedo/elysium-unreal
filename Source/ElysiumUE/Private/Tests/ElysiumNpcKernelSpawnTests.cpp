@@ -356,6 +356,8 @@ bool FElysiumNpcKernelSpawn19ManBatEventKilledTest::RunTest(const FString&)
 		TestEqual(TEXT("then the minions"), ManBat->Spawn19DeathTeardown[2], FString(TEXT("0x1038fd40")));
 	}
 	// 0x1038e93d / 0x1038e945: the screech cone is DESTROYED and the handle cleared.
+	TestTrue(TEXT("removal is pending before the terminal purge"), F.Prop->IsMarkedForDeletion() && !F.Prop->IsDead());
+	F.World.World.PurgeEntityRemovals();
 	TestTrue(TEXT("the cone entity is removed"), F.Prop->IsDead());
 	TestFalse(TEXT("+0x66a4 = -1"), ManBat->ManBatScreechCone.IsSet());
 	TestTrue(TEXT("then the Troika death (0x1038e956)"), ManBat->HasReportedDeath());
@@ -491,6 +493,8 @@ bool FElysiumNpcKernelSpawn19ZombieCreateCorpseTest::RunTest(const FString&)
 	TestEqual(TEXT("m_vecDeathForceVector saved"), Zombie->ZombieDeathForceVector, Force);
 	TestEqual(TEXT("m_DeathDamageInfo saved"), Zombie->ZombieDeathDamageInfo.Damage, Info.Damage);
 	// No activity-0x21 sequence (the seam answers -1): 0x103dfc9b takes the gib arm and removes it.
+	TestTrue(TEXT("removal is pending before the terminal purge"), Zombie->IsMarkedForDeletion() && !Zombie->IsDead());
+	F.World.World.PurgeEntityRemovals();
 	TestTrue(TEXT("CorpseGib then UTIL_Remove (0x103dfd09)"), Zombie->IsDead());
 	return true;
 }

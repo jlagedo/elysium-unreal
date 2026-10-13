@@ -564,8 +564,7 @@ namespace
 			Npc.Health = 0;
 			UE_LOG(LogElysiumNpcEnt, Log, TEXT("SUB_Remove called on entity with health > 0"));   // 0x1059c3a4
 		}
-		Npc.UpdateOnRemove();
-		Npc.Kill();
+		Npc.QueueRemove();
 	}
 
 	// `SUB_PVSRemove` `0x102696f0` (the datamap's `CBaseEntitySUB_PVSRemove`, thunk `0x10009c9b`):
@@ -590,8 +589,7 @@ namespace
 			Npc.NextThink = static_cast<float>(Now + static_cast<double>(GNpcCorpseThinkDelaySeconds));   // param_1[0x5f] = curtime + 10.0
 			return;
 		}
-		Npc.UpdateOnRemove();                                                    // 0x101cd940 UTIL_Remove
-		Npc.Kill();
+		Npc.QueueRemove();                                                      // 0x101cd940 UTIL_Remove
 	}
 }
 

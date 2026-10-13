@@ -680,9 +680,19 @@ the character chain declares a `Kill` datamap record, so the name lookup walks
 
 Nothing on that path touches health, life state, a death sequence or a ragdoll, and nothing fires an
 output, drops inventory or plays a sound. Removal is **deferred**: `UTIL_Remove` sets a
-not-yet-queued guard bit, releases the networkable interface, and appends the entity to a growable
+not-yet-queued guard bit, invokes `UpdateOnRemove`, clears the name, and appends the networkable to a growable
 global delete list (`FUN_100f6bb0`) drained later — the entity is not destroyed in the caller's
 frame.
+
+`101cd8c0` latches before virtual180, so reentry cannot repeat the callback. Base180
+`100a47d0` destroys the **current** physics object via225 before name clearing/append;
+overriding180 can retain it. Neither119 nor this queue helper clears think words.
+`100f6ce0` waits through physics environment46, releases networkable6 in append order
+while re-reading the live count, then clears the list. `1009df20` performs base destructor
+native225 and `PhysicsRemoveTouchedList1003d8f0` before entity-list removal. Separate
+immediate helper `101cd970` guards116, latches, invokes180 and deleting destructor5
+without119/name-clear/append. See [seam_entity_removal.md](../contracts/seam_entity_removal.md)
+for the host entries and bounded production witnesses.
 
 The practical consequence for authored scenes is that a cast removed with `Kill` **blinks out**. A
 map that wants bodies to fall has to damage them instead; `sp_tutorial_1`'s alley scene does both,
@@ -2185,7 +2195,9 @@ materializes every non-empty seed as a real item entity in the inherited 224-slo
 inventory. `SpawnItemInContainer` does the same for one classname; `AddEntityToContainer` resolves
 all matching targetnames and accepts only items with no current combat-character owner.
 `DeleteItems` is destructive: it removes every contained entity and clears the slots and
-active/last handles.
+active/last handles. `10208fa0` calls `Inventory_Destroy10334b10`, whose item removals call
+`UTIL_Remove101cd940`: contained entities remain pending/registered until purge even though
+the inventory slots are already cleared. `InventoryContainers` checks both phases.
 
 `Use` holds one exclusive player handle. Opening selects the lower barter service's loot mode and
 shows the loot panel; closing hides it and releases the user. The server-side `vbarter` path moves

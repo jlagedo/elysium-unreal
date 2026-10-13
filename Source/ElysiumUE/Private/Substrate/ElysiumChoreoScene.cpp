@@ -904,13 +904,17 @@ public:
 	// `OnCompletion` does not. sp_theatre authors exactly this (`scene_over_relay ->
 	// courtroom_scene_bip2 Kill` while the Prince's speech is 1.7 s from its end), and without
 	// the cancel Prince1 stayed AI-disabled and held through the escort and out of the intro.
-	virtual void OnDormancyChanged() override
+	virtual void UpdateOnRemove() override
 	{
-		FElysiumEntity::OnDormancyChanged();
-		if (bDead && bPlaying)
+		if (bPlaying)
 		{
 			CancelPlayback();
 		}
+		//10083a60: stop the scene's remaining events, discard its player state and scene reference.
+		Player.StopActiveEvents(*this);
+		Player = FElysiumScenePlayer();
+		Scene.Reset();
+		FElysiumEntity::UpdateOnRemove();
 	}
 
 	void CancelPlayback()

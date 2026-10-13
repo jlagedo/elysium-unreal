@@ -1904,6 +1904,8 @@ bool FElysiumV4dRiggedDeathTest::RunTest(const FString&)
 	RigNpc->ScriptHide();
 	TestEqual(TEXT("ordinary hide retains corpse physics"), Fixture.Services.Count(TEXT("ReleaseNpcVisual")), 0);
 	RigNpc->Kill(); RigNpc->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), RigNpc->IsMarkedForDeletion() && !RigNpc->IsDead());
+	Fixture.World.PurgeEntityRemovals();
 	TestEqual(TEXT("terminal hidden removal releases once"), Fixture.Services.Count(TEXT("ReleaseNpcVisual sim=1")), 1);
 	TestNull(TEXT("terminal removal clears entity Visual"), RigNpc->Visual);
 	TestFalse(TEXT("terminal removal clears recording simulation"), Fixture.Services.SimulatingNpcVisuals.Contains(RigVisual));
@@ -1935,6 +1937,8 @@ bool FElysiumV4dRiggedDeathTest::RunTest(const FString&)
 	TestEqual(TEXT("0x103a38c0 pedestrian SOLID_NONE"), PedNpc->RetailSolidType, 0);
 	TestEqual(TEXT("pedestrian lethal death never releases visual"), Fixture.Services.Count(TEXT("ReleaseNpcVisual")), 0);
 	PedNpc->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), PedNpc->IsMarkedForDeletion() && !PedNpc->IsDead());
+	Fixture.World.PurgeEntityRemovals();
 	TestEqual(TEXT("visible terminal removal also releases simulation"), Fixture.Services.Count(TEXT("ReleaseNpcVisual sim=1")), 1);
 	Fixture.Services.Calls.Reset();
 	USkeletalMeshComponent* DestructedVisual = nullptr;

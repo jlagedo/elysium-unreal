@@ -512,6 +512,8 @@ bool FElysiumPointTeleportContractTest::RunTest(const FString&)
 	EmptyTeleport.TargetName = TEXT("tp_empty");
 	AddExpectedError(TEXT("given no target. Deleted"), EAutomationExpectedErrorFlags::Contains, 1);
 	const FElysiumEntityHandle EmptyHandle = World.SpawnRuntimeEntity(MoveTemp(EmptyTeleport));
+	TestTrue(TEXT("removal is pending before the terminal purge"), World.Resolve(EmptyHandle) && World.Resolve(EmptyHandle)->IsMarkedForDeletion());
+	World.PurgeEntityRemovals();
 	TestNull(TEXT("an empty target kills the teleporter"), World.Resolve(EmptyHandle));
 
 	// Spawnflag 1 samples the synchronized player transform during frozen activation.

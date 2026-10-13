@@ -409,6 +409,8 @@ bool FElysiumHintSearchAdmissionOrderTest::RunTest(const FString&)
 		R.Near(nullptr, 0, 0), Miss);
 
 	Other->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), Other->IsMarkedForDeletion() && !Other->IsDead());
+	R.F.World.PurgeEntityRemovals();
 	TestEqual(TEXT("0x102d14c0: a stale owner is not a live entity, so the owned node is usable"),
 		R.Near(nullptr, TypePlain, 0), R.Id(TEXT("owned")));
 	return true;
@@ -790,6 +792,8 @@ bool FElysiumHintSearchClaimReleaseOwnerTest::RunTest(const FString&)
 	// A dead owner is a stale handle. Killing the NPC may run its own teardown, so the stale state the
 	// claim reads is stated again explicitly.
 	A->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), A->IsMarkedForDeletion() && !A->IsDead());
+	R.F.World.PurgeEntityRemovals();
 	Hint->HintOwner = A->Handle;
 	Hint->NextUseTime = 0.f;
 	TestTrue(TEXT("0x102d1540: a stale owner is not a live entity, so the hint is available to B"),

@@ -93,7 +93,6 @@ bool FElysiumPhysProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State
 void FElysiumPhysProp::Kill()
 {
     FElysiumEntity::Kill();
-    VPhysicsDestroyObject();
 }
 
 UPrimitiveComponent* FElysiumPhysProp::GetAttachBody() const

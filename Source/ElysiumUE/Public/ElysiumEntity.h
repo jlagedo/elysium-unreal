@@ -389,7 +389,8 @@ public:
 	uint32 EFlagsWord() const { return EFlags | (bEflDormant ? 0x2u : 0u) | (bRemovalPending ? 0x1u : 0u); }
 	//101cd8c0: kill latch precedes callback/name clear; released tombstones use bDead separately.
 	bool bRemovalPending = false;
-	// Host destructor dispatch latch; immediate gameplay Kill does not prove this ran.
+	bool bReleaseForRemovalInProgress = false; // host callback reentry guard, never a retail/save word.
+	// Host destructor dispatch latch; queued gameplay Kill does not prove this ran.
 	bool bNpcDestructorCleanupDispatched = false;
 	// `m_touchStamp` (+0x1ac; `touchStamp` in the kernel field table, no datamap row): the untouch
 	// generation. `SetCheckUntouch(true)` 0x100b11d0 increments it (`100b1251`) before testing the
@@ -517,10 +518,11 @@ public:
 	// --- Base inputs (reach every class through the chain) ---
 	// Slot 119, virtual as retail's (`vt+0x1dc`): `CLight::Kill` `0x101306d0` turns the light off before
 	// the base body runs, and `CBaseEntity::InputKill` `0x100acef0` dispatches through the slot.
-	virtual void Kill();  // terminal: mark dead + go inert (world reaps the slot)
+	virtual void Kill(); //100acf90: deferred UTIL_Remove, preserving the current caller frame.
 	// Host destructor service for the deferred native release; never gameplay slot119 dispatch.
 	virtual void ReleaseForRemoval();
-	void QueueRemove(); //101cd940/101cd8c0, distinct from existing immediate Kill callers.
+	void QueueRemove(); //101cd940/101cd8c0: latch ->180 ->name clear ->append.
+	void RemoveImmediate(); //101cd970: latch ->180 ->terminal release, without119/queue.
 	// `CBaseEntity::MakeDormant` 0x100a8060 (L0-r030): `m_iEFlags |= EFL_DORMANT`; `ThinkSet(0, 0, NULL)`;
 	// with an edict: `AddSolidFlags(FSOLID_NOT_SOLID)`, slot 93 `(0, 0)` (the move type cleared),
 	// `m_flNextThink = 0`, `m_fEffects |= EF_NODRAW (0x40)`, `Relink`. The port's non-solid + undrawn

@@ -355,7 +355,7 @@ namespace ElysiumTransitionState
 			}
 			TransitionStateSite(Data.Sites, TEXT("global_merge"), GRowsFn, 0x101a3c40u, TEXT("global_name"),
 				FString::Printf(TEXT("global=%s found=1 state=2 level=%s removed=1"), *E.GlobalName, *TransitionStateText(Record->LevelName)));
-			E.Kill(); // FUN_101cd970 (UTIL_Remove)
+			E.RemoveImmediate(); // FUN_101cd970 (UTIL_RemoveImmediate)
 			return false;
 		}
 

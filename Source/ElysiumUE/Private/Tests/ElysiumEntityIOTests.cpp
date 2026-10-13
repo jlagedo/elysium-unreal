@@ -778,7 +778,15 @@ bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("the live fan-out is not a missing target"), World.UnknownTargets(), 0);
 	TestEqual(TEXT("Kill reaches every same-name marker"),
-		Sink->CountOf(TEXT("deliver"), TEXT("point_door.Kill")), 2);
+		Sink->CountOf(TEXT("deliver"), TEXT("point_target.Kill")), 2);
+	// QueueRemove clears names before the delivery observer records the classname fallback.
+	for (int32 MarkerIndex = 0; MarkerIndex < 2; ++MarkerIndex)
+	{
+		FElysiumEntity* Marker = World.Resolve(FElysiumEntityHandle(MarkerIndex, World.GetEpoch()));
+		TestTrue(TEXT("each same-name marker remains registered, pending and nameless"),
+			Marker && Marker->IsMarkedForDeletion() && !Marker->IsDead() && Marker->TargetName.IsEmpty());
+	}
+	World.PurgeEntityRemovals();
 
 	// A later refire is an expected post-cleanup miss, still visible in the I/O diagnostics.
 	World.AcceptInput(TEXT("point_door"), FName(TEXT("Kill")), FElysiumVariant::Void(),
@@ -1086,6 +1094,7 @@ bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
 
 	Doomed->Kill();
 	const int32 UnknownBefore = World.UnknownTargets();
+	World.PurgeEntityRemovals(); // the stale-handle witness begins at terminal release.
 	Sink->Reset();
 
 	World.AcceptInput(Handle, FName(TEXT("Add")), FElysiumVariant::Int(1),

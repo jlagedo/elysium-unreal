@@ -885,9 +885,9 @@ bool FElysiumSwitchCoupledTest::RunTest(const FString&)
 		auto* Pass=static_cast<ElysiumSwitchNativeTest::FFilterProbe*>(Entities->Resolve(PassHandle));
 		Request.PassEntity=PassHandle; ElysiumSwitchNativeTest::FilterCalls.Reset();
 		Candidate->On91={}; Candidate->On68={};
-		if (Arm==0) Candidate->On91=[Pass](){Pass->Kill();};
-		if (Arm==1) Candidate->On68=[Pass](){Pass->Kill();};
-		if (Arm==2) Pass->On68=[Pass](){Pass->Kill();};
+		if (Arm==0) Candidate->On91=[Pass](){Pass->RemoveImmediate();};
+		if (Arm==1) Candidate->On68=[Pass](){Pass->RemoveImmediate();};
+		if (Arm==2) Pass->On68=[Pass](){Pass->RemoveImmediate();};
 		Map->TraceRetail(Request,Hit);
 		TestTrue(TEXT("native callback can retire pass and refuses the candidate"),Hit.Fraction==1.f);
 		const TArray<FString> Expected=Arm==0 ? TArray<FString>{TEXT("candidate91")} : Arm==1
@@ -1319,12 +1319,16 @@ bool FElysiumNativePhysicalTouchTest::RunTest(const FString&)
 	//Sentinel refresh is mutable: first callback removes its partner through the real retirement route.
 	TouchObserver = [&](FElysiumEntity&,FElysiumEntity* Other) { if (Other) Other->Kill(); };
 	A->SetCheckUntouch(true); A->PhysicsCheckForEntityUntouch();
+	TestTrue(TEXT("sentinel callback Kill leaves pending partner and reciprocal links until purge"),B->IsMarkedForDeletion()&&!B->IsDead()&&Link(A,B->Handle));
+	Entities->PurgeEntityRemovals();
 	TestTrue(TEXT("sentinel callback partner removal releases reciprocal physical links safely"),B->IsDead() && !Link(A,B->Handle));
 	TouchObserver = {};
 	auto* WorldEntity = Entities->Entities()[0].Get();
 	Entities->PhysicalTouchEvent({A->Handle,WorldEntity->Handle,Ordered.PointCm,Ordered.Normal,true});
 	TouchObserver = [](FElysiumEntity& Receiver,FElysiumEntity*) { Receiver.Kill(); };
 	A->SetCheckUntouch(true); A->PhysicsCheckForEntityUntouch();
+	TestTrue(TEXT("sentinel self Kill leaves pending caller before terminal release"),A->IsMarkedForDeletion()&&!A->IsDead()&&Link(WorldEntity,A->Handle));
+	Entities->PurgeEntityRemovals();
 	TestTrue(TEXT("sentinel self removal safely stops caller tail and releases other link"),A->IsDead() && !Link(WorldEntity,A->Handle));
 	TouchObserver = {}; A->TouchCallback = B->TouchCallback = nullptr;
 	const auto OldHandle = A->Handle;
@@ -1919,6 +1923,7 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestNull(TEXT("generic alias Kill retires pointed native producer"), ElysiumModelPhysics::Identity(Removed->Visual));
 	TestNull(TEXT("producer reference retires before release"), Removed->VPhysicsGetObject());
 	Removed->Kill();
+	Source.PurgeEntityRemovals(); // terminal omission witness; pending SAVE is tested separately.
 	FElysiumMapSnapshot Snapshot; Source.Freeze(Snapshot);
 	TestEqual(TEXT("Physics saves eligible fields including aliases and absent body"), Snapshot.PhysicsBodies.Num(), 5);
 	const FElysiumSavedPhysicsBody* AbsentField = Snapshot.PhysicsBodies.FindByPredicate(
@@ -2001,6 +2006,7 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	if (!RestoredTeardownAlias) return false;
 	TWeakObjectPtr<UPrimitiveComponent> TeardownComponent = ElysiumModelPhysics::ComponentFor(RestoredTeardownAlias->VPhysicsGetObject());
 	Restored->Kill();
+	Destination.PurgeEntityRemovals();
 	FElysiumMapSnapshot AfterKill; Destination.Freeze(AfterKill);
 	TestEqual(TEXT("actual Kill recipe retirement plus retained absent field observed by save"), AfterKill.PhysicsBodies.Num(), 3);
 	Destination.Teardown();
@@ -4046,7 +4052,8 @@ bool FElysiumModelShadowCallerTest::RunTest(const FString&)
 	Restored->ScriptHide(); Restored->ScriptUnhide(); Restored->SetRuntimeOrigin(FVector(11,22,33));
 	TestFalse(TEXT("later art gates cannot resurrect retired native model"), RestoredComponent->GetBodyInstance()->IsValidBodyInstance());
 	TestTrue(TEXT("unrelated borrowed retirement preserves prop alias former owned producer"), ElysiumModelPhysics::IsCurrentOutput(FormerPropToken));
-	RestoredProp->Kill(); TestFalse(TEXT("Kill releases former owned producer even when current field was cleared"), ElysiumModelPhysics::IsCurrentOutput(FormerPropToken));
+	RestoredProp->Kill(); TestTrue(TEXT("pending Kill retains former owned producer after current field clear"), ElysiumModelPhysics::IsCurrentOutput(FormerPropToken));
+	Destination.PurgeEntityRemovals(); TestFalse(TEXT("terminal release retires former owned producer even when current field was cleared"), ElysiumModelPhysics::IsCurrentOutput(FormerPropToken));
 	const auto ReplacementToken = ElysiumModelPhysics::CaptureIdentity(RestoredRemoved->VPhysicsGetObject());
 	RestoredRemoved->SetRuntimeModel(TEXT("models/scenery/structural/doorknoboffice/doorknoboffice.mdl"));
 	TestTrue(TEXT("real SetModel replaces own removed-controller producer"), RestoredRemoved->VPhysicsGetObject() && !ElysiumModelPhysics::IsCurrentOutput(ReplacementToken));
@@ -4596,6 +4603,7 @@ bool FElysiumModelPhysicsBodyGameFlagsTest::RunTest(const FString&)
 namespace ElysiumRemovalTest
 {
 	TArray<int32> Released;
+	TFunction<void(FElysiumEntity&)> ReleaseCallback;
 	TMap<FString,int32> DestructorCleanupCalls;
 	class FDestructorProbe final : public FElysiumNpc
 	{
@@ -4614,6 +4622,8 @@ namespace ElysiumRemovalTest
 		void OnOwnedEntityTerminated(FElysiumEntity& Removed, EElysiumOwnedEntityTermination) override
 		{
 			Released.Add(Removed.Handle.Index);
+			World->PurgeEntityRemovals(); // host release callback may reenter the active purge.
+			if (ReleaseCallback) { ReleaseCallback(Removed); return; }
 			if (FElysiumEntity* Tail = World->FindByName(TEXT("tail"))) Tail->QueueRemove();
 		}
 	};
@@ -4627,7 +4637,7 @@ namespace ElysiumRemovalTest
 		{
 			if(Def->Keys.Contains(TEXT("bare")))SetEFlags(EFlagsWord()|1);
 			else if(Def->Keys.Contains(TEXT("queued")))QueueRemove();
-			else if(Def->Keys.Contains(TEXT("stale")))FElysiumEntity::Kill();
+			else if(Def->Keys.Contains(TEXT("stale")))ReleaseForRemoval(); // explicit terminal-host fixture.
 		}
 		void PostSpawn() override { ++PostCalls; }
 		void Activate() override { ++ActivateCalls; }
@@ -4641,6 +4651,129 @@ namespace ElysiumRemovalTest
 		FElysiumConvexHull Hull; for(float X:{-20.f,20.f})for(float Y:{-20.f,20.f})for(float Z:{-20.f,20.f})Hull.Vertices.Add(FVector(X,Y,Z));
 		Row.Hulls.Add(Hull); return Row;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDeferredKillTest, "Elysium.Substrate.ModelPhysics.DeferredKill",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumDeferredKillTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture; if (!Fixture.CreateWorld(*this)) return false;
+	Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+	auto* Map = Fixture.SpawnMapActorDeferred(); Map->bStageOnly=true; Map->bStageWithoutCatalogue=true;
+	Map->FinishSpawning(FTransform::Identity);
+	for(int32 Frame=0;Frame<20&&!Map->IsRuntimeActive();++Frame)Fixture.TestWorld.TickTestWorld(.02f);
+	FElysiumEntityDefs Core;
+	if (!TestTrue(TEXT("deployed tutorial authored producer loads"),ElysiumEntityDefSource::Load(TEXT("sp_tutorial_1"),Core)!=EElysiumEntityDefSource::None))return false;
+	const auto* Source=Core.Defs.FindByPredicate([](const auto& Row){return Row.TargetName==TEXT("logic_kill_elev_doors");});
+	const auto* Target=Core.Defs.FindByPredicate([](const auto& Row){return Row.TargetName==TEXT("tutwareelevdrf");});
+	if (!TestTrue(TEXT("real tutorial relay Kill row and native door producer exist"),Source&&Target&&Target->Classname==TEXT("func_door")&&!Target->Hulls.IsEmpty()))return false;
+	const auto* KillRow=Source->Outputs.FindByPredicate([](const auto& Row){return Row.Input==TEXT("Kill")&&Row.Target==TEXT("tutwareelevdrf");});
+	if (!TestNotNull(TEXT("authored OnTrigger immediate Kill row"),KillRow))return false;
+	FElysiumEntityDefs Authored;Authored.MapName=Core.MapName;Authored.Defs.Add(*Source);Authored.Defs.Last().Outputs={*KillRow};Authored.Defs.Add(*Target);
+	FElysiumWorldServices Services;Services.Embodiment=Map;
+	FElysiumEntityWorld AuthoredWorld(Map,nullptr,Services);AuthoredWorld.Load(MoveTemp(Authored));AuthoredWorld.Activate(0.);
+	auto* Door=AuthoredWorld.FindByName(TEXT("tutwareelevdrf"));auto* Relay=AuthoredWorld.FindByName(TEXT("logic_kill_elev_doors"));
+	if (!Door||!Relay||!Door->VPhysicsGetObject())return false;
+	const auto DoorHandle=Door->Handle;
+	const auto DoorToken=ElysiumModelPhysics::CaptureIdentity(Door->VPhysicsGetObject());
+	int32 Calls=0;AuthoredWorld.RemoveExternalActs=[&](FElysiumEntity& Removing)
+	{
+		if(&Removing!=Door)return;++Calls;
+		TestTrue(TEXT("real input180 sees latch/name/current native before225"),Removing.IsMarkedForDeletion()&&Removing.TargetName==Target->TargetName&&ElysiumModelPhysics::IsCurrentOutput(DoorToken));
+		Removing.Kill();
+	};
+	struct FDeliveredProbe final : IElysiumIOSink
+	{
+		TFunction<void()> OnKill;
+		void OnDelivered(double,const FElysiumEntity&,const FElysiumIOEvent& Event) override
+		{if(Event.Input==FName(TEXT("Kill")))OnKill();}
+	};
+	auto DeliveredProbe=MakeUnique<FDeliveredProbe>();bool Delivered=false;
+	DeliveredProbe->OnKill=[&]()
+	{
+		Delivered=true;
+		TestTrue(TEXT("real output service observes pending registered owner after225/nameclear"),AuthoredWorld.Resolve(DoorHandle)==Door&&!Door->IsDead()&&Door->TargetName.IsEmpty()&&!ElysiumModelPhysics::IsCurrentOutput(DoorToken));
+		TestEqual(TEXT("authored input has one pending deletion before end-frame purge"),AuthoredWorld.PendingEntityRemovalCount(),1);
+	};
+	AuthoredWorld.AddSink(MoveTemp(DeliveredProbe));
+	Relay->FireOutput(FName(*KillRow->Name),{});AuthoredWorld.Tick(0.);
+	TestTrue(TEXT("real Tick services authored Kill output"),Delivered);
+	TestEqual(TEXT("real authored119 reentry queues180 exactly once"),Calls,1);
+	TestNull(TEXT("same frame post-I/O purge invalidates authored door handle"),AuthoredWorld.Resolve(DoorHandle));AuthoredWorld.Teardown();
+	FElysiumEntityDefs Defs;Defs.MapName=TEXT("deferred_kill_native");
+	for(const TCHAR* Name:{TEXT("kill_body"),TEXT("survivor")})
+	{auto Row=ElysiumModelPhysicsTest::Def(TEXT("models/scenery/physics/bottle/bottle.mdl"),Name);Row.Origin=FVector(5000,5000,5000);Defs.Defs.Add(Row);}
+	FElysiumEntityDef Parent;Parent.Classname=TEXT("info_target");Parent.TargetName=TEXT("end_parent");Defs.Defs.Add(Parent);
+	FElysiumStageSeat Seat;Seat.FeetCm=FVector(-1000,0,1000);FString Error;
+	if(!Map->RebuildStageWorld(MoveTemp(Defs),{},Seat,Error)){AddError(Error);return false;}
+	for(int32 Frame=0;Frame<20&&!Map->IsRuntimeActive();++Frame)Fixture.TestWorld.TickTestWorld(.02f);
+	auto* World=Map->GetEntityWorld();auto* A=World->FindByName(TEXT("kill_body"));auto* B=World->FindByName(TEXT("survivor"));
+	if(!A||!B||!A->VPhysicsGetObject()||!B->VPhysicsGetObject())return false;
+	const auto AHandle=A->Handle,BHandle=B->Handle;
+	const auto AToken=ElysiumModelPhysics::CaptureIdentity(A->VPhysicsGetObject());
+	auto* ComponentA=ElysiumModelPhysics::ComponentFor(AToken.Actor);auto* ComponentB=ElysiumModelPhysics::ComponentFor(B->VPhysicsGetObject());
+	ComponentA->SetEnableGravity(false);ComponentB->SetEnableGravity(false);
+	A->SetSolidFlags(A->GetSolidFlags()|0x20u);B->SetSolidFlags(B->GetSolidFlags()|0x20u);
+	TArray<FString> Ends;int32 ListenerEnds=0;
+	World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+	{if(Event.Text.Contains(TEXT("tag=endtouch")))Ends.Add(Event.Name);if(Event.Text.Contains(TEXT("tag=physical_touch"))&&Event.Text.Contains(TEXT("begin=0")))++ListenerEnds;});
+	ON_SCOPE_EXIT{if(auto* Current=Map->GetEntityWorld())Current->SetAiTraceSink({});};
+	auto Frame=[&]()
+	{ElysiumModelPhysics::Wake(ComponentA);ElysiumModelPhysics::Wake(ComponentB);Fixture.TestWorld.TickTestWorld(.02f);};
+	ComponentB->BodyInstance.SetBodyTransform(FTransform(FQuat::Identity,FVector(6000,5000,5000)),ETeleportType::TeleportPhysics);Frame();
+	ComponentA->BodyInstance.SetBodyTransform(FTransform(FQuat::Identity,FVector(5000,5000,5000)),ETeleportType::TeleportPhysics);
+	ComponentB->BodyInstance.SetBodyTransform(FTransform(FQuat::Identity,FVector(5001,5000,5000)),ETeleportType::TeleportPhysics);Frame();
+	if(!TestTrue(TEXT("real solved native contacts create reciprocal physical sentinel consumers"),A->IsCurrentlyTouching()&&B->IsCurrentlyTouching()))return false;
+	B->ParentHandle=World->FindByName(TEXT("end_parent"))->Handle;
+	Ends.Reset();ListenerEnds=0;
+	World->AcceptInput(AHandle,FName(TEXT("Kill")),FElysiumVariant::Void(),{},{});
+	TestTrue(TEXT("input pending retains physical links despite actual current-body retirement"),World->Resolve(AHandle)==A&&A->IsMarkedForDeletion()&&!A->IsDead()&&A->IsCurrentlyTouching()&&B->IsCurrentlyTouching()&&!ElysiumModelPhysics::IsCurrentOutput(AToken));
+	TestTrue(TEXT("wrapper destruction suppresses native listener End"),Ends.IsEmpty()&&ListenerEnds==0);
+	World->AcceptInput(AHandle,FName(TEXT("Kill")),FElysiumVariant::Void(),{},{});
+	TestEqual(TEXT("repeat input cannot duplicate pending queue"),World->PendingEntityRemovalCount(),1);
+	World->PurgeEntityRemovals();
+	TestTrue(TEXT("purge notifies surviving other176 then its authored parent exactly once"),Ends==TArray<FString>({TEXT("survivor"),TEXT("end_parent")}));
+	TestTrue(TEXT("own End suppressed while other link and original GameData retire"),!World->Resolve(AHandle)&&World->Resolve(BHandle)==B&&!B->IsCurrentlyTouching()&&!ElysiumModelPhysics::GameDataForObject(AToken.Actor)&&ListenerEnds==0);
+	World->PurgeEntityRemovals();TestEqual(TEXT("empty repeated purge has no repeated End"),Ends.Num(),2);
+	AddInfo(TEXT("deferred-kill: actual sp_tutorial_1 logic_kill_elev_doors ->tutwareelevdrf; native225-before-purge; other176-at-purge; wrapperEnd=0"));return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDeferredKillEpochTest, "Elysium.Substrate.ModelPhysics.DeferredKillEpoch",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumDeferredKillEpochTest::RunTest(const FString&)
+{
+	FElysiumEntityWorld World(nullptr,nullptr);
+	auto Defs=[](const TCHAR* Name,const TCHAR* Class=TEXT("info_target"))
+	{FElysiumEntityDefs Rows;Rows.MapName=TEXT("kill_epoch");FElysiumEntityDef Row;Row.Classname=Class;Row.TargetName=Name;Rows.Defs.Add(Row);return Rows;};
+	World.Load(Defs(TEXT("bare")));auto* Bare=World.FindByName(TEXT("bare"));const auto BareHandle=Bare->Handle;
+	int32 Calls=0;World.RemoveExternalActs=[&](FElysiumEntity&){++Calls;};
+	Bare->SetEFlags(Bare->EFlagsWord()|1);Bare->Kill();Bare->RemoveImmediate();
+	TestTrue(TEXT("bare semantic latch suppresses both removal producers without queue or180"),Calls==0&&World.PendingEntityRemovalCount()==0&&World.Resolve(BareHandle)==Bare);
+	Bare->SetEFlags(Bare->EFlagsWord()&~1u);Bare->ThinkCallback=FName(TEXT("retained_think"));Bare->NextThink=123.f;
+	Bare->Kill();TestTrue(TEXT("pending119 does not clear caller think words"),Bare->ThinkCallback==FName(TEXT("retained_think"))&&Bare->NextThink==123.f);
+	World.PurgeEntityRemovals();TestNull(TEXT("purged semantic owner no longer resolves"),World.Resolve(BareHandle));
+	FElysiumEntityWorld During180(nullptr,nullptr),Replacement(nullptr,nullptr);
+	During180.Load(Defs(TEXT("reset180")));auto* Reset180=During180.FindByName(TEXT("reset180"));const auto Old180=Reset180->Handle;
+	During180.RemoveExternalActs=[&](FElysiumEntity& Removing)
+	{
+		if(Removing.Handle!=Old180)return;
+		During180.Teardown();Replacement.Load(Defs(TEXT("new180")));Replacement.FindByName(TEXT("new180"))->Kill();
+	};
+	Reset180->Kill();
+	TestTrue(TEXT("180 teardown cannot rename or append stale owner after retiring epoch"),!During180.Resolve(Old180)&&During180.PendingEntityRemovalCount()==0&&Replacement.PendingEntityRemovalCount()==1);
+	During180.RemoveExternalActs={};Replacement.PurgeEntityRemovals();
+	FElysiumEntityWorld DuringRelease(nullptr,nullptr),NextHost(nullptr,nullptr);
+	auto Initial=Defs(TEXT("victim"));auto Observer=Defs(TEXT("observer"),TEXT("elysium_test_retaining_remove"));Initial.Defs.Add(Observer.Defs[0]);DuringRelease.Load(MoveTemp(Initial));
+	auto* Victim=DuringRelease.FindByName(TEXT("victim"));Victim->OwnerEntity=DuringRelease.FindByName(TEXT("observer"))->Handle;const auto OldRelease=Victim->Handle;
+	ElysiumRemovalTest::ReleaseCallback=[&](FElysiumEntity& Removing)
+	{if(Removing.Handle==OldRelease){DuringRelease.Teardown();NextHost.Load(Defs(TEXT("new_release")));NextHost.FindByName(TEXT("new_release"))->Kill();}};
+	ON_SCOPE_EXIT{ElysiumRemovalTest::ReleaseCallback={};World.RemoveExternalActs={};};
+	Victim->Kill();DuringRelease.PurgeEntityRemovals();
+	TestTrue(TEXT("terminal callback teardown stops old purge and preserves fresh host's pending removal"),!DuringRelease.Resolve(OldRelease)&&DuringRelease.PendingEntityRemovalCount()==0&&NextHost.PendingEntityRemovalCount()==1);
+	const auto NewHandle=NextHost.Entities()[0]->Handle;
+	ElysiumRemovalTest::ReleaseCallback={};NextHost.PurgeEntityRemovals();
+	TestTrue(TEXT("fresh host identity releases only at its own purge"),!NextHost.Resolve(NewHandle)&&NextHost.PendingEntityRemovalCount()==0);
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPendingRemovalTest, "Elysium.Substrate.ModelPhysics.PendingRemoval",
@@ -4681,7 +4814,7 @@ bool FElysiumPendingRemovalTest::RunTest(const FString&)
 	TestEqual(TEXT("reentry and repeat removal invoke180 once"),CallbackCount,1);
 	TestTrue(TEXT("base180 retires native but retains registered pending identity"),World.Resolve(BaseHandle)==Base && !Base->IsDead() && !ElysiumModelPhysics::IsCurrentOutput(BaseToken));
 	TestTrue(TEXT("base name clears before queue append"),Base->TargetName.IsEmpty() && World.PendingEntityRemovalCount()==1);
-	Retaining->QueueRemove();
+	World.AcceptInput(RetainingHandle,FName(TEXT("Kill")),FElysiumVariant::Void(),{},{});
 	TestEqual(TEXT("override180 reentry invokes it once"),Retaining->RemovalCalls,1);
 	TestTrue(TEXT("legitimate override retains native current alias until release"),World.Resolve(RetainingHandle)==Retaining && ElysiumModelPhysics::IsCurrentOutput(RetainingToken));
 	FElysiumMapSnapshot Snapshot; World.Freeze(Snapshot);
@@ -4899,7 +5032,7 @@ bool FElysiumRemovalResourceLifetimeTest::RunTest(const FString&)
 	auto* Immediate=World.FindByName(TEXT("immediate_npc"));auto* Queued=World.FindByName(TEXT("queued_npc"));
 	if(!Immediate||!Queued)return false;
 	ElysiumRemovalTest::DestructorCleanupCalls.Reset();Immediate->AsNpc()->AttackCoordinator=1;Queued->AsNpc()->AttackCoordinator=1;
-	Immediate->FElysiumEntity::Kill();
+	Immediate->ReleaseForRemoval(); // explicitly exercise legacy terminal-host fixture.
 	TestFalse(TEXT("old immediate Kill is not proof of destructor cleanup"),Immediate->bNpcDestructorCleanupDispatched);
 	Queued->QueueRemove();World.PurgeEntityRemovals();
 	TestTrue(TEXT("queued release invokes existing Troika destructor recipient once"),Queued->bNpcDestructorCleanupDispatched&&ElysiumRemovalTest::DestructorCleanupCalls.FindRef(TEXT("queued_npc"))==1);

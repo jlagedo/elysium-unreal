@@ -97,8 +97,10 @@ bool FElysiumNpcKernelLifecycleIsAliveTest::RunTest(const FString&)
 	Fix.Npc->LifeState = 0;
 	TestTrue(TEXT("...and LIFE_ALIVE is alive again"), Fix.Npc->IsAlive());
 
-	// `Kill` is the other half of the same word.
+	// Slot 119 queues removal; the terminal purge ends the entity lifetime.
 	Fix.Npc->Kill();
+	TestTrue(TEXT("removal is pending before the terminal purge"), Fix.Npc->IsMarkedForDeletion() && !Fix.Npc->IsDead());
+	Fix.World.World.PurgeEntityRemovals();
 	TestFalse(TEXT("a killed NPC is not alive"), Fix.Npc->IsAlive());
 	return true;
 }
